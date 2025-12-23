@@ -204,7 +204,6 @@ class ComicViewer(tk.Tk):
         self._scaled_size: Optional[tuple[int, int]] = None
         self._focus_restorer = FocusRestorer(self.after_idle, self._ensure_focus)
 
-        self._build_menus()
         self._bind_keys()
 
         self.bind("<Map>", lambda _: self._request_focus())
@@ -284,29 +283,6 @@ class ComicViewer(tk.Tk):
         rgb.save(buf, format="PNG")
         encoded = base64.encodebytes(buf.getvalue()).decode("ascii")
         return tk.PhotoImage(data=encoded, format="PNG", master=self)
-
-    def _build_menus(self):
-        menubar = tk.Menu(self)
-
-        file_menu = tk.Menu(menubar, tearoff=0)
-        file_menu.add_command(label="Open…", command=self._open_dialog, accelerator="Cmd+O")
-        file_menu.add_separator()
-        file_menu.add_command(label="Quit", command=self._quit, accelerator="Cmd+Q")
-        menubar.add_cascade(label="File", menu=file_menu)
-
-        nav_menu = tk.Menu(menubar, tearoff=0)
-        nav_menu.add_command(label="Previous Page", command=self.prev_page)
-        nav_menu.add_command(label="Next Page", command=self.next_page)
-        nav_menu.add_separator()
-        nav_menu.add_command(label="First Page", command=self.first_page)
-        nav_menu.add_command(label="Last Page", command=self.last_page)
-        menubar.add_cascade(label="Navigate", menu=nav_menu)
-
-        self.config(menu=menubar)
-
-        # macOS command keys
-        self.bind_all("<Command-o>", lambda e: self._open_dialog())
-        self.bind_all("<Command-q>", lambda e: self._quit())
 
     def _bind_keys(self):
         self.bind("<Right>", lambda e: self.next_page())
