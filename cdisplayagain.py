@@ -20,6 +20,7 @@ from tkinter import filedialog, messagebox
 from PIL import Image, ImageTk
 
 
+
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tif", ".tiff"}
 
 
@@ -350,17 +351,22 @@ class ComicViewer(tk.Tk):
         self._current_index = len(self.source.pages) - 1
         self._render_current()
 
+def exit_fullscreen(event=None):
+    root.destroy()
+
 
 def main():
     parser = argparse.ArgumentParser(description="Simple CBZ/CBR viewer (cdisplay-ish)")
     parser.add_argument("comic", nargs="?", help="Path to .cbz or .cbr")
     args = parser.parse_args()
 
+    root = tk.Tk()
+
     if args.comic:
         path = Path(args.comic).expanduser()
     else:
         # Start with a file picker if no arg
-        root = tk.Tk()
+
         root.withdraw()
         p = filedialog.askopenfilename(
             title="Open Comic",
@@ -376,7 +382,9 @@ def main():
         sys.exit(1)
 
     app = ComicViewer(path)
-    app.minsize(600, 600)
+    app.bind("<Escape>", exit_fullscreen)
+    app.attributes("-fullscreen", True)
+    app.overrideredirect(True)
     app.mainloop()
 
 
