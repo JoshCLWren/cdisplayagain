@@ -13,7 +13,7 @@ import tarfile
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Iterable, Optional
+from typing import Callable, Optional
 
 import tkinter as tk
 from tkinter import filedialog, messagebox
