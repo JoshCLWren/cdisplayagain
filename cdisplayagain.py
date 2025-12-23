@@ -182,12 +182,15 @@ class ComicViewer(tk.Tk):
 
         self._imagetk_ready = False
         self._prime_imagetk()
+        self._cursor_name = "arrow"
 
         self.title(f"cdisplayagain - {comic_path.name}")
         self.configure(bg="#111111")
+        self._configure_cursor()
 
         self.canvas = tk.Canvas(self, bg="#111111", highlightthickness=0)
         self.canvas.pack(fill=tk.BOTH, expand=True)
+        self.canvas.configure(cursor=self._cursor_name)
 
         # Keep reference to avoid Tk garbage-collecting the image
         self._tk_img: Optional[tk.PhotoImage] = None
@@ -219,6 +222,16 @@ class ComicViewer(tk.Tk):
 
     def _request_focus(self) -> None:
         self._focus_restorer.schedule()
+
+    def _configure_cursor(self) -> None:
+        """Use a minimal cursor to mimic CDisplay's pointer."""
+        for cursor_name in ("none", "dotbox", "arrow"):
+            try:
+                self.configure(cursor=cursor_name)
+                self._cursor_name = cursor_name
+                return
+            except tk.TclError:
+                continue
 
     def _ensure_focus(self) -> None:
         try:
