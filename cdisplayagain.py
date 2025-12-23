@@ -132,9 +132,12 @@ class ComicViewer(tk.Tk):
         self._tk_img: Optional[tk.PhotoImage] = None
         self._current_pil: Optional[Image.Image] = None
         self._current_index: int = 0
+        self._canvas_image_id: Optional[int] = None
 
         # Lightweight caches
         self._pil_cache: dict[str, Image.Image] = {}
+        self._scroll_offset: int = 0
+        self._scaled_size: Optional[tuple[int, int]] = None
 
         self._build_menus()
         self._bind_keys()
@@ -221,9 +224,13 @@ class ComicViewer(tk.Tk):
         self.bind("<Left>", lambda e: self.prev_page())
         self.bind("<space>", lambda e: self.next_page())
         self.bind("<BackSpace>", lambda e: self.prev_page())
+        self.bind("<Down>", lambda e: self._scroll_down())
+        self.bind("<Up>", lambda e: self._scroll_up())
         self.bind("<Home>", lambda e: self.first_page())
         self.bind("<End>", lambda e: self.last_page())
         self.bind("<Escape>", lambda e: self._quit())
+        self.bind("q", lambda e: self._quit())
+        self.bind("Q", lambda e: self._quit())
 
     def _open_dialog(self):
         path = filedialog.askopenfilename(
@@ -247,6 +254,8 @@ class ComicViewer(tk.Tk):
         self._current_pil = None
         self._tk_img = None
         self._current_index = 0
+        self._scroll_offset = 0
+        self._scaled_size = None
         self.comic_path = path
 
         try:
@@ -293,11 +302,13 @@ class ComicViewer(tk.Tk):
     def _render_current(self):
         if not self.source:
             self.canvas.delete("all")
+            self._canvas_image_id = None
             return
 
         img = self._get_current_pil()
         if img is None:
             self.canvas.delete("all")
+            self._canvas_image_id = None
             return
 
         self._current_pil = img
@@ -306,9 +317,15 @@ class ComicViewer(tk.Tk):
         ch = max(1, self.canvas.winfo_height())
 
         iw, ih = img.size
-        scale = min(cw / iw, ch / ih)
+        scale = cw / iw
         new_w = max(1, int(iw * scale))
         new_h = max(1, int(ih * scale))
+        self._scaled_size = (new_w, new_h)
+        max_offset = max(0, new_h - ch)
+        if new_h <= ch:
+            self._scroll_offset = 0
+        else:
+            self._scroll_offset = min(max(self._scroll_offset, 0), max_offset)
 
         resized = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
         if self._imagetk_ready:
@@ -321,15 +338,63 @@ class ComicViewer(tk.Tk):
             self._tk_img = self._photoimage_from_pil(resized)
 
         self.canvas.delete("all")
-        self.canvas.create_image(cw // 2, ch // 2, image=self._tk_img, anchor="center")
+        self._canvas_image_id = None
+        anchor = "center"
+        x = cw // 2
+        if new_h <= ch:
+            y = ch // 2
+        else:
+            anchor = "n"
+            y = -self._scroll_offset
+        self._canvas_image_id = self.canvas.create_image(x, y, image=self._tk_img, anchor=anchor)
 
         self._update_title()
+
+    def _scroll_step(self) -> int:
+        return max(50, self.canvas.winfo_height() // 5)
+
+    def _scroll_by(self, delta: int):
+        if not self._scaled_size:
+            return
+        ch = max(1, self.canvas.winfo_height())
+        max_offset = max(0, self._scaled_size[1] - ch)
+        if max_offset == 0:
+            return
+        new_offset = min(max_offset, max(0, self._scroll_offset + delta))
+        if new_offset == self._scroll_offset:
+            return
+        self._scroll_offset = new_offset
+        self._reposition_current_image()
+
+    def _scroll_down(self):
+        self._scroll_by(self._scroll_step())
+
+    def _scroll_up(self):
+        self._scroll_by(-self._scroll_step())
+
+    def _reposition_current_image(self):
+        if not self._canvas_image_id or not self._scaled_size:
+            return
+        cw = max(1, self.canvas.winfo_width())
+        ch = max(1, self.canvas.winfo_height())
+        if self._scaled_size[1] <= ch:
+            anchor = "center"
+            y = ch // 2
+        else:
+            anchor = "n"
+            # Clamp again in case canvas height changed out from under us
+            max_offset = max(0, self._scaled_size[1] - ch)
+            self._scroll_offset = min(max(self._scroll_offset, 0), max_offset)
+            y = -self._scroll_offset
+        self.canvas.itemconfigure(self._canvas_image_id, anchor=anchor)
+        self.canvas.coords(self._canvas_image_id, cw // 2, y)
 
     def next_page(self):
         if not self.source:
             return
         if self._current_index < len(self.source.pages) - 1:
             self._current_index += 1
+            self._scroll_offset = 0
             self._render_current()
 
     def prev_page(self):
@@ -337,18 +402,21 @@ class ComicViewer(tk.Tk):
             return
         if self._current_index > 0:
             self._current_index -= 1
+            self._scroll_offset = 0
             self._render_current()
 
     def first_page(self):
         if not self.source:
             return
         self._current_index = 0
+        self._scroll_offset = 0
         self._render_current()
 
     def last_page(self):
         if not self.source:
             return
         self._current_index = len(self.source.pages) - 1
+        self._scroll_offset = 0
         self._render_current()
 
 def main():
