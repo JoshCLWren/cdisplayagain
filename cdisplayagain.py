@@ -287,7 +287,7 @@ class ComicViewer(tk.Tk):
     def _bind_keys(self):
         self.bind("<Right>", lambda e: self.next_page())
         self.bind("<Left>", lambda e: self.prev_page())
-        self.bind("<space>", lambda e: self.next_page())
+        self.bind("<space>", lambda e: self._space_advance())
         self.bind("<BackSpace>", lambda e: self.prev_page())
         self.bind("<Down>", lambda e: self._scroll_down())
         self.bind("<Up>", lambda e: self._scroll_up())
@@ -432,6 +432,25 @@ class ComicViewer(tk.Tk):
             return
         self._scroll_offset = new_offset
         self._reposition_current_image()
+
+    def _space_advance(self):
+        if not self._scaled_size:
+            self.next_page()
+            return
+        ch = max(1, self.canvas.winfo_height())
+        max_offset = max(0, self._scaled_size[1] - ch)
+        if max_offset == 0:
+            self.next_page()
+            return
+        step = ch
+        if self._scroll_offset >= max_offset:
+            self.next_page()
+            return
+        if self._scroll_offset + step >= max_offset:
+            self._scroll_offset = max_offset
+            self._reposition_current_image()
+            return
+        self._scroll_by(step)
 
     def _scroll_down(self):
         self._scroll_by(self._scroll_step())
