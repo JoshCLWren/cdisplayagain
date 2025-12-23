@@ -1,3 +1,5 @@
+"""Parity tests for viewer behavior and supported formats."""
+
 import io
 import sys
 import tarfile
@@ -55,6 +57,7 @@ def _make_tar(path: Path, names: list[str], text_names: list[str] | None = None)
 
 @pytest.fixture
 def viewer(tmp_path):
+    """Provide a minimal viewer instance for UI-related tests."""
     img_path = tmp_path / "page1.png"
     _write_image(img_path)
     app = cdisplayagain.ComicViewer(img_path)
@@ -66,6 +69,7 @@ def viewer(tmp_path):
 
 
 def test_launch_fullscreen_enabled_in_main(tmp_path, monkeypatch):
+    """Ensure main() requests fullscreen on startup."""
     img_path = tmp_path / "page1.png"
     _write_image(img_path)
 
@@ -93,6 +97,7 @@ def test_launch_fullscreen_enabled_in_main(tmp_path, monkeypatch):
 
 
 def test_launch_fullscreen_hides_cursor(tmp_path, monkeypatch):
+    """Ensure main() hides the cursor when fullscreen starts."""
     img_path = tmp_path / "page1.png"
     _write_image(img_path)
 
@@ -123,17 +128,20 @@ def test_launch_fullscreen_hides_cursor(tmp_path, monkeypatch):
 
 
 def test_minimal_ui_has_single_canvas_child(viewer):
+    """Confirm the viewer renders a single canvas widget."""
     children = viewer.winfo_children()
     assert len(children) == 1
     assert isinstance(children[0], cdisplayagain.tk.Canvas)
 
 
 def test_fullscreen_windowed_toggle_and_cursor_hidden():
+    """Verify fullscreen toggling and cursor hiding hooks exist."""
     assert hasattr(cdisplayagain.ComicViewer, "toggle_fullscreen")
     assert hasattr(cdisplayagain.ComicViewer, "_set_cursor_hidden")
 
 
 def test_right_click_opens_context_menu(viewer):
+    """Ensure right-click binds to the context menu."""
     assert viewer.bind("<Button-3>") != ""
     assert hasattr(viewer, "_context_menu")
     first_label = viewer._context_menu.entrycget(0, "label")
@@ -141,6 +149,7 @@ def test_right_click_opens_context_menu(viewer):
 
 
 def test_open_dialog_uses_file_browser(monkeypatch, viewer, tmp_path):
+    """Confirm open dialog uses the file browser API."""
     img_path = tmp_path / "page1.png"
     _write_image(img_path)
     called = {}
@@ -156,6 +165,7 @@ def test_open_dialog_uses_file_browser(monkeypatch, viewer, tmp_path):
 
 
 def test_open_dialog_preselects_all_files(monkeypatch, viewer, tmp_path):
+    """Ensure open dialog falls back to multi-select when needed."""
     img_path = tmp_path / "page1.png"
     _write_image(img_path)
     called = {"count": 0}
@@ -172,6 +182,7 @@ def test_open_dialog_preselects_all_files(monkeypatch, viewer, tmp_path):
 
 
 def test_open_dialog_uses_multi_select_for_windows_patterns(monkeypatch, viewer):
+    """Confirm multi-select path is used for Windows patterns."""
     called = {"count": 0}
 
     def fake_askopenfilenames(**kwargs):
@@ -186,6 +197,7 @@ def test_open_dialog_uses_multi_select_for_windows_patterns(monkeypatch, viewer)
 
 
 def test_load_folder_or_archive(tmp_path):
+    """Load both a folder and a CBZ archive."""
     folder = tmp_path / "pages"
     folder.mkdir()
     _write_image(folder / "01.png")
@@ -200,6 +212,7 @@ def test_load_folder_or_archive(tmp_path):
 
 
 def test_reads_jpeg_gif_png(tmp_path):
+    """Load single-image sources for common formats."""
     jpg = tmp_path / "page.jpg"
     gif = tmp_path / "page.gif"
     png = tmp_path / "page.png"
@@ -213,6 +226,7 @@ def test_reads_jpeg_gif_png(tmp_path):
 
 
 def test_reads_zip_rar_ace_tar_archives(tmp_path):
+    """Load multiple archive types and ensure pages list is set."""
     zip_path = tmp_path / "comic.zip"
     _make_cbz(zip_path, ["01.png"])
     rar_path = tmp_path / "comic.rar"
@@ -229,6 +243,7 @@ def test_reads_zip_rar_ace_tar_archives(tmp_path):
 
 
 def test_reads_tar_archives_with_images_and_text(tmp_path):
+    """Prefer text pages first when loading TAR archives."""
     tar_path = tmp_path / "comic.tar"
     _make_tar(tar_path, ["02.png", "01.png"], ["info.nfo"])
 
@@ -238,6 +253,7 @@ def test_reads_tar_archives_with_images_and_text(tmp_path):
 
 
 def test_sorting_is_alphabetical(tmp_path):
+    """Confirm natural sorting order in folders."""
     folder = tmp_path / "pages"
     folder.mkdir()
     _write_image(folder / "10.png")
@@ -249,6 +265,7 @@ def test_sorting_is_alphabetical(tmp_path):
 
 
 def test_nfo_txt_displayed_first(tmp_path):
+    """Ensure text files appear before images in folders."""
     folder = tmp_path / "pages"
     folder.mkdir()
     (folder / "info.nfo").write_text("info")
@@ -260,6 +277,7 @@ def test_nfo_txt_displayed_first(tmp_path):
 
 
 def test_nfo_txt_displayed_first_in_cbz(tmp_path):
+    """Ensure text files appear before images in CBZ files."""
     cbz_path = tmp_path / "comic.cbz"
     _make_cbz_with_text(cbz_path, ["01.png"], ["info.nfo", "readme.txt"])
 
@@ -268,16 +286,19 @@ def test_nfo_txt_displayed_first_in_cbz(tmp_path):
 
 
 def test_info_screen_dismissed_by_double_click_or_any_key(viewer):
+    """Validate info overlay dismissal bindings exist."""
     assert viewer.bind("<Double-Button-1>") != ""
     assert viewer.bind("<Key>") != ""
 
 
 def test_info_screen_shows_first_page_simultaneously(viewer):
+    """Confirm info overlay renders alongside the first image."""
     assert hasattr(viewer, "_info_overlay")
     assert viewer._current_pil is not None
 
 
 def test_info_screen_overlays_first_image_when_text_first(viewer, tmp_path):
+    """Render text-first sources with image and overlay."""
     folder = tmp_path / "book"
     folder.mkdir()
     (folder / "info.nfo").write_text("info")
@@ -291,6 +312,7 @@ def test_info_screen_overlays_first_image_when_text_first(viewer, tmp_path):
 
 
 def test_arrow_keys_turn_pages(viewer, tmp_path):
+    """Advance and rewind pages via arrow keys."""
     img1 = tmp_path / "page1.png"
     _write_image(img1)
     img2 = tmp_path / "page2.png"
@@ -307,6 +329,7 @@ def test_arrow_keys_turn_pages(viewer, tmp_path):
 
 
 def test_page_down_and_page_up_keys_turn_pages(viewer, tmp_path):
+    """Advance and rewind pages via Page Up/Down."""
     img1 = tmp_path / "page1.png"
     _write_image(img1)
     img2 = tmp_path / "page2.png"
@@ -322,6 +345,7 @@ def test_page_down_and_page_up_keys_turn_pages(viewer, tmp_path):
 
 
 def test_spacebar_scrolls_then_advances(viewer, tmp_path):
+    """Scroll with spacebar until end, then advance."""
     tall = tmp_path / "tall.png"
     img = Image.new("RGB", (200, 1200), color=(100, 100, 100))
     img.save(tall)
@@ -352,29 +376,35 @@ def test_spacebar_scrolls_then_advances(viewer, tmp_path):
 
 
 def test_mouse_drag_pans_page(viewer):
+    """Ensure mouse drag bindings exist for panning."""
     assert viewer.bind("<ButtonPress-1>") != ""
     assert viewer.bind("<B1-Motion>") != ""
 
 
 def test_mouse_wheel_scrolls_or_navigates(viewer):
+    """Ensure mouse wheel binding exists."""
     assert viewer.bind("<MouseWheel>") != ""
 
 
 def test_f1_opens_help(viewer):
+    """Ensure F1 binding exists for help."""
     assert viewer.bind("<F1>") != ""
 
 
 def test_m_minimizes_program(viewer):
+    """Ensure the minimize shortcut exists."""
     assert viewer.bind("m") != ""
     assert hasattr(viewer, "_minimize")
 
 
 def test_x_terminates_program(viewer):
+    """Ensure the quit shortcut exists."""
     assert viewer.bind("x") != ""
     assert hasattr(viewer, "_quit")
 
 
 def test_context_menu_has_minimize_and_quit(viewer):
+    """Ensure the context menu includes minimize and quit."""
     assert hasattr(viewer, "_context_menu")
     labels = [viewer._context_menu.entrycget(i, "label") for i in range(viewer._context_menu.index("end") + 1)]
     assert "Minimize" in labels
@@ -382,11 +412,13 @@ def test_context_menu_has_minimize_and_quit(viewer):
 
 
 def test_display_has_one_page_and_two_page_modes():
+    """Ensure page mode toggles are present."""
     assert hasattr(cdisplayagain.ComicViewer, "set_one_page_mode")
     assert hasattr(cdisplayagain.ComicViewer, "set_two_page_mode")
 
 
 def test_uses_lanczos_resampling(viewer, monkeypatch):
+    """Verify Lanczos resampling is used for scaling."""
     called = {}
     original_resize = Image.Image.resize
 
@@ -401,15 +433,18 @@ def test_uses_lanczos_resampling(viewer, monkeypatch):
 
 
 def test_color_balance_and_yellow_reduction_options_exist():
+    """Ensure color-related toggles exist."""
     assert hasattr(cdisplayagain.ComicViewer, "toggle_color_balance")
     assert hasattr(cdisplayagain.ComicViewer, "toggle_yellow_reduction")
 
 
 def test_hints_show_on_idle_cursor():
+    """Ensure hint popup hook exists."""
     assert hasattr(cdisplayagain.ComicViewer, "_show_hint_popup")
 
 
 def test_common_settings_options_exist():
+    """Ensure common settings callbacks exist."""
     expected_attrs = [
         "toggle_two_pages",
         "toggle_hints",
@@ -425,6 +460,7 @@ def test_common_settings_options_exist():
 
 
 def test_full_parity_flow_space_and_nfo(tmp_path, viewer):
+    """Run a basic flow involving text pages and space advance."""
     folder = tmp_path / "book"
     folder.mkdir()
     (folder / "readme.txt").write_text("info")

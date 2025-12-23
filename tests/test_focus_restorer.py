@@ -1,7 +1,10 @@
+"""FocusRestorer scheduling behavior tests."""
+
 from cdisplayagain import FocusRestorer
 
 
 def test_focus_restorer_schedules_once_until_run():
+    """Schedule only one idle callback until the callback runs."""
     scheduled_callbacks = []
     focused = []
 

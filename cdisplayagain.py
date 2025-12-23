@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""Lightweight comic reader inspired by CDisplay."""
 from __future__ import annotations
 
 import argparse
@@ -33,21 +34,25 @@ FILE_DIALOG_TYPES = [
 
 
 def natural_key(s: str):
+    """Return a key for natural sorting with numeric segments."""
     # Natural sort: "10" > "2" correctly
     return [int(t) if t.isdigit() else t.casefold() for t in re.split(r"(\d+)", s)]
 
 
 def is_image_name(name: str) -> bool:
+    """Return True when a path looks like a supported image."""
     return Path(name).suffix.casefold() in IMAGE_EXTS
 
 
 def is_text_name(name: str) -> bool:
+    """Return True when a path looks like an info text file."""
     return Path(name).suffix.casefold() in {".nfo", ".txt"}
 
 
 @dataclass
 class PageSource:
     """Abstraction over where pages come from."""
+
     pages: list[str]                    # display/order names
     get_bytes: callable                 # (page_name:str) -> bytes
     cleanup: Optional[callable] = None  # called on exit
@@ -57,11 +62,13 @@ class FocusRestorer:
     """Schedules focus-restoring callbacks without spamming Tk."""
 
     def __init__(self, after_idle: Callable[[Callable[[], None]], object], focus_fn: Callable[[], None]):
+        """Store Tk's idle scheduler and the focus callback."""
         self._after_idle = after_idle
         self._focus_fn = focus_fn
         self._pending = False
 
     def schedule(self) -> None:
+        """Schedule a focus refresh if one is not already queued."""
         if self._pending:
             return
         self._pending = True
@@ -73,6 +80,7 @@ class FocusRestorer:
 
 
 def load_cbz(path: Path) -> PageSource:
+    """Load a CBZ/ZIP archive into a page source."""
     zf = zipfile.ZipFile(path, "r")
     # Include images even if nested in directories inside the zip
     names = [n for n in zf.namelist() if not n.endswith("/")]
@@ -99,6 +107,7 @@ def load_cbz(path: Path) -> PageSource:
 
 
 def load_cbr(path: Path) -> PageSource:
+    """Extract a CBR archive via unar and build a page source."""
     unar = shutil.which("unar")
     if not unar:
         raise RuntimeError("CBR support requires 'unar'. Install with: brew install unar")
@@ -146,6 +155,7 @@ def load_cbr(path: Path) -> PageSource:
 
 
 def load_tar(path: Path) -> PageSource:
+    """Load a TAR archive into a page source."""
     try:
         tf = tarfile.open(path, "r")
     except tarfile.TarError as exc:
@@ -184,6 +194,7 @@ def load_tar(path: Path) -> PageSource:
 
 
 def load_directory(path: Path) -> PageSource:
+    """Load a directory of images and text into a page source."""
     if not path.is_dir():
         raise RuntimeError("Provided path is not a directory")
 
@@ -206,6 +217,7 @@ def load_directory(path: Path) -> PageSource:
 
 
 def load_image_file(path: Path) -> PageSource:
+    """Wrap a single image file as a one-page source."""
     if not path.is_file() or not is_image_name(path.name):
         raise RuntimeError("Not an image file")
 
@@ -218,6 +230,7 @@ def load_image_file(path: Path) -> PageSource:
 
 
 def load_comic(path: Path) -> PageSource:
+    """Load a path containing a directory, archive, or image."""
     if path.is_dir():
         return load_directory(path)
 
@@ -238,7 +251,10 @@ def load_comic(path: Path) -> PageSource:
 
 
 class ComicViewer(tk.Tk):
+    """Tk viewer for comic archives and image folders."""
+
     def __init__(self, comic_path: Path):
+        """Initialize the window and load the initial comic."""
         super().__init__()
         self.comic_path = comic_path
         self.source: Optional[PageSource] = None
@@ -293,6 +309,7 @@ class ComicViewer(tk.Tk):
         self._focus_restorer.schedule()
 
     def event_generate(self, sequence: str, **kwargs):
+        """Intercept navigation keys to call viewer handlers."""
         if sequence in {"<Right>", "<Next>"}:
             self.next_page()
         elif sequence in {"<Left>", "<Prior>"}:
@@ -331,6 +348,7 @@ class ComicViewer(tk.Tk):
             pass
 
     def toggle_fullscreen(self) -> None:
+        """Toggle fullscreen state and sync cursor visibility."""
         try:
             current = self.attributes("-fullscreen")
             current = bool(int(current))
@@ -655,6 +673,7 @@ class ComicViewer(tk.Tk):
         self._info_overlay = overlay
 
     def winfo_children(self):
+        """Return widget children, omitting internal menus."""
         children = super().winfo_children()
         return [child for child in children if not isinstance(child, tk.Menu)]
 
@@ -721,6 +740,7 @@ class ComicViewer(tk.Tk):
         self.canvas.coords(self._canvas_image_id, cw // 2, y)
 
     def next_page(self):
+        """Advance to the next page if available."""
         if not self.source:
             return
         if self._current_index < len(self.source.pages) - 1:
@@ -729,6 +749,7 @@ class ComicViewer(tk.Tk):
             self._render_current()
 
     def prev_page(self):
+        """Move to the previous page if available."""
         if not self.source:
             return
         if self._current_index > 0:
@@ -737,6 +758,7 @@ class ComicViewer(tk.Tk):
             self._render_current()
 
     def first_page(self):
+        """Jump to the first page in the source."""
         if not self.source:
             return
         self._current_index = 0
@@ -744,6 +766,7 @@ class ComicViewer(tk.Tk):
         self._render_current()
 
     def last_page(self):
+        """Jump to the last page in the source."""
         if not self.source:
             return
         self._current_index = len(self.source.pages) - 1
@@ -751,42 +774,54 @@ class ComicViewer(tk.Tk):
         self._render_current()
 
     def set_one_page_mode(self) -> None:
+        """Provide placeholder for single-page mode parity."""
         return None
 
     def set_two_page_mode(self) -> None:
+        """Provide placeholder for two-page mode parity."""
         return None
 
     def toggle_color_balance(self) -> None:
+        """Provide placeholder for color balance toggle parity."""
         return None
 
     def toggle_yellow_reduction(self) -> None:
+        """Provide placeholder for yellow reduction toggle parity."""
         return None
 
     def _show_hint_popup(self) -> None:
         return None
 
     def toggle_two_pages(self) -> None:
+        """Provide placeholder for two-page toggle parity."""
         return None
 
     def toggle_hints(self) -> None:
+        """Provide placeholder for hint toggle parity."""
         return None
 
     def toggle_two_page_advance(self) -> None:
+        """Provide placeholder for two-page advance toggle parity."""
         return None
 
     def set_page_buffer(self, _: int | None = None) -> None:
+        """Provide placeholder for page buffer setting parity."""
         return None
 
     def set_background_color(self, _: str | None = None) -> None:
+        """Provide placeholder for background color setting parity."""
         return None
 
     def set_small_cursor(self) -> None:
+        """Restore cursor visibility after hiding."""
         self._set_cursor_hidden(False)
 
     def set_mouse_binding(self, _: str | None = None) -> None:
+        """Provide placeholder for mouse binding selection parity."""
         return None
 
 def main():
+    """Parse arguments and launch the comic viewer."""
     parser = argparse.ArgumentParser(description="Simple CBZ/CBR viewer (cdisplay-ish)")
     parser.add_argument("comic", nargs="?", help="Path to .cbz/.cbr, directory, or image file")
     args = parser.parse_args()
