@@ -1,0 +1,22 @@
+# Repository Guidelines
+
+## Project Structure & Module Organization
+The viewer lives entirely in the repository root. `cdisplayagain.py` exposes the CLI-oriented entrypoint with a `PageSource` abstraction and rendering loop built around `Archive` subclasses for CBZ/CBR handling. Tooling metadata (`pyproject.toml`, `uv.lock`) defines the Pillow and rarfile dependencies; assets are loaded directly from archives at runtime, so there is no static `assets/` directory. Expect any future modules (tests, components, helpers) to sit beside these files unless a new package directory is created.
+
+## Build, Test, and Development Commands
+- `python -m venv .venv && source .venv/bin/activate`: create an isolated environment.
+- `python -m pip install -e .`: install Pillow/rarfile from `pyproject.toml` in editable mode.
+- `python cdisplayagain.py path/to/comic.cbz`: open a specific archive immediately, useful for manual regression runs.
+- `uv run python cdisplayagain.py path/to/comic.cbz`: alternative if you prefer the fast `uv` workflow already tracked via `uv.lock`.
+
+## Coding Style & Naming Conventions
+Follow standard PEP 8 spacing (4 spaces, 100-character soft wrap) and favor descriptive snake_case for functions and variables (`natural_key`, `open_archive`). Retain the current pattern of dataclasses (`Archive`, `PageSource`) for typed data containers and keep public functions annotated with precise types. Prefer explicit helper names (e.g., `load_cbz`) and guard Tk callbacks with early returns rather than nesting.
+
+## Testing Guidelines
+There is no automated test suite yet; when adding one, scaffold `tests/` with `pytest` and name cases after the behavior under test (e.g., `test_load_cbz_sorts_pages`). For now, perform manual smoke tests by running `python cdisplayagain.py path/to/sample.cbz`, opening both `.cbz` and `.cbr` samples, paging through images, toggling fit/zoom, and ensuring cleanup of temporary directories. Document any manual checklist you execute inside the pull request.
+
+## Commit & Pull Request Guidelines
+Use imperative, component-scoped commits such as `Add CBR extraction error copy` or `Refine zoom keyboard shortcuts`. Bundle related changes per commit, referencing issue numbers in the footer when applicable. Pull requests should summarize user impact, list testing performed (commands and archive types opened), note any new dependencies (system packages like `unar`), and attach screenshots when UI is affected.
+
+## Security & Configuration Tips
+CBR support requires the external `unar` binary; verify contributors mention its installation path in reviews. Never check in sample comics or proprietary content—use small public-domain archives stored locally. When touching subprocess calls (`unar`, `rarfile`), sanitize user paths via `Path` helpers and prefer Python APIs over shell redirection.
