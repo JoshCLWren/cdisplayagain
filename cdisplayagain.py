@@ -5,12 +5,15 @@ from __future__ import annotations
 import argparse
 import base64
 import io
+import logging
+import os
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
 import tarfile
+import time
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -31,6 +34,24 @@ FILE_DIALOG_TYPES = [
     ("All Supported", f"*.cbz *.cbr *.cbt *.cba *.tar *.zip *.rar *.ace {IMAGE_FILETYPE_PATTERN}".strip()),
     ("All files", "*.*"),
 ]
+
+LOG_ROOT = Path(os.environ.get("CDISPLAYAGAIN_LOG_DIR", "logs")).expanduser()
+LOG_PATH: Optional[Path] = None
+
+
+def _init_logging() -> None:
+    global LOG_PATH
+    timestamp = time.strftime("%Y%m%d-%H%M%S")
+    log_dir = LOG_ROOT / timestamp
+    log_dir.mkdir(parents=True, exist_ok=True)
+    LOG_PATH = log_dir / "cdisplayagain.log"
+    logging.basicConfig(
+        filename=str(LOG_PATH),
+        filemode="a",
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(message)s",
+    )
+    logging.info("Logging initialized at %s", LOG_PATH)
 
 
 def natural_key(s: str):
@@ -286,6 +307,8 @@ class ComicViewer(tk.Tk):
         self._focus_restorer = FocusRestorer(self.after_idle, self._ensure_focus)
         self._info_overlay: Optional[tk.Label] = None
         self._context_menu = self._build_context_menu()
+        self._dialog_active = False
+        self._pending_quit = False
 
         self._bind_keys()
         self._bind_mouse()
@@ -349,6 +372,7 @@ class ComicViewer(tk.Tk):
 
     def toggle_fullscreen(self) -> None:
         """Toggle fullscreen state and sync cursor visibility."""
+        logging.info("Toggle fullscreen requested.")
         try:
             current = self.attributes("-fullscreen")
             current = bool(int(current))
@@ -415,6 +439,7 @@ class ComicViewer(tk.Tk):
         return tk.PhotoImage(data=encoded, format="PNG", master=self)
 
     def _bind_keys(self):
+        self.bind_all("<KeyPress>", self._log_key_event, add=True)
         self.bind_all("<Right>", lambda e: self.next_page())
         self.bind_all("<Left>", lambda e: self.prev_page())
         self.bind_all("<Next>", lambda e: self.next_page())
@@ -425,10 +450,10 @@ class ComicViewer(tk.Tk):
         self.bind("<Up>", lambda e: self._scroll_up())
         self.bind("<Home>", lambda e: self.first_page())
         self.bind("<End>", lambda e: self.last_page())
-        self.bind("<Escape>", lambda e: self._quit())
-        self.bind("q", lambda e: self._quit())
-        self.bind("Q", lambda e: self._quit())
-        self.bind("x", lambda e: self._quit())
+        self.bind_all("<Escape>", lambda e: self._quit())
+        self.bind_all("q", lambda e: self._quit())
+        self.bind_all("Q", lambda e: self._quit())
+        self.bind_all("x", lambda e: self._quit())
         self.bind("m", lambda e: self._minimize())
         self.bind("w", lambda e: self.toggle_fullscreen())
         self.bind("W", lambda e: self.toggle_fullscreen())
@@ -437,19 +462,70 @@ class ComicViewer(tk.Tk):
         self.bind("<F1>", lambda e: self._show_help())
         self.bind("<Button-3>", self._show_context_menu)
 
+    def _log_key_event(self, event) -> None:
+        logging.info(
+            "KeyPress keysym=%s char=%s keycode=%s state=%s widget=%s",
+            event.keysym,
+            repr(event.char),
+            event.keycode,
+            event.state,
+            event.widget,
+        )
+
+    def _cancel_active_dialog(self) -> None:
+        """Best-effort close of a Tk file dialog when quitting."""
+        try:
+            focus = self.tk.call("focus")
+            if focus:
+                toplevel = self.tk.call("winfo", "toplevel", focus)
+                if toplevel and toplevel != str(self):
+                    logging.info("Closing focused dialog: %s", toplevel)
+                    self.tk.call("destroy", toplevel)
+                    return
+            children = self.tk.call("winfo", "children", ".")
+            for child in children:
+                if child.startswith(".__tk_filedialog"):
+                    logging.info("Closing file dialog: %s", child)
+                    self.tk.call("destroy", child)
+                    return
+        except tk.TclError:
+            return
+
     def _open_dialog(self):
-        path = filedialog.askopenfilename(title="Open Comic", filetypes=FILE_DIALOG_TYPES)
-        if not path:
-            selections = filedialog.askopenfilenames(
+        if self._dialog_active:
+            return
+        self._dialog_active = True
+        logging.info("Open dialog requested.")
+        cursor_was_hidden = self._cursor_hidden
+        if cursor_was_hidden:
+            self._set_cursor_hidden(False)
+        try:
+            path = filedialog.askopenfilename(
+                parent=self,
                 title="Open Comic",
                 filetypes=FILE_DIALOG_TYPES,
             )
-            if selections:
-                path = selections[0]
-        if not path:
-            self._request_focus()
-            return
-        self._open_comic(Path(path))
+            if not path:
+                selections = filedialog.askopenfilenames(
+                    parent=self,
+                    title="Open Comic",
+                    filetypes=FILE_DIALOG_TYPES,
+                )
+                if selections:
+                    path = selections[0]
+            if not path:
+                logging.info("Open dialog canceled by user.")
+                return
+            logging.info("Open dialog selected: %s", path)
+            self._open_comic(Path(path))
+        finally:
+            if cursor_was_hidden:
+                self._set_cursor_hidden(True)
+            self._dialog_active = False
+            if self._pending_quit:
+                self._pending_quit = False
+                self.after(0, self._quit)
+                return
         self._request_focus()
 
     def _open_comic(self, path: Path):
@@ -470,8 +546,10 @@ class ComicViewer(tk.Tk):
         self.comic_path = path
 
         try:
+            logging.info("Opening comic: %s", path)
             self.source = load_comic(path)
         except Exception as e:
+            logging.exception("Failed to open comic: %s", path)
             messagebox.showerror("Could not open comic", str(e))
             self._request_focus()
             return
@@ -480,19 +558,28 @@ class ComicViewer(tk.Tk):
         self._render_current()
 
     def _quit(self):
+        if self._dialog_active:
+            self._pending_quit = True
+            logging.info("Quit requested during dialog; attempting to close dialog.")
+            self._cancel_active_dialog()
+            self.after(100, self._quit)
+            return
         try:
             if self.source and self.source.cleanup:
                 self.source.cleanup()
         finally:
+            logging.info("Destroying app window.")
             self.destroy()
 
     def _minimize(self) -> None:
+        logging.info("Minimize requested.")
         try:
             self.iconify()
         except tk.TclError:
             pass
 
     def _show_help(self) -> None:
+        logging.info("Help dialog requested.")
         messagebox.showinfo(
             "cdisplayagain help",
             "Use arrow keys, Page Up/Down, or mouse wheel to navigate. W toggles fullscreen. Esc quits.",
@@ -511,27 +598,45 @@ class ComicViewer(tk.Tk):
         return menu
 
     def _show_context_menu(self, event) -> None:
+        logging.info("Context menu requested at %s,%s.", event.x_root, event.y_root)
         try:
             self._context_menu.tk_popup(event.x_root, event.y_root)
         finally:
             self._context_menu.grab_release()
 
     def _bind_mouse(self) -> None:
+        self.bind_all("<ButtonPress>", self._log_mouse_event, add=True)
+        self.bind_all("<ButtonRelease>", self._log_mouse_event, add=True)
         self.bind("<ButtonPress-1>", self._start_pan)
         self.bind("<B1-Motion>", self._drag_pan)
         self.bind("<MouseWheel>", self._on_mouse_wheel)
 
+    def _log_mouse_event(self, event) -> None:
+        logging.info(
+            "Mouse event type=%s num=%s delta=%s x=%s y=%s state=%s widget=%s",
+            event.type,
+            getattr(event, "num", None),
+            getattr(event, "delta", None),
+            event.x,
+            event.y,
+            event.state,
+            event.widget,
+        )
+
     def _start_pan(self, event) -> None:
+        logging.info("Pan start y=%s.", event.y)
         self._drag_start_y = event.y
 
     def _drag_pan(self, event) -> None:
         if not hasattr(self, "_drag_start_y"):
             return
+        logging.info("Pan drag y=%s.", event.y)
         delta = self._drag_start_y - event.y
         self._drag_start_y = event.y
         self._scroll_by(delta)
 
     def _on_mouse_wheel(self, event) -> None:
+        logging.info("Mouse wheel delta=%s.", event.delta)
         if event.delta == 0:
             return
         direction = -1 if event.delta > 0 else 1
@@ -634,7 +739,7 @@ class ComicViewer(tk.Tk):
         resized = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
         if self._imagetk_ready:
             try:
-                self._tk_img = ImageTk.PhotoImage(resized)
+                self._tk_img = ImageTk.PhotoImage(resized, master=self)
             except Exception:
                 self._imagetk_ready = False
                 self._tk_img = self._photoimage_from_pil(resized)
@@ -683,6 +788,7 @@ class ComicViewer(tk.Tk):
     def _scroll_by(self, delta: int):
         if not self._scaled_size:
             return
+        logging.info("Scroll by delta=%s.", delta)
         ch = max(1, self.canvas.winfo_height())
         max_offset = max(0, self._scaled_size[1] - ch)
         if max_offset == 0:
@@ -694,6 +800,7 @@ class ComicViewer(tk.Tk):
         self._reposition_current_image()
 
     def _space_advance(self):
+        logging.info("Space advance requested.")
         if self._info_overlay:
             self._dismiss_info()
             self.next_page()
@@ -717,9 +824,11 @@ class ComicViewer(tk.Tk):
         self._scroll_by(step)
 
     def _scroll_down(self):
+        logging.info("Scroll down requested.")
         self._scroll_by(self._scroll_step())
 
     def _scroll_up(self):
+        logging.info("Scroll up requested.")
         self._scroll_by(-self._scroll_step())
 
     def _reposition_current_image(self):
@@ -741,6 +850,7 @@ class ComicViewer(tk.Tk):
 
     def next_page(self):
         """Advance to the next page if available."""
+        logging.info("Next page requested.")
         if not self.source:
             return
         if self._current_index < len(self.source.pages) - 1:
@@ -750,6 +860,7 @@ class ComicViewer(tk.Tk):
 
     def prev_page(self):
         """Move to the previous page if available."""
+        logging.info("Prev page requested.")
         if not self.source:
             return
         if self._current_index > 0:
@@ -759,6 +870,7 @@ class ComicViewer(tk.Tk):
 
     def first_page(self):
         """Jump to the first page in the source."""
+        logging.info("First page requested.")
         if not self.source:
             return
         self._current_index = 0
@@ -767,6 +879,7 @@ class ComicViewer(tk.Tk):
 
     def last_page(self):
         """Jump to the last page in the source."""
+        logging.info("Last page requested.")
         if not self.source:
             return
         self._current_index = len(self.source.pages) - 1
@@ -822,6 +935,7 @@ class ComicViewer(tk.Tk):
 
 def main():
     """Parse arguments and launch the comic viewer."""
+    _init_logging()
     parser = argparse.ArgumentParser(description="Simple CBZ/CBR viewer (cdisplay-ish)")
     parser.add_argument("comic", nargs="?", help="Path to .cbz/.cbr, directory, or image file")
     args = parser.parse_args()
@@ -852,8 +966,6 @@ def main():
     app = ComicViewer(path)
     app.attributes("-fullscreen", True)
     app._fullscreen = True
-    if hasattr(app, "_set_cursor_hidden"):
-        app._set_cursor_hidden(True)
     app._request_focus()
     app.mainloop()
 
