@@ -69,13 +69,31 @@ If you are using `uv`, you can run without activating the virtualenv:
 uv run python cdisplayagain.py path/to/comic.cbz
 ```
 
+Or via the Makefile:
+
+```bash
+make run FILE=path/to/comic.cbz
+```
+
 While viewing, navigate with the arrow keys or scroll wheel, toggle fit
 and zoom modes from the keyboard, and use `Esc` to close the window.
+
+### Makefile targets
+
+- `make venv`: create the uv-managed virtualenv.
+- `make sync`: install dependencies from `uv.lock`.
+- `make lint`: run ruff.
+- `make pytest`: run the test suite.
+- `make run FILE=path/to/comic.cbz`: launch the viewer.
+- `make smoke FILE=path/to/comic.cbz`: print the manual checklist and launch.
 
 ### Development flow
 
 - Stick to descriptive snake_case helpers and small, explicit modules.
-- Run `uv run ruff check .` after each change.
+- Run `make lint` (or `uv run ruff check .`) after each change.
+- Use `make pytest` (or `uv run pytest`) for the test suite.
+- Use `make sync` to mirror CI dependency installs.
+- Use `make smoke FILE=path/to/comic.cbz` to run the manual checklist.
 - Run manual smoke tests by paging through both CBZ and CBR files,
   validating zoom modes, and confirming temp directories are cleaned.
 - When opening pull requests, summarize user impact, list the manual
