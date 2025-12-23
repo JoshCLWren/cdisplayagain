@@ -1,5 +1,6 @@
 import io
 import sys
+import tarfile
 import zipfile
 from pathlib import Path
 
@@ -21,6 +22,35 @@ def _make_cbz(path: Path, names: list[str]) -> None:
             img = Image.new("RGB", (64, 64), color=(10, 20, 30))
             img.save(buf, format="PNG")
             zf.writestr(name, buf.getvalue())
+
+
+def _make_cbz_with_text(path: Path, names: list[str], text_names: list[str]) -> None:
+    with zipfile.ZipFile(path, "w") as zf:
+        for name in names:
+            buf = io.BytesIO()
+            img = Image.new("RGB", (64, 64), color=(10, 20, 30))
+            img.save(buf, format="PNG")
+            zf.writestr(name, buf.getvalue())
+        for name in text_names:
+            zf.writestr(name, "info")
+
+
+def _make_tar(path: Path, names: list[str], text_names: list[str] | None = None) -> None:
+    text_names = text_names or []
+    with tarfile.open(path, "w") as tf:
+        for name in names:
+            buf = io.BytesIO()
+            img = Image.new("RGB", (64, 64), color=(10, 20, 30))
+            img.save(buf, format="PNG")
+            data = buf.getvalue()
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            tf.addfile(info, io.BytesIO(data))
+        for name in text_names:
+            data = b"info"
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            tf.addfile(info, io.BytesIO(data))
 
 
 @pytest.fixture
@@ -60,6 +90,36 @@ def test_launch_fullscreen_enabled_in_main(tmp_path, monkeypatch):
     cdisplayagain.main()
 
     assert calls["fullscreen"] == ("-fullscreen", True)
+
+
+def test_launch_fullscreen_hides_cursor(tmp_path, monkeypatch):
+    img_path = tmp_path / "page1.png"
+    _write_image(img_path)
+
+    calls = {"hidden": None}
+
+    class FakeViewer:
+        def __init__(self, comic_path):
+            self.comic_path = comic_path
+
+        def attributes(self, name, value):
+            return None
+
+        def _request_focus(self):
+            return None
+
+        def _set_cursor_hidden(self, hidden):
+            calls["hidden"] = hidden
+
+        def mainloop(self):
+            return None
+
+    monkeypatch.setattr(cdisplayagain, "ComicViewer", FakeViewer)
+    monkeypatch.setattr(sys, "argv", ["cdisplayagain.py", str(img_path)])
+
+    cdisplayagain.main()
+
+    assert calls["hidden"] is True
 
 
 def test_minimal_ui_has_single_canvas_child(viewer):
@@ -158,13 +218,23 @@ def test_reads_zip_rar_ace_tar_archives(tmp_path):
     rar_path = tmp_path / "comic.rar"
     ace_path = tmp_path / "comic.ace"
     tar_path = tmp_path / "comic.tar"
-    for path in (rar_path, ace_path, tar_path):
+    for path in (rar_path, ace_path):
         path.write_bytes(b"")
+    _make_tar(tar_path, ["01.png"])
 
     assert cdisplayagain.load_comic(zip_path).pages == ["01.png"]
     assert cdisplayagain.load_comic(rar_path).pages == ["01.png"]
     assert cdisplayagain.load_comic(ace_path).pages == ["01.png"]
     assert cdisplayagain.load_comic(tar_path).pages == ["01.png"]
+
+
+def test_reads_tar_archives_with_images_and_text(tmp_path):
+    tar_path = tmp_path / "comic.tar"
+    _make_tar(tar_path, ["02.png", "01.png"], ["info.nfo"])
+
+    source = cdisplayagain.load_comic(tar_path)
+
+    assert source.pages == ["info.nfo", "01.png", "02.png"]
 
 
 def test_sorting_is_alphabetical(tmp_path):
@@ -186,6 +256,14 @@ def test_nfo_txt_displayed_first(tmp_path):
     _write_image(folder / "01.png")
 
     source = cdisplayagain.load_comic(folder)
+    assert source.pages[:2] == ["info.nfo", "readme.txt"]
+
+
+def test_nfo_txt_displayed_first_in_cbz(tmp_path):
+    cbz_path = tmp_path / "comic.cbz"
+    _make_cbz_with_text(cbz_path, ["01.png"], ["info.nfo", "readme.txt"])
+
+    source = cdisplayagain.load_comic(cbz_path)
     assert source.pages[:2] == ["info.nfo", "readme.txt"]
 
 

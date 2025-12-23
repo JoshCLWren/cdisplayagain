@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tarfile
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -24,9 +25,9 @@ from PIL import Image, ImageTk
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tif", ".tiff"}
 IMAGE_FILETYPE_PATTERN = " ".join(f"*{ext}" for ext in sorted(IMAGE_EXTS))
 FILE_DIALOG_TYPES = [
-    ("Comic Archives", "*.cbz *.cbr"),
+    ("Comic Archives", "*.cbz *.cbr *.cbt *.cba *.tar *.zip *.rar *.ace"),
     ("Image Files", IMAGE_FILETYPE_PATTERN),
-    ("All Supported", f"*.cbz *.cbr {IMAGE_FILETYPE_PATTERN}".strip()),
+    ("All Supported", f"*.cbz *.cbr *.cbt *.cba *.tar *.zip *.rar *.ace {IMAGE_FILETYPE_PATTERN}".strip()),
     ("All files", "*.*"),
 ]
 
@@ -74,12 +75,16 @@ class FocusRestorer:
 def load_cbz(path: Path) -> PageSource:
     zf = zipfile.ZipFile(path, "r")
     # Include images even if nested in directories inside the zip
-    names = [n for n in zf.namelist() if not n.endswith("/") and is_image_name(n)]
-    names.sort(key=natural_key)
+    names = [n for n in zf.namelist() if not n.endswith("/")]
+    text_names = [n for n in names if is_text_name(n)]
+    image_names = [n for n in names if is_image_name(n)]
+    text_names.sort(key=natural_key)
+    image_names.sort(key=natural_key)
+    pages = text_names + image_names
 
-    if not names:
+    if not pages:
         zf.close()
-        raise RuntimeError("No images found inside CBZ.")
+        raise RuntimeError("No images or info files found inside CBZ.")
 
     def get_bytes(name: str) -> bytes:
         return zf.read(name)
@@ -90,7 +95,7 @@ def load_cbz(path: Path) -> PageSource:
         except Exception:
             pass
 
-    return PageSource(pages=names, get_bytes=get_bytes, cleanup=cleanup)
+    return PageSource(pages=pages, get_bytes=get_bytes, cleanup=cleanup)
 
 
 def load_cbr(path: Path) -> PageSource:
@@ -110,17 +115,23 @@ def load_cbr(path: Path) -> PageSource:
     if proc.returncode != 0:
         raise RuntimeError(f"unar failed:\n{proc.stderr.strip() or proc.stdout.strip()}")
 
-    files: list[Path] = []
+    text_files: list[Path] = []
+    image_files: list[Path] = []
     for p in tmpdir.rglob("*"):
-        if p.is_file() and p.suffix.casefold() in IMAGE_EXTS:
-            files.append(p)
+        if not p.is_file():
+            continue
+        if is_text_name(p.name):
+            text_files.append(p)
+        elif p.suffix.casefold() in IMAGE_EXTS:
+            image_files.append(p)
 
-    files.sort(key=lambda p: natural_key(str(p.relative_to(tmpdir))))
+    text_files.sort(key=lambda p: natural_key(str(p.relative_to(tmpdir))))
+    image_files.sort(key=lambda p: natural_key(str(p.relative_to(tmpdir))))
 
-    if not files:
-        raise RuntimeError("No images found after extracting CBR.")
+    if not text_files and not image_files:
+        raise RuntimeError("No images or info files found after extracting CBR.")
 
-    rel_names = [str(p.relative_to(tmpdir)) for p in files]
+    rel_names = [str(p.relative_to(tmpdir)) for p in text_files + image_files]
 
     def get_bytes(rel_name: str) -> bytes:
         return (tmpdir / rel_name).read_bytes()
@@ -132,6 +143,44 @@ def load_cbr(path: Path) -> PageSource:
             pass
 
     return PageSource(pages=rel_names, get_bytes=get_bytes, cleanup=cleanup)
+
+
+def load_tar(path: Path) -> PageSource:
+    try:
+        tf = tarfile.open(path, "r")
+    except tarfile.TarError as exc:
+        raise RuntimeError(f"Could not open TAR archive: {exc}") from exc
+
+    members = [m for m in tf.getmembers() if m.isfile()]
+    text_names = [m.name for m in members if is_text_name(m.name)]
+    image_names = [m.name for m in members if is_image_name(m.name)]
+    text_names.sort(key=natural_key)
+    image_names.sort(key=natural_key)
+    pages = text_names + image_names
+
+    if not pages:
+        tf.close()
+        raise RuntimeError("No images or info files found inside TAR.")
+
+    member_map = {m.name: m for m in members}
+
+    def get_bytes(name: str) -> bytes:
+        member = member_map.get(name)
+        if not member:
+            raise RuntimeError(f"Missing entry in TAR: {name}")
+        handle = tf.extractfile(member)
+        if handle is None:
+            raise RuntimeError(f"Could not read TAR member: {name}")
+        with handle:
+            return handle.read()
+
+    def cleanup():
+        try:
+            tf.close()
+        except Exception:
+            pass
+
+    return PageSource(pages=pages, get_bytes=get_bytes, cleanup=cleanup)
 
 
 def load_directory(path: Path) -> PageSource:
@@ -182,7 +231,7 @@ def load_comic(path: Path) -> PageSource:
     if ext == ".tar":
         if path.stat().st_size == 0:
             return PageSource(pages=["01.png"], get_bytes=lambda _: b"", cleanup=None)
-        raise RuntimeError("TAR archives are not supported yet.")
+        return load_tar(path)
     if ext in IMAGE_EXTS:
         return load_image_file(path)
     raise RuntimeError("Unsupported type. Open a .cbz, .cbr, directory, or image file.")
@@ -363,6 +412,8 @@ class ComicViewer(tk.Tk):
         self.bind("Q", lambda e: self._quit())
         self.bind("x", lambda e: self._quit())
         self.bind("m", lambda e: self._minimize())
+        self.bind("w", lambda e: self.toggle_fullscreen())
+        self.bind("W", lambda e: self.toggle_fullscreen())
         self.bind("l", lambda e: self._open_dialog())
         self.bind("L", lambda e: self._open_dialog())
         self.bind("<F1>", lambda e: self._show_help())
@@ -426,7 +477,7 @@ class ComicViewer(tk.Tk):
     def _show_help(self) -> None:
         messagebox.showinfo(
             "cdisplayagain help",
-            "Use arrow keys, Page Up/Down, or mouse wheel to navigate. Esc quits.",
+            "Use arrow keys, Page Up/Down, or mouse wheel to navigate. W toggles fullscreen. Esc quits.",
         )
 
     def _dismiss_info(self) -> None:
@@ -734,6 +785,9 @@ def main():
 
     app = ComicViewer(path)
     app.attributes("-fullscreen", True)
+    app._fullscreen = True
+    if hasattr(app, "_set_cursor_hidden"):
+        app._set_cursor_hidden(True)
     app._request_focus()
     app.mainloop()
 

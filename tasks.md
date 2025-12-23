@@ -1,9 +1,11 @@
 # CDisplay Parity Checklist (Original CDisplay)
 
+Completed: TAR/CBT archive support (reads .tar archives).
+
 ## 1) Launch and window behavior
 - [x] Launches into full-screen immediately (takes over the whole screen by default).
 - [x] Uses a minimal UI, prioritizing reading over toolbars and library features (sequential viewer, not a library manager).
-- [ ] Supports full-screen or windowed viewing, including an option/behavior for hiding the mouse pointer while full-screen.
+- [x] Supports full-screen or windowed viewing, including an option/behavior for hiding the mouse pointer while full-screen.
 
 ## 2) File loading and selection
 - [ ] Right-click opens a pop-up menu, with the top entry being "load files".
@@ -19,11 +21,11 @@
 
 ## 3) Supported formats
 - [x] Reads images in: JPEG, GIF (static), PNG.
-- [ ] Reads archives: ZIP, RAR, ACE, TAR (commonly used as CBZ/CBR/CBA/CBT).
+- [x] Reads archives: ZIP, RAR, ACE, TAR (commonly used as CBZ/CBR/CBA/CBT).
 
 ## 4) Page ordering and “info pages” behavior
 - [x] Sorts pages into alphabetical order for display.
-- [ ] Displays .nfo or .txt files first (comic info screens) before image pages.
+- [x] Displays .nfo or .txt files first (comic info screens) before image pages.
 - [ ] The info screen can be dismissed by:
   - [ ] double-click, or
   - [ ] pressing any key.
