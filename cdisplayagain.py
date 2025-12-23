@@ -22,6 +22,13 @@ from PIL import Image, ImageTk
 
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tif", ".tiff"}
+IMAGE_FILETYPE_PATTERN = " ".join(f"*{ext}" for ext in sorted(IMAGE_EXTS))
+FILE_DIALOG_TYPES = [
+    ("Comic Archives", "*.cbz *.cbr"),
+    ("Image Files", IMAGE_FILETYPE_PATTERN),
+    ("All Supported", f"*.cbz *.cbr {IMAGE_FILETYPE_PATTERN}".strip()),
+    ("All files", "*.*"),
+]
 
 
 def natural_key(s: str):
@@ -104,13 +111,48 @@ def load_cbr(path: Path) -> PageSource:
     return PageSource(pages=rel_names, get_bytes=get_bytes, cleanup=cleanup)
 
 
+def load_directory(path: Path) -> PageSource:
+    if not path.is_dir():
+        raise RuntimeError("Provided path is not a directory")
+
+    files = [p for p in path.rglob("*") if p.is_file() and is_image_name(p.name)]
+    files.sort(key=lambda p: natural_key(str(p.relative_to(path))))
+
+    if not files:
+        raise RuntimeError("No images found in this directory.")
+
+    rel_names = [str(p.relative_to(path)) for p in files]
+
+    def get_bytes(rel_name: str) -> bytes:
+        return (path / rel_name).read_bytes()
+
+    return PageSource(pages=rel_names, get_bytes=get_bytes, cleanup=None)
+
+
+def load_image_file(path: Path) -> PageSource:
+    if not path.is_file() or not is_image_name(path.name):
+        raise RuntimeError("Not an image file")
+
+    name = path.name
+
+    def get_bytes(_: str) -> bytes:
+        return path.read_bytes()
+
+    return PageSource(pages=[name], get_bytes=get_bytes, cleanup=None)
+
+
 def load_comic(path: Path) -> PageSource:
+    if path.is_dir():
+        return load_directory(path)
+
     ext = path.suffix.casefold()
     if ext == ".cbz":
         return load_cbz(path)
     if ext == ".cbr":
         return load_cbr(path)
-    raise RuntimeError("Unsupported file type. Please open a .cbz or .cbr.")
+    if ext in IMAGE_EXTS:
+        return load_image_file(path)
+    raise RuntimeError("Unsupported type. Open a .cbz, .cbr, directory, or image file.")
 
 
 class ComicViewer(tk.Tk):
@@ -150,6 +192,13 @@ class ComicViewer(tk.Tk):
 
         # First render after window appears
         self.after(50, self._render_current)
+
+    def _ensure_focus(self) -> None:
+        try:
+            self.focus_force()
+        except tk.TclError:
+            pass
+        self.canvas.focus_set()
 
     def _prime_imagetk(self) -> None:
         """Ensure Pillow's Tk bindings register the PyImagingPhoto command."""
@@ -231,15 +280,15 @@ class ComicViewer(tk.Tk):
         self.bind("<Escape>", lambda e: self._quit())
         self.bind("q", lambda e: self._quit())
         self.bind("Q", lambda e: self._quit())
+        self.bind("l", lambda e: self._open_dialog())
+        self.bind("L", lambda e: self._open_dialog())
 
     def _open_dialog(self):
-        path = filedialog.askopenfilename(
-            title="Open Comic",
-            filetypes=[("Comic Archives", "*.cbz *.cbr"), ("All files", "*.*")],
-        )
+        path = filedialog.askopenfilename(title="Open Comic", filetypes=FILE_DIALOG_TYPES)
         if not path:
             return
         self._open_comic(Path(path))
+        self._ensure_focus()
 
     def _open_comic(self, path: Path):
         # Cleanup previous source
@@ -421,17 +470,14 @@ class ComicViewer(tk.Tk):
 
 def main():
     parser = argparse.ArgumentParser(description="Simple CBZ/CBR viewer (cdisplay-ish)")
-    parser.add_argument("comic", nargs="?", help="Path to .cbz or .cbr")
+    parser.add_argument("comic", nargs="?", help="Path to .cbz/.cbr, directory, or image file")
     args = parser.parse_args()
 
     def pick_file_via_dialog() -> Optional[Path]:
         dialog_root = tk.Tk()
         dialog_root.withdraw()
         try:
-            selection = filedialog.askopenfilename(
-                title="Open Comic",
-                filetypes=[("Comic Archives", "*.cbz *.cbr"), ("All files", "*.*")],
-            )
+            selection = filedialog.askopenfilename(title="Open Comic", filetypes=FILE_DIALOG_TYPES)
         finally:
             dialog_root.destroy()
         if not selection:
@@ -452,7 +498,7 @@ def main():
 
     app = ComicViewer(path)
     app.attributes("-fullscreen", True)
-    app.focus_force()
+    app._ensure_focus()
     app.mainloop()
 
 
