@@ -82,6 +82,9 @@ def test_launch_fullscreen_enabled_in_main(tmp_path, monkeypatch):
         def attributes(self, name, value):
             calls["fullscreen"] = (name, value)
 
+        def _set_cursor_hidden(self, hidden):
+            return None
+
         def _request_focus(self):
             return None
 

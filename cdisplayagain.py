@@ -454,6 +454,7 @@ class ComicViewer(tk.Tk):
         self.bind_all("q", lambda e: self._quit())
         self.bind_all("Q", lambda e: self._quit())
         self.bind_all("x", lambda e: self._quit())
+        self.bind("x", lambda e: self._quit())
         self.bind("m", lambda e: self._minimize())
         self.bind("w", lambda e: self.toggle_fullscreen())
         self.bind("W", lambda e: self.toggle_fullscreen())
@@ -524,7 +525,7 @@ class ComicViewer(tk.Tk):
             self._dialog_active = False
             if self._pending_quit:
                 self._pending_quit = False
-                self.after(0, self._quit)
+                self._quit()
                 return
         self._request_focus()
 
@@ -966,6 +967,7 @@ def main():
     app = ComicViewer(path)
     app.attributes("-fullscreen", True)
     app._fullscreen = True
+    app._set_cursor_hidden(True)
     app._request_focus()
     app.mainloop()
 

@@ -20,7 +20,10 @@ The viewer lives entirely in the repository root. `cdisplayagain.py` exposes the
 Follow standard PEP 8 spacing (4 spaces, 100-character soft wrap) and favor descriptive snake_case for functions and variables (`natural_key`, `open_archive`). Retain the current pattern of dataclasses (`Archive`, `PageSource`) for typed data containers and keep public functions annotated with precise types. Prefer explicit helper names (e.g., `load_cbz`) and guard Tk callbacks with early returns rather than nesting.
 
 ## Testing Guidelines
-There is no automated test suite yet; when adding one, scaffold `tests/` with `pytest` and name cases after the behavior under test (e.g., `test_load_cbz_sorts_pages`). For now, perform manual smoke tests by running `python cdisplayagain.py path/to/sample.cbz`, opening both `.cbz` and `.cbr` samples, paging through images, toggling fit/zoom, and ensuring cleanup of temporary directories. Document any manual checklist you execute inside the pull request.
+- Automated tests live in `tests/` and run with `uv run pytest` (or `make pytest`).
+- When adding tests, keep `pytest` naming like `test_load_cbz_sorts_pages`.
+- When using fakes, mirror the real `ComicViewer` interface rather than relaxing production code.
+- For manual smoke tests, run `uv run python cdisplayagain.py path/to/sample.cbz`, open both `.cbz` and `.cbr` samples, page through images, toggle fit/zoom, and ensure cleanup of temporary directories. Document any manual checklist you execute inside the pull request.
 
 ## Commit & Pull Request Guidelines
 Use imperative, component-scoped commits such as `Add CBR extraction error copy` or `Refine zoom keyboard shortcuts`. Bundle related changes per commit, referencing issue numbers in the footer when applicable. Pull requests should summarize user impact, list testing performed (commands and archive types opened), note any new dependencies (system packages like `unar`), and attach screenshots when UI is affected.
