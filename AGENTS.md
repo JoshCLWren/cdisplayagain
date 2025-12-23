@@ -1,5 +1,12 @@
 # Repository Guidelines
 
+## Project Ethos
+- **Honor the original experience:** Preserve CDisplay's fast, lightweight, and keyboard-first feel rather than reinventing the workflow.
+- **Modernize without bloat:** Adopt Python conveniences and Tk widgets only when they simplify maintenance; avoid bolting on features that slow startup or clutter the UI.
+- **Respect readers' libraries:** Never mutate archives, keep temporary files contained and cleaned, and surface errors before data loss can occur.
+- **Prefer clarity over cleverness:** Write explicit helpers, document design decisions in pull requests, and leave the code approachable for hobbyist contributors.
+- **Cross-platform empathy:** Test on at least one non-Windows platform, call out external dependencies like `unar`, and avoid shell-specific shortcuts.
+
 ## Project Structure & Module Organization
 The viewer lives entirely in the repository root. `cdisplayagain.py` exposes the CLI-oriented entrypoint with a `PageSource` abstraction and rendering loop built around `Archive` subclasses for CBZ/CBR handling. Tooling metadata (`pyproject.toml`, `uv.lock`) defines the Pillow and rarfile dependencies; assets are loaded directly from archives at runtime, so there is no static `assets/` directory. Expect any future modules (tests, components, helpers) to sit beside these files unless a new package directory is created.
 

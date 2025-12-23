@@ -1,27 +1,62 @@
-Remake of cdisplay in Python. 
+## cdisplayagain
 
-From the orginal website:
-CDisplay Sequential Image Viewer 	
-	Download the sequential image viewing utility.  Free!
+`cdisplayagain` is a minimalist, cross-platform remake of the classic
+Windows-only CDisplay sequential image viewer. The goal is to keep the
+original spirit—fast page flips, zero data mutation, and archive-first
+comic reading—while modernizing the codebase with Python, Pillow, and a
+clean CLI workflow.
 
-The Windows Image Viewer 'CDisplay' was written to ease the viewing of images in JPEG, PNG and static GIF format.  This was partly down to the existing programs currently available being too general purpose and thus awkward to use when simply wanting to view images sequentially.
+### Why it exists
 
-It was written using Borland C++ Builder 5.0 and has been tested under Windows 98, NT 4, 2000 and XP Tablet.
+CDisplay defined how digital comics should feel: unzip-free, keyboard
+friendly, and respectful of your library. The original implementation is
+frozen in time on old Windows releases. This project re-imagines that
+experience with modern tooling so contributors can continue evolving the
+viewer without wrestling dated IDEs or registry quirks.
 
-It is important to understand that this program has NO file write capabilities; files are left totally untouched.  A small amount of configuration data is written to the registry but apart from that the computer and its data is left untouched.
+### Features
 
-Features:
+- Sequential viewing of JPEG, PNG, and GIF pages sourced directly from
+  CBZ/CBR archives.
+- Archive abstractions that automatically sort page names using
+  `natural_key` to match the reading order you expect.
+- Tk-based viewer with fit-to-screen, fit-to-width, and zoom shortcuts
+  mapped to the same effortless keyboard-first workflow as CDisplay.
+- Zero-write runtime: archives stay untouched and temporary extraction
+  directories are cleaned automatically.
 
-Loads JPEG, PNG and static GIF images which are automatically ordered and presented for viewing one at a time or two at a time.
+### Installation
 
-The images may be in a zip, rar, ace or tar archive file - no need to decompress before reading.
+```bash
+python -m venv .venv && source .venv/bin/activate
+python -m pip install -e .
+```
 
-Page through the images sequentially and scroll around pages with single key presses.
+CBR support depends on the external `unar` binary. Install it via your
+package manager (`brew install unar`, `apt install unar`, etc.) and
+ensure it is on `PATH` before launching the viewer.
 
-Automatic page sizing: none; fit to screen, fit to width of screen, fit to width of screen if oversized, display at specific height, or display two pages.  Resizing uses Lanczos interpolation for best picture quality.
+### Usage
 
-Automatic colour balance and yellow reduction if desired.
+Open any `.cbz` or `.cbr` archive:
 
-No bloat caused by non-essential general purpose image processing features.
+```bash
+python cdisplayagain.py path/to/comic.cbz
+```
 
-FREE.
+While viewing, navigate with the arrow keys or scroll wheel, toggle fit
+and zoom modes from the keyboard, and use `Esc` to close the window.
+
+### Development flow
+
+- Stick to descriptive snake_case helpers and small, explicit modules.
+- Run manual smoke tests by paging through both CBZ and CBR files,
+  validating zoom modes, and confirming temp directories are cleaned.
+- When opening pull requests, summarize user impact, list the manual
+  archives you exercised, and attach screenshots if UI changes.
+
+### Credits
+
+All inspiration comes from David Ayton's original "CDisplay Sequential
+Image Viewer". This repo simply keeps that experience alive with a more
+approachable tech stack.
