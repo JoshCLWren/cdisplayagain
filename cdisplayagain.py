@@ -351,40 +351,40 @@ class ComicViewer(tk.Tk):
         self._current_index = len(self.source.pages) - 1
         self._render_current()
 
-def exit_fullscreen(event=None):
-    root.destroy()
-
-
 def main():
     parser = argparse.ArgumentParser(description="Simple CBZ/CBR viewer (cdisplay-ish)")
     parser.add_argument("comic", nargs="?", help="Path to .cbz or .cbr")
     args = parser.parse_args()
 
-    root = tk.Tk()
+    def pick_file_via_dialog() -> Optional[Path]:
+        dialog_root = tk.Tk()
+        dialog_root.withdraw()
+        try:
+            selection = filedialog.askopenfilename(
+                title="Open Comic",
+                filetypes=[("Comic Archives", "*.cbz *.cbr"), ("All files", "*.*")],
+            )
+        finally:
+            dialog_root.destroy()
+        if not selection:
+            return None
+        return Path(selection)
 
     if args.comic:
         path = Path(args.comic).expanduser()
     else:
-        # Start with a file picker if no arg
-
-        root.withdraw()
-        p = filedialog.askopenfilename(
-            title="Open Comic",
-            filetypes=[("Comic Archives", "*.cbz *.cbr"), ("All files", "*.*")],
-        )
-        root.destroy()
-        if not p:
+        chosen = pick_file_via_dialog()
+        if not chosen:
             return
-        path = Path(p)
+        path = chosen
 
     if not path.exists():
         print(f"File not found: {path}", file=sys.stderr)
         sys.exit(1)
 
     app = ComicViewer(path)
-    app.bind("<Escape>", exit_fullscreen)
     app.attributes("-fullscreen", True)
-    app.overrideredirect(True)
+    app.focus_force()
     app.mainloop()
 
 
