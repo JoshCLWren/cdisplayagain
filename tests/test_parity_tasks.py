@@ -196,6 +196,27 @@ def test_open_dialog_uses_multi_select_for_windows_patterns(monkeypatch, viewer)
     assert called["count"] == 1
 
 
+def test_quit_during_open_dialog_defers_until_dialog_closes(monkeypatch, viewer):
+    """Ensure quitting during file dialog waits until the dialog finishes."""
+    destroyed = {"called": False}
+
+    def fake_destroy():
+        destroyed["called"] = True
+
+    def fake_askopenfilename(**_kwargs):
+        viewer._quit()
+        assert destroyed["called"] is False
+        return ""
+
+    monkeypatch.setattr(viewer, "destroy", fake_destroy)
+    monkeypatch.setattr(cdisplayagain.filedialog, "askopenfilename", fake_askopenfilename)
+    monkeypatch.setattr(cdisplayagain.filedialog, "askopenfilenames", lambda **_kwargs: [])
+
+    viewer._open_dialog()
+
+    assert destroyed["called"] is True
+
+
 def test_load_folder_or_archive(tmp_path):
     """Load both a folder and a CBZ archive."""
     folder = tmp_path / "pages"
