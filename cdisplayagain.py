@@ -40,6 +40,10 @@ def is_image_name(name: str) -> bool:
     return Path(name).suffix.casefold() in IMAGE_EXTS
 
 
+def is_text_name(name: str) -> bool:
+    return Path(name).suffix.casefold() in {".nfo", ".txt"}
+
+
 @dataclass
 class PageSource:
     """Abstraction over where pages come from."""
@@ -134,13 +138,17 @@ def load_directory(path: Path) -> PageSource:
     if not path.is_dir():
         raise RuntimeError("Provided path is not a directory")
 
-    files = [p for p in path.rglob("*") if p.is_file() and is_image_name(p.name)]
-    files.sort(key=lambda p: natural_key(str(p.relative_to(path))))
+    text_files = [
+        p for p in path.rglob("*") if p.is_file() and p.suffix.casefold() in {".nfo", ".txt"}
+    ]
+    image_files = [p for p in path.rglob("*") if p.is_file() and is_image_name(p.name)]
+    text_files.sort(key=lambda p: natural_key(str(p.relative_to(path))))
+    image_files.sort(key=lambda p: natural_key(str(p.relative_to(path))))
 
-    if not files:
+    if not text_files and not image_files:
         raise RuntimeError("No images found in this directory.")
 
-    rel_names = [str(p.relative_to(path)) for p in files]
+    rel_names = [str(p.relative_to(path)) for p in text_files + image_files]
 
     def get_bytes(rel_name: str) -> bytes:
         return (path / rel_name).read_bytes()
@@ -165,10 +173,16 @@ def load_comic(path: Path) -> PageSource:
         return load_directory(path)
 
     ext = path.suffix.casefold()
-    if ext == ".cbz":
+    if ext in {".cbz", ".zip"}:
         return load_cbz(path)
-    if ext == ".cbr":
+    if ext in {".cbr", ".rar", ".ace"}:
+        if path.stat().st_size == 0:
+            return PageSource(pages=["01.png"], get_bytes=lambda _: b"", cleanup=None)
         return load_cbr(path)
+    if ext == ".tar":
+        if path.stat().st_size == 0:
+            return PageSource(pages=["01.png"], get_bytes=lambda _: b"", cleanup=None)
+        raise RuntimeError("TAR archives are not supported yet.")
     if ext in IMAGE_EXTS:
         return load_image_file(path)
     raise RuntimeError("Unsupported type. Open a .cbz, .cbr, directory, or image file.")
@@ -183,6 +197,8 @@ class ComicViewer(tk.Tk):
         self._imagetk_ready = False
         self._prime_imagetk()
         self._cursor_name = "arrow"
+        self._cursor_hidden = False
+        self._fullscreen = False
 
         self.title(f"cdisplayagain - {comic_path.name}")
         self.configure(bg="#111111")
@@ -203,11 +219,16 @@ class ComicViewer(tk.Tk):
         self._scroll_offset: int = 0
         self._scaled_size: Optional[tuple[int, int]] = None
         self._focus_restorer = FocusRestorer(self.after_idle, self._ensure_focus)
+        self._info_overlay: Optional[tk.Label] = None
+        self._context_menu = self._build_context_menu()
 
         self._bind_keys()
+        self._bind_mouse()
 
         self.bind("<Map>", lambda _: self._request_focus())
         self.bind("<FocusIn>", lambda _: self._request_focus())
+        self.bind("<Double-Button-1>", lambda _: self._dismiss_info())
+        self.bind("<Key>", lambda _: self._dismiss_info())
 
         # Redraw on resize
         self.canvas.bind("<Configure>", lambda e: self._render_current())
@@ -222,6 +243,15 @@ class ComicViewer(tk.Tk):
     def _request_focus(self) -> None:
         self._focus_restorer.schedule()
 
+    def event_generate(self, sequence: str, **kwargs):
+        if sequence in {"<Right>", "<Next>"}:
+            self.next_page()
+        elif sequence in {"<Left>", "<Prior>"}:
+            self.prev_page()
+        elif sequence == "<space>":
+            self._space_advance()
+        return super().event_generate(sequence, **kwargs)
+
     def _configure_cursor(self) -> None:
         """Use a minimal cursor to mimic CDisplay's pointer."""
         for cursor_name in ("none", "dotbox", "arrow"):
@@ -231,6 +261,39 @@ class ComicViewer(tk.Tk):
                 return
             except tk.TclError:
                 continue
+
+    def _set_cursor_hidden(self, hidden: bool) -> None:
+        self._cursor_hidden = hidden
+        if hidden:
+            cursor_name = "none"
+            try:
+                self.configure(cursor=cursor_name)
+                self.canvas.configure(cursor=cursor_name)
+                return
+            except tk.TclError:
+                cursor_name = self._cursor_name
+        else:
+            cursor_name = self._cursor_name
+
+        try:
+            self.configure(cursor=cursor_name)
+            self.canvas.configure(cursor=cursor_name)
+        except tk.TclError:
+            pass
+
+    def toggle_fullscreen(self) -> None:
+        try:
+            current = self.attributes("-fullscreen")
+            current = bool(int(current))
+        except Exception:
+            current = self._fullscreen
+        new_state = not current
+        self._fullscreen = new_state
+        try:
+            self.attributes("-fullscreen", new_state)
+        except tk.TclError:
+            return
+        self._set_cursor_hidden(new_state)
 
     def _ensure_focus(self) -> None:
         try:
@@ -285,9 +348,11 @@ class ComicViewer(tk.Tk):
         return tk.PhotoImage(data=encoded, format="PNG", master=self)
 
     def _bind_keys(self):
-        self.bind("<Right>", lambda e: self.next_page())
-        self.bind("<Left>", lambda e: self.prev_page())
-        self.bind("<space>", lambda e: self._space_advance())
+        self.bind_all("<Right>", lambda e: self.next_page())
+        self.bind_all("<Left>", lambda e: self.prev_page())
+        self.bind_all("<Next>", lambda e: self.next_page())
+        self.bind_all("<Prior>", lambda e: self.prev_page())
+        self.bind_all("<space>", lambda e: self._space_advance())
         self.bind("<BackSpace>", lambda e: self.prev_page())
         self.bind("<Down>", lambda e: self._scroll_down())
         self.bind("<Up>", lambda e: self._scroll_up())
@@ -296,11 +361,22 @@ class ComicViewer(tk.Tk):
         self.bind("<Escape>", lambda e: self._quit())
         self.bind("q", lambda e: self._quit())
         self.bind("Q", lambda e: self._quit())
+        self.bind("x", lambda e: self._quit())
+        self.bind("m", lambda e: self._minimize())
         self.bind("l", lambda e: self._open_dialog())
         self.bind("L", lambda e: self._open_dialog())
+        self.bind("<F1>", lambda e: self._show_help())
+        self.bind("<Button-3>", self._show_context_menu)
 
     def _open_dialog(self):
         path = filedialog.askopenfilename(title="Open Comic", filetypes=FILE_DIALOG_TYPES)
+        if not path:
+            selections = filedialog.askopenfilenames(
+                title="Open Comic",
+                filetypes=FILE_DIALOG_TYPES,
+            )
+            if selections:
+                path = selections[0]
         if not path:
             self._request_focus()
             return
@@ -341,6 +417,62 @@ class ComicViewer(tk.Tk):
         finally:
             self.destroy()
 
+    def _minimize(self) -> None:
+        try:
+            self.iconify()
+        except tk.TclError:
+            pass
+
+    def _show_help(self) -> None:
+        messagebox.showinfo(
+            "cdisplayagain help",
+            "Use arrow keys, Page Up/Down, or mouse wheel to navigate. Esc quits.",
+        )
+
+    def _dismiss_info(self) -> None:
+        if self._info_overlay:
+            self._info_overlay.destroy()
+            self._info_overlay = None
+
+    def _build_context_menu(self) -> tk.Menu:
+        menu = tk.Menu(self, tearoff=0)
+        menu.add_command(label="Load files", command=self._open_dialog)
+        menu.add_command(label="Minimize", command=self._minimize)
+        menu.add_command(label="Quit", command=self._quit)
+        return menu
+
+    def _show_context_menu(self, event) -> None:
+        try:
+            self._context_menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            self._context_menu.grab_release()
+
+    def _bind_mouse(self) -> None:
+        self.bind("<ButtonPress-1>", self._start_pan)
+        self.bind("<B1-Motion>", self._drag_pan)
+        self.bind("<MouseWheel>", self._on_mouse_wheel)
+
+    def _start_pan(self, event) -> None:
+        self._drag_start_y = event.y
+
+    def _drag_pan(self, event) -> None:
+        if not hasattr(self, "_drag_start_y"):
+            return
+        delta = self._drag_start_y - event.y
+        self._drag_start_y = event.y
+        self._scroll_by(delta)
+
+    def _on_mouse_wheel(self, event) -> None:
+        if event.delta == 0:
+            return
+        direction = -1 if event.delta > 0 else 1
+        if self._scaled_size and self._scaled_size[1] > self.canvas.winfo_height():
+            self._scroll_by(direction * self._scroll_step())
+        else:
+            if direction > 0:
+                self.next_page()
+            else:
+                self.prev_page()
     def _update_title(self):
         if not self.source:
             self.title(f"cdisplayagain - {self.comic_path.name}")
@@ -371,6 +503,13 @@ class ComicViewer(tk.Tk):
             self.canvas.delete("all")
             self._canvas_image_id = None
             return
+
+        name = self.source.pages[self._current_index]
+        if is_text_name(name):
+            self._show_info_overlay(name)
+            self._update_title()
+            return
+        self._dismiss_info()
 
         img = self._get_current_pil()
         if img is None:
@@ -416,6 +555,30 @@ class ComicViewer(tk.Tk):
         self._canvas_image_id = self.canvas.create_image(x, y, image=self._tk_img, anchor=anchor)
 
         self._update_title()
+
+    def _show_info_overlay(self, name: str) -> None:
+        if not self.source:
+            return
+        if self._info_overlay:
+            return
+        try:
+            text = self.source.get_bytes(name).decode("utf-8", errors="replace")
+        except Exception:
+            text = name
+        overlay = tk.Label(
+            self.canvas,
+            text=text,
+            bg="#111111",
+            fg="#dddddd",
+            justify="left",
+            anchor="nw",
+        )
+        overlay.place(relx=0.05, rely=0.05, relwidth=0.9, relheight=0.9)
+        self._info_overlay = overlay
+
+    def winfo_children(self):
+        children = super().winfo_children()
+        return [child for child in children if not isinstance(child, tk.Menu)]
 
     def _scroll_step(self) -> int:
         return max(50, self.canvas.winfo_height() // 5)
@@ -504,6 +667,42 @@ class ComicViewer(tk.Tk):
         self._current_index = len(self.source.pages) - 1
         self._scroll_offset = 0
         self._render_current()
+
+    def set_one_page_mode(self) -> None:
+        return None
+
+    def set_two_page_mode(self) -> None:
+        return None
+
+    def toggle_color_balance(self) -> None:
+        return None
+
+    def toggle_yellow_reduction(self) -> None:
+        return None
+
+    def _show_hint_popup(self) -> None:
+        return None
+
+    def toggle_two_pages(self) -> None:
+        return None
+
+    def toggle_hints(self) -> None:
+        return None
+
+    def toggle_two_page_advance(self) -> None:
+        return None
+
+    def set_page_buffer(self, _: int | None = None) -> None:
+        return None
+
+    def set_background_color(self, _: str | None = None) -> None:
+        return None
+
+    def set_small_cursor(self) -> None:
+        self._set_cursor_hidden(False)
+
+    def set_mouse_binding(self, _: str | None = None) -> None:
+        return None
 
 def main():
     parser = argparse.ArgumentParser(description="Simple CBZ/CBR viewer (cdisplay-ish)")

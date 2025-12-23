@@ -11,9 +11,9 @@
 The viewer lives entirely in the repository root. `cdisplayagain.py` exposes the CLI-oriented entrypoint with a `PageSource` abstraction and rendering loop built around `Archive` subclasses for CBZ/CBR handling. Tooling metadata (`pyproject.toml`, `uv.lock`) defines the Pillow and rarfile dependencies; assets are loaded directly from archives at runtime, so there is no static `assets/` directory. Expect any future modules (tests, components, helpers) to sit beside these files unless a new package directory is created.
 
 ## Build, Test, and Development Commands
-- `python -m venv .venv && source .venv/bin/activate`: create an isolated environment.
-- `python -m pip install -e .`: install Pillow/rarfile from `pyproject.toml` in editable mode.
-- `python cdisplayagain.py path/to/comic.cbz`: open a specific archive immediately, useful for manual regression runs.
+- `uv venv`: create a uv-managed virtualenv (skip activation).
+- `uv sync`: install dependencies via uv without activating the venv.
+- `uv run python cdisplayagain.py path/to/comic.cbz`: open a specific archive immediately, useful for manual regression runs.
 - `uv run python cdisplayagain.py path/to/comic.cbz`: alternative if you prefer the fast `uv` workflow already tracked via `uv.lock`.
 
 ## Coding Style & Naming Conventions
