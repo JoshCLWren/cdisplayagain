@@ -12,7 +12,7 @@ import tempfile
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Callable, Iterable, Optional
 
 import tkinter as tk
 from tkinter import filedialog, messagebox
@@ -46,6 +46,25 @@ class PageSource:
     pages: list[str]                    # display/order names
     get_bytes: callable                 # (page_name:str) -> bytes
     cleanup: Optional[callable] = None  # called on exit
+
+
+class FocusRestorer:
+    """Schedules focus-restoring callbacks without spamming Tk."""
+
+    def __init__(self, after_idle: Callable[[Callable[[], None]], object], focus_fn: Callable[[], None]):
+        self._after_idle = after_idle
+        self._focus_fn = focus_fn
+        self._pending = False
+
+    def schedule(self) -> None:
+        if self._pending:
+            return
+        self._pending = True
+        self._after_idle(self._run)
+
+    def _run(self) -> None:
+        self._pending = False
+        self._focus_fn()
 
 
 def load_cbz(path: Path) -> PageSource:
@@ -180,9 +199,13 @@ class ComicViewer(tk.Tk):
         self._pil_cache: dict[str, Image.Image] = {}
         self._scroll_offset: int = 0
         self._scaled_size: Optional[tuple[int, int]] = None
+        self._focus_restorer = FocusRestorer(self.after_idle, self._ensure_focus)
 
         self._build_menus()
         self._bind_keys()
+
+        self.bind("<Map>", lambda _: self._request_focus())
+        self.bind("<FocusIn>", lambda _: self._request_focus())
 
         # Redraw on resize
         self.canvas.bind("<Configure>", lambda e: self._render_current())
@@ -192,6 +215,10 @@ class ComicViewer(tk.Tk):
 
         # First render after window appears
         self.after(50, self._render_current)
+        self._request_focus()
+
+    def _request_focus(self) -> None:
+        self._focus_restorer.schedule()
 
     def _ensure_focus(self) -> None:
         try:
@@ -286,9 +313,10 @@ class ComicViewer(tk.Tk):
     def _open_dialog(self):
         path = filedialog.askopenfilename(title="Open Comic", filetypes=FILE_DIALOG_TYPES)
         if not path:
+            self._request_focus()
             return
         self._open_comic(Path(path))
-        self._ensure_focus()
+        self._request_focus()
 
     def _open_comic(self, path: Path):
         # Cleanup previous source
@@ -311,6 +339,7 @@ class ComicViewer(tk.Tk):
             self.source = load_comic(path)
         except Exception as e:
             messagebox.showerror("Could not open comic", str(e))
+            self._request_focus()
             return
 
         self._update_title()
@@ -498,7 +527,7 @@ def main():
 
     app = ComicViewer(path)
     app.attributes("-fullscreen", True)
-    app._ensure_focus()
+    app._request_focus()
     app.mainloop()
 
 
