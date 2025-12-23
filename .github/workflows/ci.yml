@@ -43,5 +43,8 @@ jobs:
       - name: Sync dependencies
         run: uv sync --locked
 
+      - name: Install Tk/Xvfb dependencies
+        run: sudo apt-get update && sudo apt-get install -y xvfb python3-tk
+
       - name: Run pytest
         run: xvfb-run -a uv run pytest
