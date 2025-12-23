@@ -1,6 +1,6 @@
 # CDisplay Parity Checklist (Original CDisplay)
 
-Completed: TAR/CBT archive support (reads .tar archives).
+Completed: Show info overlay while rendering the first image page.
 
 ## 1) Launch and window behavior
 - [x] Launches into full-screen immediately (takes over the whole screen by default).
@@ -29,7 +29,7 @@ Completed: TAR/CBT archive support (reads .tar archives).
 - [ ] The info screen can be dismissed by:
   - [ ] double-click, or
   - [ ] pressing any key.
-- [ ] While the info is displayed/dismissed, the initial page is also shown (the readme describes them as simultaneous).
+- [x] While the info is displayed/dismissed, the initial page is also shown (the readme describes them as simultaneous).
 
 ## 5) Core navigation keys and behavior
 ### Page turning (basic)

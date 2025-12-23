@@ -532,12 +532,17 @@ class ComicViewer(tk.Tk):
         self.title(f"cdisplayagain - {self.comic_path.name} ({self._current_index + 1}/{total})")
 
     def _get_current_pil(self) -> Optional[Image.Image]:
+        return self._get_pil_for_index(self._current_index)
+
+    def _get_pil_for_index(self, index: int) -> Optional[Image.Image]:
         if not self.source:
             return None
         if not self.source.pages:
             return None
+        if index < 0 or index >= len(self.source.pages):
+            return None
 
-        name = self.source.pages[self._current_index]
+        name = self.source.pages[index]
         if name in self._pil_cache:
             return self._pil_cache[name]
 
@@ -549,6 +554,14 @@ class ComicViewer(tk.Tk):
         self._pil_cache[name] = img
         return img
 
+    def _find_next_image_index(self, start_index: int) -> Optional[int]:
+        if not self.source:
+            return None
+        for index in range(start_index + 1, len(self.source.pages)):
+            if not is_text_name(self.source.pages[index]):
+                return index
+        return None
+
     def _render_current(self):
         if not self.source:
             self.canvas.delete("all")
@@ -557,12 +570,28 @@ class ComicViewer(tk.Tk):
 
         name = self.source.pages[self._current_index]
         if is_text_name(name):
-            self._show_info_overlay(name)
+            self._render_info_with_image(name)
             self._update_title()
             return
         self._dismiss_info()
+        self._render_image_for_index(self._current_index)
+        self._update_title()
 
-        img = self._get_current_pil()
+    def _render_info_with_image(self, name: str) -> None:
+        image_index = self._find_next_image_index(self._current_index)
+        if image_index is None:
+            self.canvas.delete("all")
+            self._canvas_image_id = None
+            self._current_pil = None
+            self._scaled_size = None
+            self._scroll_offset = 0
+            self._show_info_overlay(name)
+            return
+        self._render_image_for_index(image_index)
+        self._show_info_overlay(name)
+
+    def _render_image_for_index(self, index: int) -> None:
+        img = self._get_pil_for_index(index)
         if img is None:
             self.canvas.delete("all")
             self._canvas_image_id = None
@@ -605,8 +634,6 @@ class ComicViewer(tk.Tk):
             y = -self._scroll_offset
         self._canvas_image_id = self.canvas.create_image(x, y, image=self._tk_img, anchor=anchor)
 
-        self._update_title()
-
     def _show_info_overlay(self, name: str) -> None:
         if not self.source:
             return
@@ -648,6 +675,10 @@ class ComicViewer(tk.Tk):
         self._reposition_current_image()
 
     def _space_advance(self):
+        if self._info_overlay:
+            self._dismiss_info()
+            self.next_page()
+            return
         if not self._scaled_size:
             self.next_page()
             return

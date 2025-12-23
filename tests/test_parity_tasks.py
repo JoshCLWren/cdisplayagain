@@ -277,6 +277,19 @@ def test_info_screen_shows_first_page_simultaneously(viewer):
     assert viewer._current_pil is not None
 
 
+def test_info_screen_overlays_first_image_when_text_first(viewer, tmp_path):
+    folder = tmp_path / "book"
+    folder.mkdir()
+    (folder / "info.nfo").write_text("info")
+    _write_image(folder / "01.png")
+
+    viewer._open_comic(folder)
+    viewer.update()
+
+    assert viewer._info_overlay is not None
+    assert viewer._current_pil is not None
+
+
 def test_arrow_keys_turn_pages(viewer, tmp_path):
     img1 = tmp_path / "page1.png"
     _write_image(img1)
