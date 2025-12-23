@@ -75,6 +75,7 @@ and zoom modes from the keyboard, and use `Esc` to close the window.
 ### Development flow
 
 - Stick to descriptive snake_case helpers and small, explicit modules.
+- Run `uv run ruff check .` after each change.
 - Run manual smoke tests by paging through both CBZ and CBR files,
   validating zoom modes, and confirming temp directories are cleaned.
 - When opening pull requests, summarize user impact, list the manual
