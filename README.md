@@ -32,6 +32,25 @@ python -m venv .venv && source .venv/bin/activate
 python -m pip install -e .
 ```
 
+If you already use `uv`, you can skip activation and use its pip shim:
+
+```bash
+uv venv
+uv pip install -e .
+```
+
+To install `uv` if you do not have it yet:
+
+```bash
+pipx install uv
+```
+
+Or, via the official installer:
+
+```bash
+curl -Ls https://astral.sh/uv/install.sh | sh
+```
+
 CBR support depends on the external `unar` binary. Install it via your
 package manager (`brew install unar`, `apt install unar`, etc.) and
 ensure it is on `PATH` before launching the viewer.
@@ -42,6 +61,12 @@ Open any `.cbz` or `.cbr` archive:
 
 ```bash
 python cdisplayagain.py path/to/comic.cbz
+```
+
+If you are using `uv`, you can run without activating the virtualenv:
+
+```bash
+uv run python cdisplayagain.py path/to/comic.cbz
 ```
 
 While viewing, navigate with the arrow keys or scroll wheel, toggle fit
