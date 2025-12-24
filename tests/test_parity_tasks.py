@@ -171,7 +171,7 @@ def test_fullscreen_windowed_toggle_and_cursor_hidden():
 
 def test_right_click_opens_context_menu(viewer):
     """Ensure right-click binds to the context menu."""
-    assert viewer.bind("<Button-3>") != ""
+    assert viewer.bind_all("<Button-3>") != ""
     assert hasattr(viewer, "_context_menu")
     first_label = viewer._context_menu.entrycget(0, "label")
     assert first_label == "Load files"
@@ -430,29 +430,29 @@ def test_spacebar_scrolls_then_advances(viewer, tmp_path):
 
 def test_mouse_drag_pans_page(viewer):
     """Ensure mouse drag bindings exist for panning."""
-    assert viewer.bind("<ButtonPress-1>") != ""
-    assert viewer.bind("<B1-Motion>") != ""
+    assert viewer.canvas.bind("<ButtonPress-1>") != ""
+    assert viewer.canvas.bind("<B1-Motion>") != ""
 
 
 def test_mouse_wheel_scrolls_or_navigates(viewer):
     """Ensure mouse wheel binding exists."""
-    assert viewer.bind("<MouseWheel>") != ""
+    assert viewer.canvas.bind("<MouseWheel>") != ""
 
 
 def test_f1_opens_help(viewer):
     """Ensure F1 binding exists for help."""
-    assert viewer.bind("<F1>") != ""
+    assert viewer.bind_all("<F1>") != ""
 
 
 def test_m_minimizes_program(viewer):
     """Ensure the minimize shortcut exists."""
-    assert viewer.bind("m") != ""
+    assert viewer.bind_all("m") != ""
     assert hasattr(viewer, "_minimize")
 
 
 def test_x_terminates_program(viewer):
     """Ensure the quit shortcut exists."""
-    assert viewer.bind("x") != ""
+    assert viewer.bind_all("x") != ""
     assert hasattr(viewer, "_quit")
 
 
