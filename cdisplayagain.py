@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Lightweight comic reader inspired by CDisplay."""
+
 from __future__ import annotations
 
 import argparse
@@ -12,9 +13,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import tarfile
 import time
-import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
@@ -23,7 +22,25 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 
 from PIL import Image, ImageTk
+import shutil
+import sys
 
+
+def require_unar() -> None:
+    """Ensure that 'unar' is available on the system for CBR support."""
+    if shutil.which("unar"):
+        return
+
+    if sys.platform.startswith("linux"):
+        hint = "sudo apt install unar"
+    elif sys.platform == "darwin":
+        hint = "brew install unar"
+    else:
+        hint = "Install 'unar' using your system package manager"
+
+    raise SystemExit(
+        f"CBR support requires the external tool 'unar'.\n\nInstall it with:\n  {hint}\n"
+    )
 
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tif", ".tiff"}
@@ -31,7 +48,10 @@ IMAGE_FILETYPE_PATTERN = " ".join(f"*{ext}" for ext in sorted(IMAGE_EXTS))
 FILE_DIALOG_TYPES = [
     ("Comic Archives", "*.cbz *.cbr *.cbt *.cba *.tar *.zip *.rar *.ace"),
     ("Image Files", IMAGE_FILETYPE_PATTERN),
-    ("All Supported", f"*.cbz *.cbr *.cbt *.cba *.tar *.zip *.rar *.ace {IMAGE_FILETYPE_PATTERN}".strip()),
+    (
+        "All Supported",
+        f"*.cbz *.cbr *.cbt *.cba *.tar *.zip *.rar *.ace {IMAGE_FILETYPE_PATTERN}".strip(),
+    ),
     ("All files", "*.*"),
 ]
 
@@ -74,15 +94,17 @@ def is_text_name(name: str) -> bool:
 class PageSource:
     """Abstraction over where pages come from."""
 
-    pages: list[str]                    # display/order names
-    get_bytes: callable                 # (page_name:str) -> bytes
+    pages: list[str]  # display/order names
+    get_bytes: callable  # (page_name:str) -> bytes
     cleanup: Optional[callable] = None  # called on exit
 
 
 class FocusRestorer:
     """Schedules focus-restoring callbacks without spamming Tk."""
 
-    def __init__(self, after_idle: Callable[[Callable[[], None]], object], focus_fn: Callable[[], None]):
+    def __init__(
+        self, after_idle: Callable[[Callable[[], None]], object], focus_fn: Callable[[], None]
+    ):
         """Store Tk's idle scheduler and the focus callback."""
         self._after_idle = after_idle
         self._focus_fn = focus_fn
@@ -102,6 +124,8 @@ class FocusRestorer:
 
 def load_cbz(path: Path) -> PageSource:
     """Load a CBZ/ZIP archive into a page source."""
+    import zipfile
+
     zf = zipfile.ZipFile(path, "r")
     # Include images even if nested in directories inside the zip
     names = [n for n in zf.namelist() if not n.endswith("/")]
@@ -177,6 +201,8 @@ def load_cbr(path: Path) -> PageSource:
 
 def load_tar(path: Path) -> PageSource:
     """Load a TAR archive into a page source."""
+    import tarfile
+
     try:
         tf = tarfile.open(path, "r")
     except tarfile.TarError as exc:
@@ -271,13 +297,16 @@ def load_comic(path: Path) -> PageSource:
     raise RuntimeError("Unsupported type. Open a .cbz, .cbr, directory, or image file.")
 
 
-class ComicViewer(tk.Tk):
+class ComicViewer(tk.Frame):
     """Tk viewer for comic archives and image folders."""
 
-    def __init__(self, comic_path: Path):
-        """Initialize the window and load the initial comic."""
-        super().__init__()
+    def __init__(self, master: tk.Tk, comic_path: Path):
+        """Initialize the viewer frame and load the initial comic."""
+        super().__init__(master)
         self.comic_path = comic_path
+        self.master = master
+        self.pack(fill=tk.BOTH, expand=True)
+
         self.source: Optional[PageSource] = None
 
         self._imagetk_ready = False
@@ -286,8 +315,9 @@ class ComicViewer(tk.Tk):
         self._cursor_hidden = False
         self._fullscreen = False
 
-        self.title(f"cdisplayagain - {comic_path.name}")
+        self.master.title(f"cdisplayagain - {comic_path.name}")
         self.configure(bg="#111111")
+        self.master.configure(bg="#111111")
         self._configure_cursor()
 
         self.canvas = tk.Canvas(self, bg="#111111", highlightthickness=0)
@@ -374,14 +404,14 @@ class ComicViewer(tk.Tk):
         """Toggle fullscreen state and sync cursor visibility."""
         logging.info("Toggle fullscreen requested.")
         try:
-            current = self.attributes("-fullscreen")
+            current = self.master.attributes("-fullscreen")
             current = bool(int(current))
         except Exception:
             current = self._fullscreen
         new_state = not current
         self._fullscreen = new_state
         try:
-            self.attributes("-fullscreen", new_state)
+            self.master.attributes("-fullscreen", new_state)
         except tk.TclError:
             return
         self._set_cursor_hidden(new_state)
@@ -570,12 +600,12 @@ class ComicViewer(tk.Tk):
                 self.source.cleanup()
         finally:
             logging.info("Destroying app window.")
-            self.destroy()
+            self.master.destroy()
 
     def _minimize(self) -> None:
         logging.info("Minimize requested.")
         try:
-            self.iconify()
+            self.master.iconify()
         except tk.TclError:
             pass
 
@@ -648,12 +678,15 @@ class ComicViewer(tk.Tk):
                 self.next_page()
             else:
                 self.prev_page()
+
     def _update_title(self):
         if not self.source:
-            self.title(f"cdisplayagain - {self.comic_path.name}")
+            self.master.title(f"cdisplayagain - {self.comic_path.name}")
             return
         total = len(self.source.pages)
-        self.title(f"cdisplayagain - {self.comic_path.name} ({self._current_index + 1}/{total})")
+        self.master.title(
+            f"cdisplayagain - {self.comic_path.name} ({self._current_index + 1}/{total})"
+        )
 
     def _get_current_pil(self) -> Optional[Image.Image]:
         return self._get_pil_for_index(self._current_index)
@@ -934,6 +967,7 @@ class ComicViewer(tk.Tk):
         """Provide placeholder for mouse binding selection parity."""
         return None
 
+
 def main():
     """Parse arguments and launch the comic viewer."""
     _init_logging()
@@ -941,36 +975,39 @@ def main():
     parser.add_argument("comic", nargs="?", help="Path to .cbz/.cbr, directory, or image file")
     args = parser.parse_args()
 
-    def pick_file_via_dialog() -> Optional[Path]:
-        dialog_root = tk.Tk()
-        dialog_root.withdraw()
-        try:
-            selection = filedialog.askopenfilename(title="Open Comic", filetypes=FILE_DIALOG_TYPES)
-        finally:
-            dialog_root.destroy()
-        if not selection:
-            return None
-        return Path(selection)
+    # Create Tk root once
+    root = tk.Tk()
+    root.withdraw()
 
+    path: Optional[Path] = None
     if args.comic:
         path = Path(args.comic).expanduser()
     else:
-        chosen = pick_file_via_dialog()
-        if not chosen:
+        # Use the existing root for the dialog
+        selection = filedialog.askopenfilename(
+            parent=root, title="Open Comic", filetypes=FILE_DIALOG_TYPES
+        )
+        if not selection:
+            root.destroy()
             return
-        path = chosen
+        path = Path(selection)
 
     if not path.exists():
         print(f"File not found: {path}", file=sys.stderr)
+        root.destroy()
         sys.exit(1)
 
-    app = ComicViewer(path)
-    app.attributes("-fullscreen", True)
+    app = ComicViewer(root, path)
+    # Set initial full screen state
+    root.attributes("-fullscreen", True)
     app._fullscreen = True
     app._set_cursor_hidden(True)
     app._request_focus()
-    app.mainloop()
+
+    root.deiconify()
+    root.mainloop()
 
 
 if __name__ == "__main__":
+    require_unar()
     main()

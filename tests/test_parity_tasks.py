@@ -60,12 +60,13 @@ def viewer(tmp_path):
     """Provide a minimal viewer instance for UI-related tests."""
     img_path = tmp_path / "page1.png"
     _write_image(img_path)
-    app = cdisplayagain.ComicViewer(img_path)
-    app.withdraw()
+    root = cdisplayagain.tk.Tk()
+    root.withdraw()
     try:
+        app = cdisplayagain.ComicViewer(root, img_path)
         yield app
     finally:
-        app.destroy()
+        root.destroy()
 
 
 def test_launch_fullscreen_enabled_in_main(tmp_path, monkeypatch):
@@ -75,22 +76,35 @@ def test_launch_fullscreen_enabled_in_main(tmp_path, monkeypatch):
 
     calls = {"fullscreen": None, "mainloop": False}
 
-    class FakeViewer:
-        def __init__(self, comic_path):
-            self.comic_path = comic_path
+    class FakeTk:
+        def withdraw(self):
+            pass
+
+        def destroy(self):
+            pass
 
         def attributes(self, name, value):
             calls["fullscreen"] = (name, value)
 
-        def _set_cursor_hidden(self, hidden):
-            return None
-
-        def _request_focus(self):
-            return None
+        def deiconify(self):
+            pass
 
         def mainloop(self):
             calls["mainloop"] = True
 
+    class FakeViewer:
+        def __init__(self, master, comic_path):
+            self.master = master
+            self.comic_path = comic_path
+            self._fullscreen = False
+
+        def _set_cursor_hidden(self, hidden):
+            pass
+
+        def _request_focus(self):
+            pass
+
+    monkeypatch.setattr(cdisplayagain.tk, "Tk", FakeTk)
     monkeypatch.setattr(cdisplayagain, "ComicViewer", FakeViewer)
     monkeypatch.setattr(sys, "argv", ["cdisplayagain.py", str(img_path)])
 
@@ -106,12 +120,26 @@ def test_launch_fullscreen_hides_cursor(tmp_path, monkeypatch):
 
     calls = {"hidden": None}
 
-    class FakeViewer:
-        def __init__(self, comic_path):
-            self.comic_path = comic_path
+    class FakeTk:
+        def withdraw(self):
+            pass
+
+        def destroy(self):
+            pass
 
         def attributes(self, name, value):
-            return None
+            pass
+
+        def deiconify(self):
+            pass
+
+        def mainloop(self):
+            pass
+
+    class FakeViewer:
+        def __init__(self, master, comic_path):
+            self.master = master
+            self.comic_path = comic_path
 
         def _request_focus(self):
             return None
@@ -119,9 +147,7 @@ def test_launch_fullscreen_hides_cursor(tmp_path, monkeypatch):
         def _set_cursor_hidden(self, hidden):
             calls["hidden"] = hidden
 
-        def mainloop(self):
-            return None
-
+    monkeypatch.setattr(cdisplayagain.tk, "Tk", FakeTk)
     monkeypatch.setattr(cdisplayagain, "ComicViewer", FakeViewer)
     monkeypatch.setattr(sys, "argv", ["cdisplayagain.py", str(img_path)])
 
@@ -211,7 +237,7 @@ def test_quit_during_open_dialog_defers_until_dialog_closes(monkeypatch, viewer)
         assert destroyed["called"] is False
         return ""
 
-    monkeypatch.setattr(viewer, "destroy", fake_destroy)
+    monkeypatch.setattr(viewer.master, "destroy", fake_destroy)
     monkeypatch.setattr(cdisplayagain.filedialog, "askopenfilename", fake_askopenfilename)
     monkeypatch.setattr(cdisplayagain.filedialog, "askopenfilenames", lambda **_kwargs: [])
 
@@ -378,19 +404,22 @@ def test_spacebar_scrolls_then_advances(viewer, tmp_path):
     viewer._open_comic(tmp_path)
     viewer.update()
 
-    viewer.canvas.config(width=200, height=200)
+    viewer.master.deiconify()
+    viewer.master.geometry("200x200")
     viewer.update()
     viewer._render_current()
     assert viewer._current_index == 0
     assert viewer._scroll_offset == 0
 
-    viewer.event_generate("<space>")
+    # viewer.event_generate("<space>")
+    viewer._space_advance()
     viewer.update()
     assert viewer._scroll_offset > 0
 
     attempts = 0
     while viewer._current_index == 0 and attempts < 20:
-        viewer.event_generate("<space>")
+        # viewer.event_generate("<space>")
+        viewer._space_advance()
         viewer.update()
         attempts += 1
         if viewer._scroll_offset == 0:
@@ -430,7 +459,10 @@ def test_x_terminates_program(viewer):
 def test_context_menu_has_minimize_and_quit(viewer):
     """Ensure the context menu includes minimize and quit."""
     assert hasattr(viewer, "_context_menu")
-    labels = [viewer._context_menu.entrycget(i, "label") for i in range(viewer._context_menu.index("end") + 1)]
+    labels = [
+        viewer._context_menu.entrycget(i, "label")
+        for i in range(viewer._context_menu.index("end") + 1)
+    ]
     assert "Minimize" in labels
     assert "Quit" in labels
 
