@@ -15,3 +15,4 @@ logs/
 .envrc
 cdisplayagain.egg-info/
 cdisplayagain.spec
+*.log
