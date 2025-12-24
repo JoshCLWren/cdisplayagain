@@ -60,6 +60,9 @@ jobs:
       - name: Extract venv
         run: tar -xzf venv.tar.gz
 
+      - name: Install xvfb
+        run: apt-get update -qq && apt-get install -y -qq xvfb
+
       - name: Run pytest
         shell: bash
         run: xvfb-run -a .venv/bin/pytest --cov=cdisplayagain --cov-report=xml --cov-fail-under=75
