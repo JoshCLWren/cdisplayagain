@@ -1,4 +1,4 @@
-.PHONY: help lint pytest sync venv run smoke clean-build build build-onedir install install-bin install-desktop mime-query redo ci-test-debian ci-test-local
+.PHONY: help lint pytest sync venv run smoke clean-build build build-onedir install install-bin install-desktop mime-query redo ci-test-debian ci-test-local ci-build-image
 
 # Configuration
 PREFIX ?= /usr/local
@@ -102,15 +102,17 @@ ci-test-local:  ## Run CI-like tests locally (requires xvfb and libvips)
 		grep -E "passed|failed|ERROR|coverage" ci-test-output.log | tail -10; \
 	fi
 
-ci-test-debian:  ## Run tests in debian container (like GitHub CI)
-	@echo "Running tests in debian:13 container (like CI)..."
-	@docker run --rm -v "$(PWD):/app" -w /app debian:13 bash -c \
-		'apt-get update -qq && apt-get install -y -qq ca-certificates curl libvips python3 python3-venv python3-tk xvfb && \
-		curl -LsSf https://astral.sh/uv/install.sh | sh > /dev/null 2>&1 && \
-		export PATH="$$HOME/.local/bin:$$PATH" && \
-		uv python install 3.12 && uv venv && uv sync --locked && \
-		xvfb-run -a --server-args="-screen 0 1280x1024x24" uv run pytest tests/ -q --tb=short' \
-		2>&1 | tee ci-test-debian-output.log
+ci-build-image:  ## Build/rebuild cached debian image
+	@echo "Building cached debian image..."
+	@docker compose build ci
+
+ci-test-debian:  ## Run tests in cached debian container (like GitHub CI)
+	@echo "Running tests in cached debian container..."
+	@if ! docker image inspect cdisplayagain-ci:13 >/dev/null 2>&1; then \
+		echo "Cached image not found, building..."; \
+		$(MAKE) ci-build-image; \
+	fi
+	@docker compose run --rm ci 2>&1 | tee ci-test-debian-output.log
 	@if [ -f ci-test-debian-output.log ]; then \
 		echo "=== CI Test Output Summary ==="; \
 		grep -E "passed|failed|ERROR|coverage" ci-test-debian-output.log | tail -10; \

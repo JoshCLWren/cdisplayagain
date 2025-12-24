@@ -170,8 +170,7 @@ def test_perf_cbr_extraction_overhead(tmp_path):
     'unar' handles zips too, so we can test the subprocess pathway effectively.
     """
     unar_path = shutil.which("unar")
-    if not unar_path:
-        pytest.skip("unar not found")
+    assert unar_path, "unar tool is required for CBR performance test"
 
     # We rename a ZIP to .cbr. cdisplayagain.py calls unar for .cbr.
     # unar detects file type by signature, so it should handle a zip-named-cbr just fine.
