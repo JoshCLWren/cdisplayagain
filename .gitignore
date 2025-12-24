@@ -12,3 +12,6 @@ wheels/
 
 .coverage
 logs/
+.envrc
+cdisplayagain.egg-info/
+cdisplayagain.spec
