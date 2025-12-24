@@ -6,12 +6,9 @@ on:
   pull_request:
 
 jobs:
-  ci:
+  build:
     runs-on: ubuntu-latest
     container: debian:13
-    strategy:
-      matrix:
-        task: [lint, test]
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -19,17 +16,55 @@ jobs:
       - name: Setup environment
         uses: ./.github/actions/setup
 
-      - name: Run ${{ matrix.task }}
+      - name: Upload venv artifact
+        run: tar -czf venv.tar.gz .venv
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: venv
+          path: venv.tar.gz
+
+  lint:
+    runs-on: ubuntu-latest
+    container: debian:13
+    needs: build
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Download venv artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: venv
+
+      - name: Extract venv
+        run: tar -xzf venv.tar.gz
+
+      - name: Run ruff
         shell: bash
-        run: |
-          if [ "${{ matrix.task }}" = "lint" ]; then
-            uv run ruff check .
-          else
-            xvfb-run -a uv run pytest --cov=cdisplayagain --cov-report=xml --cov-fail-under=75
-          fi
+        run: .venv/bin/ruff check .
+
+  tests:
+    runs-on: ubuntu-latest
+    container: debian:13
+    needs: build
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Download venv artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: venv
+
+      - name: Extract venv
+        run: tar -xzf venv.tar.gz
+
+      - name: Run pytest
+        shell: bash
+        run: xvfb-run -a .venv/bin/pytest --cov=cdisplayagain --cov-report=xml --cov-fail-under=75
 
       - name: Upload coverage to Codecov
-        if: matrix.task == 'test'
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
