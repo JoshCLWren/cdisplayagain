@@ -107,8 +107,9 @@ ci-test-debian:  ## Run tests in debian container (like GitHub CI)
 	@docker run --rm -v "$(PWD):/app" -w /app debian:13 bash -c \
 		'apt-get update -qq && apt-get install -y -qq ca-certificates curl libvips python3 python3-venv python3-tk xvfb && \
 		curl -LsSf https://astral.sh/uv/install.sh | sh > /dev/null 2>&1 && \
-		uv venv --python python3 && uv sync --locked && \
-		xvfb-run -a uv run pytest tests/ -q --tb=short' \
+		export PATH="$$HOME/.local/bin:$$PATH" && \
+		uv python install 3.12 && uv venv && uv sync --locked && \
+		xvfb-run -a --server-args="-screen 0 1280x1024x24" uv run pytest tests/ -q --tb=short' \
 		2>&1 | tee ci-test-debian-output.log
 	@if [ -f ci-test-debian-output.log ]; then \
 		echo "=== CI Test Output Summary ==="; \

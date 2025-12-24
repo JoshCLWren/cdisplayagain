@@ -6,66 +6,30 @@ on:
   pull_request:
 
 jobs:
-  lint:
+  ci:
     runs-on: ubuntu-latest
     container: debian:13
+    strategy:
+      matrix:
+        task: [lint, test]
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Install system dependencies
-        run: >
-          apt-get update &&
-          apt-get install -y
-          ca-certificates
-          curl
-          python3
-          python3-venv
+      - name: Setup environment
+        uses: ./.github/actions/setup
 
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v5
-
-      - name: Create venv
-        run: uv venv --python python3
-
-      - name: Sync dependencies
-        run: uv sync --locked
-
-      - name: Run ruff
-        run: uv run ruff check .
-
-  tests:
-    runs-on: ubuntu-latest
-    container: debian:13
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Install system dependencies
-        run: >
-          apt-get update &&
-          apt-get install -y
-          ca-certificates
-          curl
-          libvips
-          python3
-          python3-venv
-          python3-tk
-          xvfb
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v5
-
-      - name: Create venv
-        run: uv venv --python python3
-
-      - name: Sync dependencies
-        run: uv sync --locked
-
-      - name: Run pytest
-        run: xvfb-run -a uv run pytest --cov=cdisplayagain --cov-report=xml --cov-fail-under=75
+      - name: Run ${{ matrix.task }}
+        shell: bash
+        run: |
+          if [ "${{ matrix.task }}" = "lint" ]; then
+            uv run ruff check .
+          else
+            xvfb-run -a uv run pytest --cov=cdisplayagain --cov-report=xml --cov-fail-under=75
+          fi
 
       - name: Upload coverage to Codecov
+        if: matrix.task == 'test'
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml

@@ -171,6 +171,7 @@ def test_load_cbr_unar_subprocess_failure(tmp_path, monkeypatch):
         return type("FakeResult", (), {"returncode": 1, "stderr": "error", "stdout": ""})()
 
     monkeypatch.setattr(cdisplayagain.subprocess, "run", fake_run)
+    monkeypatch.setattr(cdisplayagain.shutil, "which", lambda _: "/usr/bin/unar")
     with pytest.raises(RuntimeError, match="unar failed"):
         cdisplayagain.load_cbr(cbr_path)
 
