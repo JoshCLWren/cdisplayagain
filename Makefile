@@ -1,4 +1,4 @@
-.PHONY: help lint pytest sync venv run smoke clean-build build build-onedir install install-bin install-desktop mime-query redo
+.PHONY: help lint pytest sync venv run smoke clean-build build build-onedir install install-bin install-desktop mime-query redo ci-test-debian ci-test-local
 
 # Configuration
 PREFIX ?= /usr/local
@@ -87,3 +87,37 @@ redo: build-onedir install-bin  ## Rebuild and run (Usage: make redo FILE=...)
 	else \
 		echo "Usage: make redo FILE=path/to/comic.cbz"; \
 	fi
+
+ci-test-local:  ## Run CI-like tests locally (requires xvfb and libvips)
+	@echo "Running CI-like test locally..."
+	@if ! command -v xvfb-run >/dev/null 2>&1; then \
+		echo "WARNING: xvfb-run not found. Running without virtual display..."; \
+		uv run pytest tests/ -q --tb=short 2>&1 | tee ci-test-output.log; \
+	else \
+		xvfb-run -a uv run pytest tests/ -q --tb=short 2>&1 | tee ci-test-output.log; \
+	fi
+	@if [ -f ci-test-output.log ]; then \
+		echo ""; \
+		echo "=== CI Test Output Summary ==="; \
+		grep -E "passed|failed|ERROR|coverage" ci-test-output.log | tail -10; \
+	fi
+
+ci-test-debian:  ## Run tests in debian container (like GitHub CI)
+	@echo "Running tests in debian:13 container (like CI)..."
+	@docker run --rm -v "$(PWD):/app" -w /app debian:13 bash -c \
+		'apt-get update -qq && apt-get install -y -qq ca-certificates curl libvips python3 python3-venv python3-tk xvfb && \
+		curl -LsSf https://astral.sh/uv/install.sh | sh > /dev/null 2>&1 && \
+		uv venv --python python3 && uv sync --locked && \
+		xvfb-run -a uv run pytest tests/ -q --tb=short' \
+		2>&1 | tee ci-test-debian-output.log
+	@if [ -f ci-test-debian-output.log ]; then \
+		echo "=== CI Test Output Summary ==="; \
+		grep -E "passed|failed|ERROR|coverage" ci-test-debian-output.log | tail -10; \
+	fi
+
+ci-check:  ## Check if CI prerequisites are installed
+	@echo "Checking CI prerequisites..."
+	@echo "libvips: $$(dpkg -l | grep -q libvips && echo 'INSTALLED' || echo 'NOT FOUND')"
+	@echo "xvfb: $$(command -v xvfb-run && echo 'INSTALLED' || echo 'NOT FOUND')"
+	@echo "python3-tk: $$(dpkg -l | grep -q python3-tk && echo 'INSTALLED' || echo 'NOT FOUND')"
+	@echo "docker: $$(command -v docker && echo 'INSTALLED' || echo 'NOT FOUND')"
