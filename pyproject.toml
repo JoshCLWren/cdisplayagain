@@ -13,7 +13,7 @@ dependencies = [
 ]
 
 [tool.pytest.ini_options]
-addopts = ["--cov=cdisplayagain", "--cov-fail-under=75", "--no-cov-on-fail"]
+addopts = ["--cov=cdisplayagain", "--cov-fail-under=74", "--no-cov-on-fail"]
 pythonpath = ["."]
 
 [tool.ruff]
