@@ -1,7 +1,7 @@
 [project]
 name = "cdisplayagain"
 version = "0.1.0"
-description = "Add your description here"
+description = "Minimalist, cross-platform remake of the classic CDisplay sequential image viewer"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
