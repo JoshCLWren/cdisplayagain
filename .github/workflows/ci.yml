@@ -6,7 +6,7 @@ on:
   pull_request:
 
 jobs:
-  build:
+  lint:
     runs-on: ubuntu-latest
     container: debian:13
     steps:
@@ -16,56 +16,23 @@ jobs:
       - name: Setup environment
         uses: ./.github/actions/setup
 
-      - name: Upload venv artifact
-        run: tar -czf venv.tar.gz .venv
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: venv
-          path: venv.tar.gz
-
-  lint:
-    runs-on: ubuntu-latest
-    container: debian:13
-    needs: build
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Download venv artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: venv
-
-      - name: Extract venv
-        run: tar -xzf venv.tar.gz
-
       - name: Run ruff
         shell: bash
-        run: .venv/bin/ruff check .
+        run: uv run ruff check .
 
   tests:
     runs-on: ubuntu-latest
     container: debian:13
-    needs: build
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Download venv artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: venv
-
-      - name: Extract venv
-        run: tar -xzf venv.tar.gz
-
-      - name: Install xvfb
-        run: apt-get update -qq && apt-get install -y -qq xvfb
+      - name: Setup environment
+        uses: ./.github/actions/setup
 
       - name: Run pytest
         shell: bash
-        run: xvfb-run -a .venv/bin/pytest --cov=cdisplayagain --cov-report=xml --cov-fail-under=75
+        run: xvfb-run -a uv run pytest --cov=cdisplayagain --cov-report=xml --cov-fail-under=75
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
