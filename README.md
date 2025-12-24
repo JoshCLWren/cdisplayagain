@@ -1,5 +1,9 @@
 ## cdisplayagain
 
+![Python](https://img.shields.io/badge/python-3.12+-blue.svg)
+![Code Coverage](https://codecov.io/gh/joshuajreid/cdisplayagain/branch/main/graph/badge.svg)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
+
 `cdisplayagain` is a minimalist, cross-platform remake of the classic
 Windows-only CDisplay sequential image viewer. The goal is to keep the
 original spirit—fast page flips, zero data mutation, and archive-first

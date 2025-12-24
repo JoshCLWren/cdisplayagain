@@ -1,9 +1,11 @@
 """Tests for UI event bindings specifically key shortcuts."""
 
+import io
 import tkinter as tk
 from unittest.mock import Mock, patch
 from cdisplayagain import ComicViewer
 from pathlib import Path
+from PIL import Image
 
 
 def test_l_key_triggers_open_dialog():
@@ -11,13 +13,19 @@ def test_l_key_triggers_open_dialog():
     root = tk.Tk()
     # root.withdraw()  <-- Removing this so it is visible
 
+    # Create a valid image for testing
+    test_img = Image.new("RGB", (100, 100), color="red")
+    buf = io.BytesIO()
+    test_img.save(buf, format="PNG")
+    valid_image_bytes = buf.getvalue()
+
     # Mock load_comic so we don't need a real file
     with patch("cdisplayagain.load_comic") as mock_load:
         # Return a dummy source with one page
         mock_source = Mock()
         mock_source.pages = ["page1.jpg"]
         mock_source.cleanup = None
-        mock_source.get_bytes.return_value = b""
+        mock_source.get_bytes.return_value = valid_image_bytes
         mock_load.return_value = mock_source
 
         with (
@@ -33,6 +41,7 @@ def test_l_key_triggers_open_dialog():
                 mock_img.size = (100, 100)
                 mock_img.resize.return_value = mock_img
                 mock_img.convert.return_value = mock_img
+                mock_img.save = lambda buf, **kwargs: buf.write(valid_image_bytes)
                 mock_img_open.return_value = mock_img
 
                 # Make window tiny and frameless to reduce visual noise

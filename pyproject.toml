@@ -13,7 +13,7 @@ dependencies = [
 ]
 
 [tool.pytest.ini_options]
-addopts = ["--cov=cdisplayagain", "--cov-fail-under=68"]
+addopts = ["--cov=cdisplayagain", "--cov-fail-under=75", "--no-cov-on-fail"]
 pythonpath = ["."]
 
 [tool.ruff]
@@ -23,6 +23,19 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["D"]
 ignore = ["D203", "D213"]
+
+[tool.coverage.run]
+source = ["."]
+omit = [".venv/*", "tests/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]
 
 [dependency-groups]
 dev = [

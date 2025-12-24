@@ -161,3 +161,88 @@ def test_load_comic_dispatches_image(tmp_path):
     _write_image(img_path)
     source = cdisplayagain.load_comic(img_path)
     assert source.pages == ["page.png"]
+
+
+def test_load_cbr_unar_subprocess_failure(tmp_path, monkeypatch):
+    """Raise when unar subprocess fails."""
+    cbr_path = tmp_path / "comic.cbr"
+
+    def fake_run(*args, **kwargs):
+        return type("FakeResult", (), {"returncode": 1, "stderr": "error", "stdout": ""})()
+
+    monkeypatch.setattr(cdisplayagain.subprocess, "run", fake_run)
+    with pytest.raises(RuntimeError, match="unar failed"):
+        cdisplayagain.load_cbr(cbr_path)
+
+
+def test_load_directory_text_file(tmp_path):
+    """Load directory with text and image files."""
+    (tmp_path / "readme.txt").write_text("info")
+    (tmp_path / "page01.png").write_bytes(b"png")
+    (tmp_path / "page02.jpg").write_bytes(b"jpg")
+
+    source = cdisplayagain.load_directory(tmp_path)
+    assert "readme.txt" in source.pages
+    assert "page01.png" in source.pages
+    assert "page02.jpg" in source.pages
+
+
+def test_load_cbz_mixed_content(tmp_path):
+    """Load CBZ with mixed text and image files."""
+    cbz_path = tmp_path / "mixed.cbz"
+    with zipfile.ZipFile(cbz_path, "w") as zf:
+        zf.writestr("readme.nfo", b"info")
+        zf.writestr("page1.jpg", b"image1")
+        zf.writestr("page2.png", b"image2")
+        zf.writestr("page3.jpg", b"image3")
+
+    source = cdisplayagain.load_cbz(cbz_path)
+    assert source.pages[0] == "readme.nfo"
+    assert "page1.jpg" in source.pages
+    assert "page2.png" in source.pages
+    assert "page3.jpg" in source.pages
+
+
+def test_load_tar_mixed_content(tmp_path):
+    """Load TAR with mixed text and image files."""
+    tar_path = tmp_path / "mixed.tar"
+    with tarfile.open(tar_path, "w") as tf:
+        data = b"data"
+        info1 = tarfile.TarInfo("readme.nfo")
+        info1.size = len(data)
+        tf.addfile(info1, io.BytesIO(data))
+
+        info2 = tarfile.TarInfo("page1.jpg")
+        info2.size = len(data)
+        tf.addfile(info2, io.BytesIO(data))
+
+    source = cdisplayagain.load_tar(tar_path)
+    assert "readme.nfo" in source.pages
+    assert "page1.jpg" in source.pages
+
+
+def test_natural_key_various_formats():
+    """Test natural key with various number formats."""
+    tests = [
+        ("page-1.png", "page-2.png"),
+        ("page-2.png", "page-10.png"),
+        ("page-001.png", "page-010.png"),
+        ("chapter1page2.jpg", "chapter1page10.jpg"),
+    ]
+    for first, second in tests:
+        assert cdisplayagain.natural_key(first) < cdisplayagain.natural_key(second), (
+            f"{first} should be before {second}"
+        )
+
+
+def test_require_unar_missing_unar(monkeypatch):
+    """Raise SystemExit when unar is not available."""
+    monkeypatch.setattr(cdisplayagain.shutil, "which", lambda _: None)
+    with pytest.raises(SystemExit, match="CBR support requires"):
+        cdisplayagain.require_unar()
+
+
+def test_require_unar_available(monkeypatch):
+    """Return early when unar is available."""
+    monkeypatch.setattr(cdisplayagain.shutil, "which", lambda _: "/usr/bin/unar")
+    cdisplayagain.require_unar()

@@ -11,6 +11,7 @@ from pathlib import Path
 from PIL import Image
 import cdisplayagain
 import tkinter as tk
+from image_backend import get_resized_bytes, HAS_PYVIPS
 
 # -----------------------------------------------------------------------------
 # Helpers for Realistic Data
@@ -187,3 +188,54 @@ def test_perf_cbr_extraction_overhead(tmp_path):
     assert duration < 2.0
     if source.cleanup:
         source.cleanup()
+
+
+def test_image_backend_pyvips_available():
+    """Verify pyvips is available for image backend."""
+    assert HAS_PYVIPS is True, "pyvips should be available for performance testing"
+
+
+def test_image_backend_lru_cache_hit():
+    """Verify LRU cache works for repeated resize requests."""
+    img = Image.new("RGB", (1920, 1080), color=(100, 150, 200))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    raw_bytes = buf.getvalue()
+
+    target_w, target_h = 960, 540
+
+    result1 = get_resized_bytes(raw_bytes, target_w, target_h)
+    result2 = get_resized_bytes(raw_bytes, target_w, target_h)
+
+    assert len(result1) > 0
+    assert len(result2) > 0
+    assert result1 == result2, "LRU cache should return same result for same inputs"
+
+
+def test_image_backend_different_sizes():
+    """Verify different resize sizes produce different outputs."""
+    img = Image.new("RGB", (1920, 1080), color=(100, 150, 200))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    raw_bytes = buf.getvalue()
+
+    result1 = get_resized_bytes(raw_bytes, 1920, 1080)
+    result2 = get_resized_bytes(raw_bytes, 960, 540)
+
+    assert len(result1) > 0
+    assert len(result2) > 0
+    assert result1 != result2, "Different sizes should produce different outputs"
+
+
+def test_image_backend_roundtrip():
+    """Verify resized image can be loaded back as PIL Image."""
+    img = Image.new("RGB", (1920, 1080), color=(100, 150, 200))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    raw_bytes = buf.getvalue()
+
+    target_w, target_h = 960, 540
+    resized_bytes = get_resized_bytes(raw_bytes, target_w, target_h)
+
+    resized_img = Image.open(io.BytesIO(resized_bytes))
+    assert resized_img.size == (target_w, target_h)

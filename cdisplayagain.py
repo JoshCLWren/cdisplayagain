@@ -22,8 +22,8 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 
 from PIL import Image, ImageTk
-import shutil
-import sys
+
+from image_backend import get_resized_bytes
 
 
 def require_unar() -> None:
@@ -772,7 +772,11 @@ class ComicViewer(tk.Frame):
         else:
             self._scroll_offset = min(max(self._scroll_offset, 0), max_offset)
 
-        resized = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        raw_bytes = buf.getvalue()
+        resized_bytes = get_resized_bytes(raw_bytes, new_w, new_h)
+        resized = Image.open(io.BytesIO(resized_bytes))
         if self._imagetk_ready:
             try:
                 self._tk_img = ImageTk.PhotoImage(resized, master=self)
