@@ -62,6 +62,8 @@ def viewer(tmp_path):
     _write_image(img_path)
     root = cdisplayagain.tk.Tk()
     root.withdraw()
+    root.update()
+    root.attributes("-alpha", 0.0)
     try:
         app = cdisplayagain.ComicViewer(root, img_path)
         yield app
