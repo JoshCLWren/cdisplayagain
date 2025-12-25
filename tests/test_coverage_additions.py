@@ -740,11 +740,20 @@ def test_load_cbr_cleanup_failure_logged(tmp_path, monkeypatch, caplog):
         original_rmtree(path, *args, **kwargs)
         raise RuntimeError("Cleanup error")
 
-    with patch("cdisplayagain.shutil.rmtree", side_effect=failing_rmtree):
-        with caplog.at_level(logging.WARNING):
-            with pytest.raises((rarfile_cffi.RarFileError, RuntimeError)):
-                cdisplayagain.load_cbr(cbr_path)
-            assert any("CBR cleanup failed" in record.message for record in caplog.records)
+    mock_rar = MagicMock()
+    mock_rar.namelist.return_value = ["page1.jpg"]
+    mock_rar.read.return_value = b"content"
+
+    with patch("unrar.cffi.rarfile.RarFile", return_value=mock_rar):
+        with patch("cdisplayagain.shutil.rmtree", side_effect=failing_rmtree):
+            with caplog.at_level(logging.WARNING):
+                source = cdisplayagain.load_cbr(cbr_path)
+                if source.cleanup:
+                    try:
+                        source.cleanup()
+                    except RuntimeError:
+                        pass
+                assert any("Cleanup failed" in record.message for record in caplog.records)
 
 
 def test_load_cbr_success_with_test_fixture():
@@ -768,6 +777,74 @@ def test_load_cbr_success_with_test_fixture():
     finally:
         if source.cleanup:
             source.cleanup()
+
+
+def test_load_cbr_with_text_file(tmp_path):
+    """Test load_cbr handles text files in archives."""
+    cbr_path = tmp_path / "comic.cbr"
+    cbr_path.write_bytes(b"invalid rar")
+
+    mock_rar = MagicMock()
+    mock_rar.namelist.return_value = ["subdir/", "readme.txt", "page1.jpg", ""]
+    mock_rar.read.return_value = b"content"
+
+    with patch("unrar.cffi.rarfile.RarFile", return_value=mock_rar):
+        source = cdisplayagain.load_cbr(cbr_path)
+        try:
+            assert any("readme.txt" in p for p in source.pages)
+            assert any("page1.jpg" in p for p in source.pages)
+        finally:
+            if source.cleanup:
+                source.cleanup()
+
+
+def test_load_cbr_with_directory_entries(tmp_path):
+    """Test load_cbr handles directory entries in archives."""
+    cbr_path = tmp_path / "comic.cbr"
+    cbr_path.write_bytes(b"invalid rar")
+
+    mock_rar = MagicMock()
+    mock_rar.namelist.return_value = ["subdir/", "page1.jpg"]
+    mock_rar.read.return_value = b"content"
+
+    with patch("unrar.cffi.rarfile.RarFile", return_value=mock_rar):
+        source = cdisplayagain.load_cbr(cbr_path)
+        try:
+            assert any("page1.jpg" in p for p in source.pages)
+        finally:
+            if source.cleanup:
+                source.cleanup()
+
+
+def test_load_cbr_empty_filenames(tmp_path):
+    """Test load_cbr handles empty filenames in archives."""
+    cbr_path = tmp_path / "comic.cbr"
+    cbr_path.write_bytes(b"invalid rar")
+
+    mock_rar = MagicMock()
+    mock_rar.namelist.return_value = ["", "page1.jpg"]
+    mock_rar.read.return_value = b"content"
+
+    with patch("unrar.cffi.rarfile.RarFile", return_value=mock_rar):
+        source = cdisplayagain.load_cbr(cbr_path)
+        try:
+            assert any("page1.jpg" in p for p in source.pages)
+        finally:
+            if source.cleanup:
+                source.cleanup()
+
+
+def test_load_cbr_no_valid_files_raises_error(tmp_path):
+    """Test load_cbr raises error when archive has no valid files."""
+    cbr_path = tmp_path / "comic.cbr"
+    cbr_path.write_bytes(b"invalid rar")
+
+    mock_rar = MagicMock()
+    mock_rar.namelist.return_value = ["subdir/", "data.bin"]
+
+    with patch("unrar.cffi.rarfile.RarFile", return_value=mock_rar):
+        with pytest.raises(RuntimeError, match="No images or info files found"):
+            cdisplayagain.load_cbr(cbr_path)
 
     """Test platform-specific install hints."""
 
