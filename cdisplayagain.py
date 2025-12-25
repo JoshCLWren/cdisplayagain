@@ -400,11 +400,13 @@ class ImageWorker:
             thread.start()
             self._threads.append(thread)
 
-    def request_page(self, index: int, width: int, height: int, preload: bool = False):
+    def request_page(
+        self, index: int, width: int, height: int, preload: bool = False, render_generation: int = 0
+    ):
         """Request a page be processed in background."""
         try:
             priority = 1 if preload else 0
-            self._queue.put_nowait((priority, index, width, height, preload))
+            self._queue.put_nowait((priority, index, width, height, preload, render_generation))
         except queue.Full:
             pass
 
@@ -420,12 +422,21 @@ class ImageWorker:
         """Process resize requests in background."""
         while True:
             try:
-                priority, index, width, height, preload = self._queue.get()
+                priority, index, width, height, preload, render_generation = self._queue.get()
 
                 if preload:
                     logging.info("Worker preloading page %d at %dx%d", index, width, height)
                 else:
                     logging.info("Worker processing page %d at %dx%d", index, width, height)
+
+                if not preload and render_generation != self._app._render_generation:
+                    logging.info(
+                        "Worker cancelling stale render for page %d (gen %d != %d)",
+                        index,
+                        render_generation,
+                        self._app._render_generation,
+                    )
+                    continue
 
                 raw = self._app.source.get_bytes(self._app.source.pages[index])
                 resized_pil = get_resized_pil(raw, width, height)
@@ -516,6 +527,7 @@ class ComicViewer(tk.Frame):
         self._nav_debounce = Debouncer(150, self._execute_page_change, self)
         self._first_render_done: bool = False
         self._first_proper_render_completed: bool = False
+        self._render_generation: int = 0
 
         self._bind_keys()
         self._bind_mouse()
@@ -1101,7 +1113,9 @@ class ComicViewer(tk.Frame):
             self._update_title()
         else:
             logging.info("Cache miss for page %d, requesting worker", index)
-            self._worker.request_page(index, cw, ch)
+            self._worker.request_page(
+                index, cw, ch, preload=False, render_generation=self._render_generation
+            )
             self._update_title()
 
         next_idx = self._find_next_image_index(index)
@@ -1140,7 +1154,9 @@ class ComicViewer(tk.Frame):
 
         if not self._first_proper_render_completed:
             logging.info("First proper render, skipping preview, requesting high-quality resize")
-            self._worker.request_page(index, cw, ch)
+            self._worker.request_page(
+                index, cw, ch, preload=False, render_generation=self._render_generation
+            )
             self._update_title()
             perf_log("render_current_sync", time.perf_counter() - render_start, "first_render")
             return
@@ -1160,7 +1176,9 @@ class ComicViewer(tk.Frame):
         perf_log("display_preview", time.perf_counter() - display_start)
 
         logging.info("Requesting high-quality resize for page %d", index)
-        self._worker.request_page(index, cw, ch)
+        self._worker.request_page(
+            index, cw, ch, preload=False, render_generation=self._render_generation
+        )
         self._update_title()
 
         perf_log("render_current_sync", time.perf_counter() - render_start, "preview")
@@ -1186,7 +1204,9 @@ class ComicViewer(tk.Frame):
             self._show_info_overlay(name)
             return
 
-        self._worker.request_page(image_index, cw, ch)
+        self._worker.request_page(
+            image_index, cw, ch, preload=False, render_generation=self._render_generation
+        )
         self._show_info_overlay(name)
 
     def _show_info_overlay(self, name: str) -> None:
@@ -1288,6 +1308,7 @@ class ComicViewer(tk.Frame):
         if self._current_index < len(self.source.pages) - 1:
             self._current_index += 1
             self._scroll_offset = 0
+            self._render_generation += 1
             self._render_current()
 
     def prev_page(self):
@@ -1298,6 +1319,7 @@ class ComicViewer(tk.Frame):
         if self._current_index > 0:
             self._current_index -= 1
             self._scroll_offset = 0
+            self._render_generation += 1
             self._render_current()
 
     def first_page(self):
@@ -1307,6 +1329,7 @@ class ComicViewer(tk.Frame):
             return
         self._current_index = 0
         self._scroll_offset = 0
+        self._render_generation += 1
         self._render_current()
 
     def last_page(self):
@@ -1316,6 +1339,7 @@ class ComicViewer(tk.Frame):
             return
         self._current_index = len(self.source.pages) - 1
         self._scroll_offset = 0
+        self._render_generation += 1
         self._render_current()
 
     def set_one_page_mode(self) -> None:

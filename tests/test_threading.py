@@ -359,10 +359,10 @@ def test_preload_skips_text_pages(tk_root, tmp_path):
     preload_requests = []
     original_request = app._worker.request_page
 
-    def capture_request(index, width, height, preload=False):
+    def capture_request(index, width, height, preload=False, render_generation=0):
         if preload:
             preload_requests.append(index)
-        original_request(index, width, height, preload)
+        original_request(index, width, height, preload, render_generation)
 
     app._worker.request_page = capture_request
 
@@ -385,16 +385,72 @@ def test_worker_preload_method(tk_root, tmp_path):
 
     queue_items = []
 
-    def capture_request(index, width, height, preload=False):
-        queue_items.append((index, width, height, preload))
+    def capture_request(index, width, height, preload=False, render_generation=0):
+        queue_items.append((index, width, height, preload, render_generation))
 
     worker.request_page = capture_request
 
     worker.preload(1)
 
     assert len(queue_items) == 1
-    index, width, height, preload = queue_items[0]
+    index, width, height, preload, render_generation = queue_items[0]
     assert index == 1
     assert width > 0
     assert height > 0
     assert preload is True
+
+
+def test_stale_render_cancellation(tk_root, tmp_path):
+    """Test that stale renders are cancelled when rapidly page-turning."""
+    cbz_path = tmp_path / "test.cbz"
+    create_test_cbz(cbz_path, page_count=10)
+
+    app = cdisplayagain.ComicViewer(tk_root, cbz_path)
+    app.update()
+
+    initial_generation = app._render_generation
+
+    render_requests = []
+
+    def capture_request(index, width, height, preload=False, render_generation=0):
+        render_requests.append((index, render_generation, preload))
+
+    app._worker.request_page = capture_request
+
+    app._render_current()
+
+    assert len(render_requests) >= 1
+    assert render_requests[0][1] == initial_generation
+    assert render_requests[0][2] is False
+
+    app.next_page()
+    assert app._render_generation == initial_generation + 1
+
+
+def test_multiple_rapid_page_turns(tk_root, tmp_path):
+    """Test that multiple rapid page turns increment render generation."""
+    cbz_path = tmp_path / "test.cbz"
+    create_test_cbz(cbz_path, page_count=10)
+
+    app = cdisplayagain.ComicViewer(tk_root, cbz_path)
+    app.update()
+
+    initial_generation = app._render_generation
+
+    app.next_page()
+    assert app._render_generation == initial_generation + 1
+
+    app.next_page()
+    assert app._render_generation == initial_generation + 2
+
+    app.next_page()
+    assert app._render_generation == initial_generation + 3
+
+    app.prev_page()
+    assert app._render_generation == initial_generation + 4
+
+    app.first_page()
+    assert app._render_generation == initial_generation + 5
+
+    app.last_page()
+    assert app._render_generation == initial_generation + 6
