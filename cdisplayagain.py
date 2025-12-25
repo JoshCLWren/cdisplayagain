@@ -253,8 +253,8 @@ def load_cbz(path: Path) -> PageSource:
     def cleanup():
         try:
             zf.close()
-        except Exception:
-            pass
+        except Exception as e:
+            logging.warning("Cleanup failed: %s", e)
 
     return PageSource(pages=pages, get_bytes=get_bytes, cleanup=cleanup)
 
@@ -298,8 +298,8 @@ def load_cbr(path: Path) -> PageSource:
     def cleanup():
         try:
             shutil.rmtree(tmpdir, ignore_errors=True)
-        except Exception:
-            pass
+        except Exception as e:
+            logging.warning("Cleanup failed: %s", e)
 
     return PageSource(pages=rel_names, get_bytes=get_bytes, cleanup=cleanup)
 
@@ -339,8 +339,8 @@ def load_tar(path: Path) -> PageSource:
     def cleanup():
         try:
             tf.close()
-        except Exception:
-            pass
+        except Exception as e:
+            logging.warning("Cleanup failed: %s", e)
 
     return PageSource(pages=pages, get_bytes=get_bytes, cleanup=cleanup)
 
@@ -750,8 +750,8 @@ class ComicViewer(tk.Frame):
         if self.source and self.source.cleanup:
             try:
                 self.source.cleanup()
-            except Exception:
-                pass
+            except Exception as e:
+                logging.warning("Cleanup failed: %s", e)
 
         self.source = None
         self._pil_cache.clear()
