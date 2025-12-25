@@ -97,8 +97,9 @@ def test_image_worker_basic(tk_root, tmp_path):
 
     results = []
 
-    def capture_update(index, resized_bytes):
-        results.append((index, len(resized_bytes)))
+    def capture_update(index, img):
+        assert isinstance(img, Image.Image)
+        results.append((index, img.size))
         if len(results) >= 1:
             tk_root.quit()
 
@@ -122,8 +123,9 @@ def test_image_worker_queue_full(tk_root, tmp_path):
 
     results = []
 
-    def capture_update(index, resized_bytes):
-        results.append((index, len(resized_bytes)))
+    def capture_update(index, img):
+        assert isinstance(img, Image.Image)
+        results.append((index, img.size))
         if len(results) >= 4:
             tk_root.quit()
 
@@ -281,6 +283,7 @@ def test_update_from_cache_directly(tk_root, tmp_path):
     cache_key = (0, cw, ch)
 
     from image_backend import get_resized_pil
+
     resized_img = get_resized_pil(raw_bytes, cw, ch)
 
     app._canvas_properly_sized = True

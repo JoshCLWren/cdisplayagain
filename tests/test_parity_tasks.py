@@ -388,8 +388,8 @@ def test_info_screen_shows_first_page_simultaneously(viewer):
         raw_bytes = viewer.source.get_bytes(viewer.source.pages[0])
         from image_backend import get_resized_pil
 
-        resized_bytes = get_resized_bytes(raw_bytes, cw, ch)
-        viewer._image_cache[(0, cw, ch)] = resized_bytes
+        resized_img = get_resized_pil(raw_bytes, cw, ch)
+        viewer._image_cache[(0, cw, ch)] = resized_img
         viewer._render_current()
     assert viewer._current_pil is not None
 
@@ -413,8 +413,8 @@ def test_info_screen_overlays_first_image_when_text_first(viewer, tmp_path):
             raw_bytes = viewer.source.get_bytes(viewer.source.pages[idx])
             from image_backend import get_resized_pil
 
-            resized_bytes = get_resized_bytes(raw_bytes, cw, ch)
-            viewer._image_cache[(idx, cw, ch)] = resized_bytes
+            resized_img = get_resized_pil(raw_bytes, cw, ch)
+            viewer._image_cache[(idx, cw, ch)] = resized_img
         viewer._render_current()
 
     assert viewer._info_overlay is not None
@@ -474,8 +474,8 @@ def test_spacebar_scrolls_then_advances(viewer, tmp_path):
 
     for idx in range(len(viewer.source.pages)):
         raw_bytes = viewer.source.get_bytes(viewer.source.pages[idx])
-        resized_bytes = get_resized_bytes(raw_bytes, cw, ch)
-        viewer._image_cache[(idx, cw, ch)] = resized_bytes
+        resized_img = get_resized_pil(raw_bytes, cw, ch)
+        viewer._image_cache[(idx, cw, ch)] = resized_img
 
     viewer._render_current()
     assert viewer._current_index == 0
@@ -549,21 +549,21 @@ def test_uses_lanczos_resampling(viewer, monkeypatch):
 
     called = {}
 
-    original_get_resized = cdisplayagain.get_resized_bytes
+    original_get_resized = cdisplayagain.get_resized_pil
 
     def fake_get_resized(raw_bytes, width, height):
         called["used"] = True
         return original_get_resized(raw_bytes, width, height)
 
-    monkeypatch.setattr(cdisplayagain, "get_resized_bytes", fake_get_resized)
+    monkeypatch.setattr(cdisplayagain, "get_resized_pil", fake_get_resized)
 
     cw = max(1, viewer.canvas.winfo_width())
     ch = max(1, viewer.canvas.winfo_height())
 
     if viewer.source and len(viewer.source.pages) > 0:
         raw_bytes = viewer.source.get_bytes(viewer.source.pages[0])
-        resized_bytes = fake_get_resized(raw_bytes, cw, ch)
-        viewer._image_cache[(0, cw, ch)] = resized_bytes
+        resized_img = fake_get_resized(raw_bytes, cw, ch)
+        viewer._image_cache[(0, cw, ch)] = resized_img
 
     assert called.get("used") is True
 
