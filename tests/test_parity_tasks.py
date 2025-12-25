@@ -288,10 +288,24 @@ def test_reads_zip_rar_ace_tar_archives(tmp_path):
         path.write_bytes(b"")
     _make_tar(tar_path, ["01.png"])
 
-    assert cdisplayagain.load_comic(zip_path).pages == ["01.png"]
-    assert cdisplayagain.load_comic(rar_path).pages == ["01.png"]
-    assert cdisplayagain.load_comic(ace_path).pages == ["01.png"]
-    assert cdisplayagain.load_comic(tar_path).pages == ["01.png"]
+    zip_source = cdisplayagain.load_comic(zip_path)
+    rar_source = cdisplayagain.load_comic(rar_path)
+    ace_source = cdisplayagain.load_comic(ace_path)
+    tar_source = cdisplayagain.load_comic(tar_path)
+    try:
+        assert zip_source.pages == ["01.png"]
+        assert rar_source.pages == ["01.png"]
+        assert ace_source.pages == ["01.png"]
+        assert tar_source.pages == ["01.png"]
+    finally:
+        if zip_source.cleanup:
+            zip_source.cleanup()
+        if rar_source.cleanup:
+            rar_source.cleanup()
+        if ace_source.cleanup:
+            ace_source.cleanup()
+        if tar_source.cleanup:
+            tar_source.cleanup()
 
 
 def test_reads_tar_archives_with_images_and_text(tmp_path):
@@ -301,7 +315,11 @@ def test_reads_tar_archives_with_images_and_text(tmp_path):
 
     source = cdisplayagain.load_comic(tar_path)
 
-    assert source.pages == ["info.nfo", "01.png", "02.png"]
+    try:
+        assert source.pages == ["info.nfo", "01.png", "02.png"]
+    finally:
+        if source.cleanup:
+            source.cleanup()
 
 
 def test_sorting_is_alphabetical(tmp_path):

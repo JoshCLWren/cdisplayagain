@@ -101,8 +101,12 @@ def test_load_tar_missing_member_raises(tmp_path):
         tf.addfile(info, io.BytesIO(data))
 
     source = cdisplayagain.load_tar(tar_path)
-    with pytest.raises(RuntimeError, match="Missing entry"):
-        source.get_bytes("missing.png")
+    try:
+        with pytest.raises(RuntimeError, match="Missing entry"):
+            source.get_bytes("missing.png")
+    finally:
+        if source.cleanup:
+            source.cleanup()
 
 
 def test_load_tar_extractfile_none_raises(tmp_path, monkeypatch):
@@ -120,8 +124,12 @@ def test_load_tar_extractfile_none_raises(tmp_path, monkeypatch):
         return None
 
     monkeypatch.setattr(tarfile.TarFile, "extractfile", fake_extractfile)
-    with pytest.raises(RuntimeError, match="Could not read TAR member"):
-        source.get_bytes("01.png")
+    try:
+        with pytest.raises(RuntimeError, match="Could not read TAR member"):
+            source.get_bytes("01.png")
+    finally:
+        if source.cleanup:
+            source.cleanup()
 
 
 def test_load_comic_unsupported_extension(tmp_path):
@@ -220,8 +228,12 @@ def test_load_tar_mixed_content(tmp_path):
         tf.addfile(info2, io.BytesIO(data))
 
     source = cdisplayagain.load_tar(tar_path)
-    assert "readme.nfo" in source.pages
-    assert "page1.jpg" in source.pages
+    try:
+        assert "readme.nfo" in source.pages
+        assert "page1.jpg" in source.pages
+    finally:
+        if source.cleanup:
+            source.cleanup()
 
 
 def test_natural_key_various_formats():
