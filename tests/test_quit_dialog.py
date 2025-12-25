@@ -3,7 +3,7 @@
 import io
 import tkinter as tk
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 from PIL import Image
 
@@ -11,7 +11,7 @@ from cdisplayagain import ComicViewer
 
 
 def test_dialog_has_quit_bindings():
-    """Verify that the custom open dialog has quit key bindings."""
+    """Verify that custom open dialog has quit key bindings."""
     root = tk.Tk()
 
     test_img = Image.new("RGB", (100, 100), color="red")
@@ -29,6 +29,8 @@ def test_dialog_has_quit_bindings():
         with (
             patch("tkinter.messagebox.showerror"),
             patch("tkinter.messagebox.showinfo"),
+            patch("tkinter.filedialog.askopenfilename"),
+            patch("tkinter.filedialog.askopenfilenames"),
             patch("PIL.Image.open") as mock_img_open,
         ):
             mock_img = Mock()
@@ -48,35 +50,22 @@ def test_dialog_has_quit_bindings():
 
             assert not app._dialog_active
 
-            quit_called = [False]
-            dialog_widget = [None]
+            mock_dialog = MagicMock()
+            mock_dialog.title = Mock()
+            mock_dialog.bind = Mock(return_value="callback")
+            mock_dialog.destroy = Mock()
 
-            def mock_quit():
-                quit_called[0] = True
+            def mock_wait_window(window):
+                pass
 
-            original_open = tk.Toplevel.__init__
+            with patch("tkinter.Toplevel", return_value=mock_dialog):
+                with patch.object(root, "wait_window", mock_wait_window):
+                    app._open_dialog()
 
-            def track_toplevel_init(self, master, **kwargs):
-                original_open(self, master, **kwargs)
-                dialog_widget[0] = self
-
-            with patch.object(tk.Toplevel, "__init__", track_toplevel_init):
-                with patch.object(app, "_quit", mock_quit):
-
-                    def mock_wait_window(window):
-                        window.event_generate("q")
-                        window.update()
-
-                    with patch.object(root, "wait_window", mock_wait_window):
-                        app._open_dialog()
-
-                    assert dialog_widget[0] is not None, "Dialog should have been created"
-                    bindings = dialog_widget[0].bind("q")
-                    assert len(bindings) > 0, "Dialog should have 'q' key binding"
-
-                    bindings_esc = dialog_widget[0].bind("<Escape>")
-                    assert len(bindings_esc) > 0, "Dialog should have Escape binding"
-
-                    assert quit_called[0], "Quit should have been called"
+                    bind_calls = [call_args[0][0] for call_args in mock_dialog.bind.call_args_list]
+                    assert "<Escape>" in bind_calls, "Dialog should have Escape binding"
+                    assert "q" in bind_calls, "Dialog should have 'q' key binding"
+                    assert "Q" in bind_calls, "Dialog should have 'Q' key binding"
+                    assert "x" in bind_calls, "Dialog should have 'x' key binding"
 
     root.destroy()

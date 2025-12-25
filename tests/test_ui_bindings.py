@@ -54,22 +54,15 @@ def test_l_key_triggers_open_dialog():
                 app.focus_set()
                 root.update()
 
-                # Mock the _open_dialog method to verify it gets called
-                # We patch it on the instance
-                app._open_dialog = Mock(wraps=app._open_dialog)
+                # Mock the _open_dialog method - just verify it gets called, don't actually run it
+                # This prevents any dialogs from appearing
+                app._open_dialog = Mock()
 
-                def mock_wait_window(widget):
-                    """Mock wait_window to avoid blocking on actual dialogs."""
-                    widget.destroy()
+                # Simulate pressing 'l'. explicit keysym is safer for tests
+                # Generate on app widget
+                app.event_generate("l")  # Try simple char first as bind_all "l" matches keypress
+                root.update()
 
-                with patch.object(root, "wait_window", mock_wait_window):
-                    # Simulate pressing 'l'. explicit keysym is safer for tests
-                    # Generate on app widget
-                    app.event_generate(
-                        "l"
-                    )  # Try simple char first as bind_all "l" matches keypress
-                    root.update()
-
-                    app._open_dialog.assert_called_once()
+                app._open_dialog.assert_called_once()
 
     root.destroy()
