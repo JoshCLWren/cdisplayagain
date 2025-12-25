@@ -41,7 +41,7 @@ def create_test_cbz(output_path, num_pages=25):
 
 
 def create_test_cbr(output_path, num_pages=29):
-    """Create a CBR file (as ZIP for compatibility with unar)."""
+    """Create a CBR file (as ZIP for compatibility with unrar2-cffi)."""
     width, height = 1074, 1650
     with zipfile.ZipFile(output_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         for i in range(num_pages):

@@ -1,0 +1,43 @@
+"""Type stubs for unrar2-cffi rarfile module."""
+
+import io
+import os
+
+class RarInfo:
+    filename: str
+    file_size: int
+    compress_size: int
+    CRC: int
+    date_time: tuple[int, int, int, int, int, int]
+    is_dir: bool
+    compress_type: int
+
+class RarHeader:
+    FileCRC: int
+    FileNameW: str
+    FileTime: int
+    Flags: int
+    HostOS: int
+    Method: int
+    PackSize: int
+    PackSizeHigh: int
+    UnpSize: int
+    UnpSizeHigh: int
+    UnpVer: int
+    def skip(self) -> None: ...
+    def test(self) -> None: ...
+
+class RarFile:
+    def __init__(self, filename: os.PathLike[str] | str, *, pwd: str | None = None) -> None: ...
+    def namelist(self) -> list[str]: ...
+    def read(self, member: str) -> bytes: ...
+    def open(self, file_or_info: str | RarInfo) -> io.BytesIO: ...
+    def getinfo(self, file: str) -> RarInfo: ...
+    def infolist(self) -> list[RarInfo]: ...
+    def printdir(self, file: object) -> None: ...
+    def testrar(self) -> str | None: ...
+
+class BadRarFile(Exception): ...
+class RarFileError(Exception): ...
+
+def is_rarfile(filename: os.PathLike[str] | str) -> bool: ...

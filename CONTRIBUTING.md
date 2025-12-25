@@ -35,6 +35,7 @@ To test the hook manually: `make githook` or `bash scripts/lint.sh`
 - Do not check in sample comics or proprietary content.
 - Do not use in-line comments to disable linting or type checks.
 - Do not narrate your code with comments; prefer clear code and commit messages.
+- Do not use `pytest.skip` in test files; all tests must run in CI.
 
 ## Style guidelines
 

@@ -11,7 +11,6 @@ import os
 import queue
 import re
 import shutil
-import subprocess
 import sys
 import tempfile
 import threading
@@ -37,20 +36,21 @@ def _as_wm(obj: tk.Misc) -> tk.Wm:
 
 
 def require_unar() -> None:
-    """Ensure that 'unar' is available on the system for CBR support."""
-    if shutil.which("unar"):
+    """Ensure that unrar2-cffi is available on system for CBR support."""
+    import importlib.util
+
+    spec = importlib.util.find_spec("unrar.cffi")
+    if spec is not None:
         return
 
     if sys.platform.startswith("linux"):
-        hint = "sudo apt install unar"
+        hint = "uv pip install unrar2-cffi"
     elif sys.platform == "darwin":
-        hint = "brew install unar"
+        hint = "uv pip install unrar2-cffi"
     else:
-        hint = "Install 'unar' using your system package manager"
+        hint = "pip install unrar2-cffi"
 
-    raise SystemExit(
-        f"CBR support requires the external tool 'unar'.\n\nInstall it with:\n  {hint}\n"
-    )
+    raise SystemExit(f"CBR support requires 'unrar2-cffi'.\n\nInstall it with:\n  {hint}\n")
 
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tif", ".tiff"}
@@ -259,49 +259,57 @@ def load_cbz(path: Path) -> PageSource:
 
 
 def load_cbr(path: Path) -> PageSource:
-    """Extract a CBR archive via unar and build a page source."""
-    unar = shutil.which("unar")
-    if not unar:
-        raise RuntimeError("CBR support requires 'unar'. Install with: brew install unar")
+    """Extract a CBR archive via unrar2-cffi and build a page source."""
+    from unrar.cffi import rarfile as rarfile_cffi
 
     tmpdir = Path(tempfile.mkdtemp(prefix="cdisplayagain_"))
     try:
-        proc = subprocess.run(
-            [unar, "-q", "-o", str(tmpdir), str(path)],
-            capture_output=True,
-            text=True,
-        )
-        if proc.returncode != 0:
-            raise RuntimeError(f"unar failed:\n{proc.stderr.strip() or proc.stdout.strip()}")
+        with PerfTimer("load_cbr"):
+            rar = rarfile_cffi.RarFile(str(path))
+            filenames = rar.namelist()
 
-        text_files: list[Path] = []
-        image_files: list[Path] = []
-        for p in tmpdir.rglob("*"):
-            if not p.is_file():
-                continue
-            if is_text_name(p.name):
-                text_files.append(p)
-            elif p.suffix.casefold() in IMAGE_EXTS:
-                image_files.append(p)
+            text_files: list[Path] = []
+            image_files: list[Path] = []
 
-        text_files.sort(key=lambda p: natural_key(str(p.relative_to(tmpdir))))
-        image_files.sort(key=lambda p: natural_key(str(p.relative_to(tmpdir))))
+            for filename in filenames:
+                if not filename:
+                    continue
 
-        if not text_files and not image_files:
-            raise RuntimeError("No images or info files found after extracting CBR.")
+                dest = tmpdir / filename
+                if filename.endswith("/"):
+                    dest.mkdir(parents=True, exist_ok=True)
+                    continue
 
-        rel_names = [str(p.relative_to(tmpdir)) for p in text_files + image_files]
+                try:
+                    data = rar.read(filename)
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    dest.write_bytes(data)
 
-        def get_bytes(rel_name: str) -> bytes:
-            return (tmpdir / rel_name).read_bytes()
+                    if is_text_name(filename):
+                        text_files.append(dest)
+                    elif Path(filename).suffix.casefold() in IMAGE_EXTS:
+                        image_files.append(dest)
+                except Exception as e:
+                    logging.warning("Failed to extract %s: %s", filename, e)
 
-        def cleanup():
-            try:
-                shutil.rmtree(tmpdir)
-            except Exception as e:
-                logging.warning("Cleanup failed: %s", e)
+            text_files.sort(key=lambda p: natural_key(str(p.relative_to(tmpdir))))
+            image_files.sort(key=lambda p: natural_key(str(p.relative_to(tmpdir))))
 
-        return PageSource(pages=rel_names, get_bytes=get_bytes, cleanup=cleanup)
+            if not text_files and not image_files:
+                raise RuntimeError("No images or info files found after extracting CBR.")
+
+            rel_names = [str(p.relative_to(tmpdir)) for p in text_files + image_files]
+
+            def get_bytes(rel_name: str) -> bytes:
+                return (tmpdir / rel_name).read_bytes()
+
+            def cleanup():
+                try:
+                    shutil.rmtree(tmpdir)
+                except Exception as e:
+                    logging.warning("Cleanup failed: %s", e)
+
+            return PageSource(pages=rel_names, get_bytes=get_bytes, cleanup=cleanup)
     except Exception:
         try:
             shutil.rmtree(tmpdir, ignore_errors=True)
