@@ -30,14 +30,20 @@ def create_random_image(width, height):
 
 
 def create_test_cbz(output_path, num_pages=25):
-    """Create a CBZ file with random images (same size as Titans sample)."""
-    width, height = 1934, 2952
-    with zipfile.ZipFile(output_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        for i in range(num_pages):
-            img = create_random_image(width, height)
-            buf = io.BytesIO()
-            img.save(buf, format="JPEG", quality=80)
-            zf.writestr(f"page_{i + 1:05d}.jpg", buf.getvalue())
+    """Copy a real CBZ file from the sample_reading_media repository."""
+    real_cbz_path = FIXTURES_DIR / "bobby_make_believe_sample.cbz"
+    if real_cbz_path.exists():
+        import shutil
+
+        shutil.copy(real_cbz_path, output_path)
+    else:
+        width, height = 1934, 2952
+        with zipfile.ZipFile(output_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            for i in range(num_pages):
+                img = create_random_image(width, height)
+                buf = io.BytesIO()
+                img.save(buf, format="JPEG", quality=80)
+                zf.writestr(f"page_{i + 1:05d}.jpg", buf.getvalue())
 
 
 def create_test_cbr(output_path, num_pages=29):
