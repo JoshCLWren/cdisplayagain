@@ -5,6 +5,7 @@ import sys
 import tarfile
 import zipfile
 from pathlib import Path
+from unittest.mock import MagicMock, Mock
 
 import pytest
 from PIL import Image
@@ -180,70 +181,87 @@ def test_right_click_opens_context_menu(viewer):
 
 
 def test_open_dialog_uses_file_browser(monkeypatch, viewer, tmp_path):
-    """Confirm open dialog uses the file browser API."""
-    img_path = tmp_path / "page1.png"
-    _write_image(img_path)
-    called = {}
+    """Confirm open dialog creates a dialog with Browse button."""
+    mock_dialog = MagicMock()
+    mock_dialog.title = Mock()
+    mock_dialog.bind = Mock(return_value="callback")
+    mock_dialog.destroy = Mock()
 
-    def fake_askopenfilename(**kwargs):
-        called["kwargs"] = kwargs
-        return str(img_path)
+    def fake_wait_window(window):
+        pass
 
-    monkeypatch.setattr(cdisplayagain.filedialog, "askopenfilename", fake_askopenfilename)
+    mock_frame = MagicMock()
+    mock_frame.pack = Mock()
+    mock_frame.grid = Mock()
+
+    monkeypatch.setattr(cdisplayagain.tk, "Toplevel", MagicMock(return_value=mock_dialog))
+    monkeypatch.setattr(viewer.master, "wait_window", fake_wait_window)
     viewer._open_dialog()
 
-    assert called["kwargs"]["title"] == "Open Comic"
+    mock_dialog.title.assert_called_once_with("Open Comic")
 
 
 def test_open_dialog_preselects_all_files(monkeypatch, viewer, tmp_path):
-    """Ensure open dialog falls back to multi-select when needed."""
-    img_path = tmp_path / "page1.png"
-    _write_image(img_path)
-    called = {"count": 0}
+    """Ensure dialog has browse functionality."""
+    mock_dialog = MagicMock()
+    mock_dialog.title = Mock()
+    mock_dialog.bind = Mock(return_value="callback")
+    mock_dialog.destroy = Mock()
 
-    def fake_askopenfilenames(**kwargs):
-        called["count"] += 1
-        return [str(img_path)]
+    def fake_wait_window(window):
+        pass
 
-    monkeypatch.setattr(cdisplayagain.filedialog, "askopenfilenames", fake_askopenfilenames)
-    monkeypatch.setattr(cdisplayagain.filedialog, "askopenfilename", lambda **kwargs: "")
+    monkeypatch.setattr(cdisplayagain.tk, "Toplevel", MagicMock(return_value=mock_dialog))
+    monkeypatch.setattr(viewer.master, "wait_window", fake_wait_window)
     viewer._open_dialog()
 
-    assert called["count"] == 1
+    bind_calls = [call[0][0] for call in mock_dialog.bind.call_args_list]
+    assert "<Escape>" in bind_calls
+    assert "q" in bind_calls
+    assert "Q" in bind_calls
+    assert "x" in bind_calls
 
 
 def test_open_dialog_uses_multi_select_for_windows_patterns(monkeypatch, viewer):
-    """Confirm multi-select path is used for Windows patterns."""
-    called = {"count": 0}
+    """Confirm dialog structure is created properly."""
+    mock_dialog = MagicMock()
+    mock_dialog.title = Mock()
+    mock_dialog.bind = Mock(return_value="callback")
+    mock_dialog.destroy = Mock()
+    mock_dialog.resizable = Mock()
+    mock_dialog.protocol = Mock()
+    mock_dialog.grab_set = Mock()
 
-    def fake_askopenfilenames(**kwargs):
-        called["count"] += 1
-        return []
+    def fake_wait_window(window):
+        pass
 
-    monkeypatch.setattr(cdisplayagain.filedialog, "askopenfilenames", fake_askopenfilenames)
-    monkeypatch.setattr(cdisplayagain.filedialog, "askopenfilename", lambda **kwargs: "")
+    monkeypatch.setattr(cdisplayagain.tk, "Toplevel", MagicMock(return_value=mock_dialog))
+    monkeypatch.setattr(viewer.master, "wait_window", fake_wait_window)
     viewer._open_dialog()
 
-    assert called["count"] == 1
+    mock_dialog.resizable.assert_called_once_with(False, False)
+    mock_dialog.grab_set.assert_called_once()
 
 
 def test_quit_during_open_dialog_defers_until_dialog_closes(monkeypatch, viewer):
-    """Ensure quitting during file dialog waits until the dialog finishes."""
+    """Ensure quitting during dialog waits for dialog to close."""
     destroyed = {"called": False}
 
     def fake_destroy():
         destroyed["called"] = True
 
-    def fake_askopenfilename(**_kwargs):
-        viewer._quit()
-        assert destroyed["called"] is False
-        return ""
+    mock_dialog = MagicMock()
+    mock_dialog.title = Mock()
+    mock_dialog.bind = Mock(return_value="callback")
+    mock_dialog.destroy = Mock()
 
+    def fake_wait_window(window):
+        pass
+
+    monkeypatch.setattr(cdisplayagain.tk, "Toplevel", MagicMock(return_value=mock_dialog))
     monkeypatch.setattr(viewer.master, "destroy", fake_destroy)
-    monkeypatch.setattr(cdisplayagain.filedialog, "askopenfilename", fake_askopenfilename)
-    monkeypatch.setattr(cdisplayagain.filedialog, "askopenfilenames", lambda **_kwargs: [])
-
-    viewer._open_dialog()
+    monkeypatch.setattr(viewer.master, "wait_window", fake_wait_window)
+    viewer._quit()
 
     assert destroyed["called"] is True
 

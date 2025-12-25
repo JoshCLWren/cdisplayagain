@@ -31,8 +31,6 @@ def test_l_key_triggers_open_dialog():
         mock_load.return_value = mock_source
 
         with (
-            patch("tkinter.filedialog.askopenfilename", return_value="dummy.cbz"),
-            patch("tkinter.filedialog.askopenfilenames", return_value=["dummy.cbz"]),
             patch("tkinter.messagebox.showerror"),
             patch("tkinter.messagebox.showinfo"),
         ):
@@ -56,9 +54,9 @@ def test_l_key_triggers_open_dialog():
                 app.focus_set()
                 root.update()
 
-                # Mock the _open_dialog method to verify it gets called
-                # We patch it on the instance
-                app._open_dialog = Mock(wraps=app._open_dialog)
+                # Mock the _open_dialog method - just verify it gets called, don't actually run it
+                # This prevents any dialogs from appearing
+                app._open_dialog = Mock()
 
                 # Simulate pressing 'l'. explicit keysym is safer for tests
                 # Generate on app widget
