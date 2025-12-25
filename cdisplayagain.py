@@ -509,6 +509,7 @@ class ComicViewer(tk.Frame):
         self._pending_quit: bool = False
         self._nav_debounce = Debouncer(150, self._execute_page_change, self)
         self._first_render_done: bool = False
+        self._first_proper_render_completed: bool = False
 
         self._bind_keys()
         self._bind_mouse()
@@ -885,6 +886,7 @@ class ComicViewer(tk.Frame):
         logging.info("Update from cache: cached page %d at %dx%d", index, cw, ch)
 
         self._display_cached_image(resized_bytes)
+        self._first_proper_render_completed = True
         self._update_title()
 
     def _quit(self):
@@ -1069,7 +1071,15 @@ class ComicViewer(tk.Frame):
             logging.info("Cache hit for page %d", index)
             self._display_cached_image(cached)
             self._update_title()
+            self._first_proper_render_completed = True
             perf_log("render_current_sync", time.perf_counter() - render_start, "cache_hit")
+            return
+
+        if not self._first_proper_render_completed:
+            logging.info("First proper render, skipping preview, requesting high-quality resize")
+            self._worker.request_page(index, cw, ch)
+            self._update_title()
+            perf_log("render_current_sync", time.perf_counter() - render_start, "first_render")
             return
 
         logging.info("Cache miss for page %d, displaying preview then requesting resize", index)
