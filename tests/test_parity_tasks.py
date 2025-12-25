@@ -282,10 +282,10 @@ def test_reads_zip_rar_ace_tar_archives(tmp_path):
     zip_path = tmp_path / "comic.zip"
     _make_cbz(zip_path, ["01.png"])
     rar_path = tmp_path / "comic.rar"
+    _make_cbz(rar_path, ["01.png"])
     ace_path = tmp_path / "comic.ace"
+    _make_cbz(ace_path, ["01.png"])
     tar_path = tmp_path / "comic.tar"
-    for path in (rar_path, ace_path):
-        path.write_bytes(b"")
     _make_tar(tar_path, ["01.png"])
 
     zip_source = cdisplayagain.load_comic(zip_path)

@@ -446,11 +446,11 @@ def load_comic(path: Path) -> PageSource:
         return load_cbz(path)
     if ext in {".cbr", ".rar", ".ace"}:
         if path.stat().st_size == 0:
-            return PageSource(pages=["01.png"], get_bytes=lambda _: b"", cleanup=None)
+            raise RuntimeError(f"Archive is empty: {path.name}")
         return load_cbr(path)
     if ext == ".tar":
         if path.stat().st_size == 0:
-            return PageSource(pages=["01.png"], get_bytes=lambda _: b"", cleanup=None)
+            raise RuntimeError(f"Archive is empty: {path.name}")
         return load_tar(path)
     if ext in IMAGE_EXTS:
         return load_image_file(path)
