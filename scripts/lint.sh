@@ -11,7 +11,7 @@ echo "Running code quality checks..."
 # Compile check for all Python files
 echo ""
 echo "Checking Python syntax by compiling..."
-python -m compileall . -q
+uv run python -m compileall . -q
 
 # Run linting
 echo ""
