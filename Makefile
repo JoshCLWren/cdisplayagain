@@ -112,7 +112,14 @@ ci-test-debian:  ## Run tests in cached debian container (like GitHub CI)
 		echo "Cached image not found, building..."; \
 		$(MAKE) ci-build-image; \
 	fi
-	@docker compose run --rm ci 2>&1 | tee ci-test-debian-output.log
+	@docker run --rm \
+		-v "$(CURDIR):/app" \
+		-v "$(CURDIR)/.venv:/app/.venv" \
+		-w /app \
+		-e PATH="/root/.local/bin:$$PATH" \
+		cdisplayagain-ci:13 \
+		bash -c 'uv sync --locked && timeout 300 xvfb-run -a --server-args="-screen 0 1280x1024x24" .venv/bin/pytest tests/ -q --tb=short' \
+		2>&1 | tee ci-test-debian-output.log
 	@if [ -f ci-test-debian-output.log ]; then \
 		echo "=== CI Test Output Summary ==="; \
 		grep -E "passed|failed|ERROR|coverage" ci-test-debian-output.log | tail -10; \
