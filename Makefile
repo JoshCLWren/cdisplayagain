@@ -1,4 +1,4 @@
-.PHONY: help lint pytest sync venv run smoke clean-build build build-onedir install install-bin install-desktop mime-query redo ci-test-debian ci-test-local ci-build-image
+.PHONY: help lint pytest sync venv run smoke clean-build build build-onedir install install-bin install-desktop mime-query redo ci-test-debian ci-test-local ci-build-image githook install-githook
 
 # Configuration
 PREFIX ?= /usr/local
@@ -11,6 +11,15 @@ help:  ## Show this help message
 lint:  ## Run code linting
 	uv run ruff check .
 	uv run pyright .
+
+install-githook:  ## Install pre-commit hook for new developers
+	@mkdir -p .git/hooks
+	@cp .githooks/pre-commit .git/hooks/pre-commit
+	@chmod +x .git/hooks/pre-commit
+	@echo "Pre-commit hook installed to .git/hooks/pre-commit"
+
+githook: install-githook  ## Run pre-commit hook manually (installs if missing)
+	./.git/hooks/pre-commit
 
 pytest:  ## Run tests
 	uv run pytest

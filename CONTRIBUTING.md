@@ -4,10 +4,23 @@ Thanks for contributing to cdisplayagain. This project values a fast, lightweigh
 viewer and clear, approachable code. Please follow the checks below for any code
 change.
 
+## Pre-commit hook
+
+A pre-commit hook is installed in `.git/hooks/pre-commit` that automatically runs:
+- Python compilation check
+- Ruff linting (`uv run ruff check .`)
+- Pyright type checking (`uv run pyright .`)
+
+The hook will block commits containing `# type: ignore`, `# noqa`, `# ruff: ignore`, or `# pylint: ignore`.
+
+To test the hook manually: `make githook` or `./.git/hooks/pre-commit`
+
 ## Code quality standards
 
 - Run linting after each change:
   - `uv run ruff check .`
+- Run type checking after each change:
+  - `uv run pyright .`
 - Run tests when you touch logic or input handling:
   - `uv run python -m pytest`
 - Perform manual smoke checks (CBZ + CBR) before sharing UI changes:
@@ -18,9 +31,17 @@ change.
 - Do not check in sample comics or proprietary content.
 - Do not use in-line comments to disable linting or type checks.
 - Do not narrate your code with comments; prefer clear code and commit messages.
+
 ## Style guidelines
 
 - Keep helpers explicit and descriptive (snake_case), and annotate public
   functions with precise types.
 - Avoid shell-specific shortcuts; prefer Python APIs and `pathlib.Path` helpers.
 - Do not mutate archives or leave temporary files behind.
+
+## Pull request guidelines
+
+- Use imperative, component-scoped commit messages (e.g., "Add CBR extraction error copy")
+- Bundle related changes per commit
+- PR summary should describe user impact and testing performed
+- Attach screenshots when UI is affected
