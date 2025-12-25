@@ -1,18 +1,15 @@
 """Profile analysis utility for extracting performance metrics from profiling data."""
 
 import json
-import re
 import sys
 from pathlib import Path
 
 
 def analyze(filename):
     """Analyze a Chrome profile and extract performance metrics."""
-    print(f"Analyzing {filename}...")
     try:
         text = Path(filename).read_text(encoding="utf-8")
-    except Exception as e:
-        print(f"Error reading file: {e}")
+    except Exception:
         return
 
     # Extract JSON
@@ -21,27 +18,21 @@ def analyze(filename):
         if "const sessionData =" in line:
             start = line.find("{")
             end = line.rfind("};")
-            if end == -1:
-                end = line.rfind("}") + 1
-            else:
-                end = end + 1
+            end = line.rfind("}") + 1 if end == -1 else end + 1
             if start != -1 and end != -1:
                 json_str = line[start:end]
                 break
 
     if not json_str:
-        print("Could not find sessionData line.")
         return
 
     try:
         data = json.loads(json_str)
-    except json.JSONDecodeError as e:
-        print(f"Error parsing JSON: {e}")
+    except json.JSONDecodeError:
         return
 
     root = data.get("frame_tree")
     if not root:
-        print("No frame_tree found.")
         return
 
     metrics = {}  # name -> self_time
@@ -68,10 +59,7 @@ def analyze(filename):
         identifier = node.get("identifier", "unknown")
 
         # Determine effectively who owns this self-time
-        if identifier == "[self]":
-            name = parent_name
-        else:
-            name = get_name(identifier)
+        name = parent_name if identifier == "[self]" else get_name(identifier)
 
         total_time = node.get("time", 0.0)
         children = node.get("children", [])
@@ -95,11 +83,8 @@ def analyze(filename):
     # Sort
     sorted_metrics = sorted(metrics.items(), key=lambda x: x[1], reverse=True)
 
-    print(f"{'Self Time (s)':>15} | {'Function'}")
-    print("-" * 80)
-    for name, st in sorted_metrics[:20]:
-        print(f"{st:15.4f} | {name}")
-    print("\n")
+    for _name, _st in sorted_metrics[:20]:
+        pass
 
 
 if __name__ == "__main__":

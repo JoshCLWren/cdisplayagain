@@ -1,13 +1,11 @@
 """Tests for threading architecture (Phase 3)."""
 
-import time
-import threading
-import queue
-import pytest
-import tkinter as tk
-from pathlib import Path
 import io
+import time
+import tkinter as tk
 import zipfile
+
+import pytest
 from PIL import Image
 
 import cdisplayagain
@@ -104,7 +102,6 @@ def test_image_worker_basic(tk_root, tmp_path):
         if len(results) >= 1:
             tk_root.quit()
 
-    original_update = app._update_from_cache
     app._update_from_cache = capture_update
 
     worker.request_page(0, 100, 200)
@@ -128,7 +125,6 @@ def test_image_worker_queue_full(tk_root, tmp_path):
     def capture_update(index, resized_bytes):
         results.append((index, len(resized_bytes)))
 
-    original_update = app._update_from_cache
     app._update_from_cache = capture_update
 
     for i in range(10):

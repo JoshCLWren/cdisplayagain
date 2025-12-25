@@ -16,11 +16,10 @@ import sys
 import tempfile
 import threading
 import time
+import tkinter as tk
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Optional
-
-import tkinter as tk
 from tkinter import filedialog, messagebox
 
 from PIL import Image, ImageTk
@@ -58,7 +57,7 @@ FILE_DIALOG_TYPES = [
 ]
 
 LOG_ROOT = Path(os.environ.get("CDISPLAYAGAIN_LOG_DIR", "logs")).expanduser()
-LOG_PATH: Optional[Path] = None
+LOG_PATH: Path | None = None
 
 
 def _init_logging() -> None:
@@ -98,7 +97,7 @@ class PageSource:
 
     pages: list[str]  # display/order names
     get_bytes: callable  # (page_name:str) -> bytes
-    cleanup: Optional[callable] = None  # called on exit
+    cleanup: callable | None = None  # called on exit
 
 
 class FocusRestorer:
@@ -132,7 +131,7 @@ class Debouncer:
         self._delay = delay_ms
         self._callback = callback
         self._app = app
-        self._timer_id: Optional[int] = None
+        self._timer_id: int | None = None
 
     def trigger(self, *args, **kwargs):
         """Trigger callback after delay (reset if already pending)."""
@@ -182,12 +181,9 @@ def load_cbr(path: Path) -> PageSource:
         raise RuntimeError("CBR support requires 'unar'. Install with: brew install unar")
 
     tmpdir = Path(tempfile.mkdtemp(prefix="cdisplayagain_"))
-    # -q quiet, -o output dir
-    # unar extracts into tmpdir (may create subfolders)
     proc = subprocess.run(
         [unar, "-q", "-o", str(tmpdir), str(path)],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
     if proc.returncode != 0:
@@ -368,7 +364,7 @@ class ComicViewer(tk.Frame):
         self.master = master
         self.pack(fill=tk.BOTH, expand=True)
 
-        self.source: Optional[PageSource] = None
+        self.source: PageSource | None = None
 
         self._imagetk_ready = False
         self._prime_imagetk()
@@ -386,24 +382,25 @@ class ComicViewer(tk.Frame):
         self.canvas.configure(cursor=self._cursor_name)
 
         # Keep reference to avoid Tk garbage-collecting the image
-        self._tk_img: Optional[tk.PhotoImage] = None
-        self._current_pil: Optional[Image.Image] = None
+        self._tk_img: tk.PhotoImage | None = None
+        self._current_pil: Image.Image | None = None
         self._current_index: int = 0
-        self._canvas_image_id: Optional[int] = None
+        self._canvas_image_id: int | None = None
 
         # Lightweight caches
         self._pil_cache: dict[str, Image.Image] = {}
         self._image_cache: dict[tuple[int, int, int], bytes] = {}
         self._scroll_offset: int = 0
-        self._scaled_size: Optional[tuple[int, int]] = None
+        self._scaled_size: tuple[int, int] | None = None
         self._focus_restorer = FocusRestorer(self.after_idle, self._ensure_focus)
-        self._info_overlay: Optional[tk.Label] = None
+        self._info_overlay: tk.Label | None = None
         self._context_menu = self._build_context_menu()
         self._dialog_active = False
         self._pending_quit = False
 
         self._worker = ImageWorker(self)
-        self._pending_index: Optional[int] = None
+        self._pending_index: int | None = None
+        self._pending_quit: bool = False
         self._nav_debounce = Debouncer(150, self._execute_page_change, self)
 
         self._bind_keys()
@@ -607,6 +604,7 @@ class ComicViewer(tk.Frame):
         cursor_was_hidden = self._cursor_hidden
         if cursor_was_hidden:
             self._set_cursor_hidden(False)
+        path = None
         try:
             path = filedialog.askopenfilename(
                 parent=self,
@@ -623,17 +621,19 @@ class ComicViewer(tk.Frame):
                     path = selections[0]
             if not path:
                 logging.info("Open dialog canceled by user.")
-                return
-            logging.info("Open dialog selected: %s", path)
-            self._open_comic(Path(path))
+            else:
+                logging.info("Open dialog selected: %s", path)
+                self._open_comic(Path(path))
         finally:
             if cursor_was_hidden:
                 self._set_cursor_hidden(True)
             self._dialog_active = False
-            if self._pending_quit:
-                self._pending_quit = False
-                self._quit()
-                return
+        if self._pending_quit:
+            self._pending_quit = False
+            self._quit()
+            return
+        if not path:
+            return
         self._request_focus()
 
     def _open_comic(self, path: Path):
@@ -813,10 +813,10 @@ class ComicViewer(tk.Frame):
             f"cdisplayagain - {self.comic_path.name} ({self._current_index + 1}/{total})"
         )
 
-    def _get_current_pil(self) -> Optional[Image.Image]:
+    def _get_current_pil(self) -> Image.Image | None:
         return self._get_pil_for_index(self._current_index)
 
-    def _get_pil_for_index(self, index: int) -> Optional[Image.Image]:
+    def _get_pil_for_index(self, index: int) -> Image.Image | None:
         if not self.source:
             return None
         if not self.source.pages:
@@ -836,7 +836,7 @@ class ComicViewer(tk.Frame):
         self._pil_cache[name] = img
         return img
 
-    def _find_next_image_index(self, start_index: int) -> Optional[int]:
+    def _find_next_image_index(self, start_index: int) -> int | None:
         if not self.source:
             return None
         for index in range(start_index + 1, len(self.source.pages)):
@@ -1108,7 +1108,7 @@ def main():
     root = tk.Tk()
     root.withdraw()
 
-    path: Optional[Path] = None
+    path: Path | None = None
     if args.comic:
         path = Path(args.comic).expanduser()
     else:

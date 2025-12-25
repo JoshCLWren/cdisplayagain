@@ -1,17 +1,16 @@
 """Performance benchmarks for cdisplayagain."""
 
-import time
-import zipfile
-import pytest
 import io
-import os
 import shutil
-import subprocess
-from pathlib import Path
-from PIL import Image
-import cdisplayagain
+import time
 import tkinter as tk
-from image_backend import get_resized_bytes, HAS_PYVIPS
+import zipfile
+
+import pytest
+from PIL import Image
+
+import cdisplayagain
+from image_backend import HAS_PYVIPS, get_resized_bytes
 
 # -----------------------------------------------------------------------------
 # Helpers for Realistic Data

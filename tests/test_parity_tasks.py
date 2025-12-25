@@ -478,7 +478,6 @@ def test_display_has_one_page_and_two_page_modes():
 def test_uses_lanczos_resampling(viewer, monkeypatch):
     """Verify Lanczos resampling is used for scaling."""
     import cdisplayagain
-    import image_backend
 
     called = {}
 

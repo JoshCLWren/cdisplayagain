@@ -2,10 +2,12 @@
 
 import io
 import tkinter as tk
-from unittest.mock import Mock, patch
-from cdisplayagain import ComicViewer
 from pathlib import Path
+from unittest.mock import Mock, patch
+
 from PIL import Image
+
+from cdisplayagain import ComicViewer
 
 
 def test_l_key_triggers_open_dialog():
