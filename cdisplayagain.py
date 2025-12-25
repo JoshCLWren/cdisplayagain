@@ -971,10 +971,13 @@ class ComicViewer(tk.Frame):
         self._scroll_by(delta)
 
     def _on_mouse_wheel(self, event) -> None:
-        logging.info("Mouse wheel delta=%s.", event.delta)
-        if event.delta == 0:
+        logging.info("Mouse wheel delta=%s num=%s.", event.delta, getattr(event, "num", None))
+        if hasattr(event, "num") and event.num:
+            direction = -1 if event.num == 4 else 1
+        elif event.delta == 0:
             return
-        direction = -1 if event.delta > 0 else 1
+        else:
+            direction = -1 if event.delta > 0 else 1
         if self._scaled_size and self._scaled_size[1] > self.canvas.winfo_height():
             self._scroll_by(direction * self._scroll_step())
         else:
