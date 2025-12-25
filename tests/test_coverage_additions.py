@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import _tkinter
 import io
+import logging
 import tarfile
+import tempfile
 import zipfile
 from pathlib import Path
 
@@ -637,3 +639,125 @@ def test_on_mouse_wheel_positive_delta_no_scroll(tmp_path):
         viewer._on_mouse_wheel(event)
     finally:
         root.destroy()
+
+
+def test_prime_imagetk_logs_import_failure(monkeypatch, caplog):
+    """Test _prime_imagetk logs warning when PIL._imagingtk import fails."""
+    import importlib
+
+    def fake_import(name, *args, **kwargs):
+        if name == "PIL._imagingtk":
+            raise ImportError("No module named 'PIL._imagingtk'")
+        return importlib.__import__(name, *args, **kwargs)
+
+    monkeypatch.setattr(cdisplayagain.importlib, "import_module", fake_import)
+
+    img_path = Path(__file__).parent / "fixtures" / "page1.png"
+    if not img_path.exists():
+        img_path = Path(__file__).parent.parent / "fixtures" / "page1.png"
+
+    if img_path.exists():
+        root = cdisplayagain.tk.Tk()
+        root.withdraw()
+        root.update()
+        try:
+            with caplog.at_level(logging.WARNING):
+                cdisplayagain.ComicViewer(root, img_path)
+                assert any(
+                    "ImageTk initialization failed: could not import PIL._imagingtk"
+                    in record.message
+                    for record in caplog.records
+                )
+        finally:
+            root.destroy()
+
+
+def test_prime_imagetk_logs_interp_addr_failure(monkeypatch, caplog):
+    """Test _prime_imagetk logs warning when getting interpreter address fails."""
+
+    class FakeTk:
+        def __init__(self):
+            self._interp_addr_failed = True
+
+        def interpaddr(self):
+            raise RuntimeError("Cannot get interpreter address")
+
+    class FakeTkApp:
+        tk = FakeTk()
+
+    monkeypatch.setattr(cdisplayagain.tk, "Tk", lambda: FakeTkApp())
+
+    img_path = Path(__file__).parent / "fixtures" / "page1.png"
+    if not img_path.exists():
+        img_path = Path(__file__).parent.parent / "fixtures" / "page1.png"
+
+    if img_path.exists():
+        root = cdisplayagain.tk.Tk()
+        root.withdraw()
+        root.update()
+        try:
+            with caplog.at_level(logging.WARNING):
+                cdisplayagain.ComicViewer(root, img_path)
+                assert any(
+                    "ImageTk initialization failed" in record.message for record in caplog.records
+                )
+        finally:
+            root.destroy()
+
+
+def test_load_cbr_cleans_up_on_unar_failure(tmp_path, monkeypatch):
+    """Test load_cbr cleans up temp dir when unar subprocess fails."""
+    cbr_path = tmp_path / "comic.cbr"
+    cbr_path.write_bytes(b"data")
+
+    temp_dirs_created = []
+
+    original_mkdtemp = tempfile.mkdtemp
+
+    def track_mkdtemp(*args, **kwargs):
+        result = original_mkdtemp(*args, **kwargs)
+        temp_dirs_created.append(result)
+        return result
+
+    monkeypatch.setattr(tempfile, "mkdtemp", track_mkdtemp)
+
+    def fake_run(*args, **kwargs):
+        return type("FakeResult", (), {"returncode": 1, "stderr": "error", "stdout": ""})()
+
+    monkeypatch.setattr(cdisplayagain.subprocess, "run", fake_run)
+    monkeypatch.setattr(cdisplayagain.shutil, "which", lambda _: "/usr/bin/unar")
+
+    with pytest.raises(RuntimeError, match="unar failed"):
+        cdisplayagain.load_cbr(cbr_path)
+
+    assert len(temp_dirs_created) == 1
+    assert not Path(temp_dirs_created[0]).exists()
+
+
+def test_load_cbr_cleans_up_on_empty_extraction(tmp_path, monkeypatch):
+    """Test load_cbr cleans up temp dir when no images found."""
+    cbr_path = tmp_path / "comic.cbr"
+    cbr_path.write_bytes(b"data")
+
+    temp_dirs_created = []
+
+    original_mkdtemp = tempfile.mkdtemp
+
+    def track_mkdtemp(*args, **kwargs):
+        result = original_mkdtemp(*args, **kwargs)
+        temp_dirs_created.append(result)
+        return result
+
+    monkeypatch.setattr(tempfile, "mkdtemp", track_mkdtemp)
+
+    def fake_run(*args, **kwargs):
+        return type("FakeResult", (), {"returncode": 0, "stderr": "", "stdout": ""})()
+
+    monkeypatch.setattr(cdisplayagain.subprocess, "run", fake_run)
+    monkeypatch.setattr(cdisplayagain.shutil, "which", lambda _: "/usr/bin/unar")
+
+    with pytest.raises(RuntimeError, match="No images or info files found"):
+        cdisplayagain.load_cbr(cbr_path)
+
+    assert len(temp_dirs_created) == 1
+    assert not Path(temp_dirs_created[0]).exists()
