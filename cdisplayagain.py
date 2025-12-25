@@ -502,11 +502,11 @@ class ComicViewer(tk.Frame):
         self._context_menu = self._build_context_menu()
         self._dialog_active = False
         self._pending_quit: bool = False
+        self._quitting: bool = False
         self._canvas_properly_sized: bool = False
 
         self._worker = ImageWorker(self)
         self._pending_index: int | None = None
-        self._pending_quit: bool = False
         self._nav_debounce = Debouncer(150, self._execute_page_change, self)
         self._first_render_done: bool = False
         self._first_proper_render_completed: bool = False
@@ -890,12 +890,14 @@ class ComicViewer(tk.Frame):
         self._update_title()
 
     def _quit(self):
+        if self._quitting:
+            return
         if self._dialog_active:
             self._pending_quit = True
             logging.info("Quit requested during dialog; attempting to close dialog.")
             self._cancel_active_dialog()
-            self.after(100, self._quit)
             return
+        self._quitting = True
         try:
             if self.source and self.source.cleanup:
                 self.source.cleanup()
