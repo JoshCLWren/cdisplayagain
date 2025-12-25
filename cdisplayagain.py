@@ -18,6 +18,7 @@ import tempfile
 import threading
 import time
 import tkinter as tk
+from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -127,6 +128,52 @@ def is_image_name(name: str) -> bool:
 def is_text_name(name: str) -> bool:
     """Return True when a path looks like an info text file."""
     return Path(name).suffix.casefold() in {".nfo", ".txt"}
+
+
+class LRUCache:
+    """Fixed-size LRU cache using OrderedDict for fast eviction."""
+
+    def __init__(self, maxsize: int = 20):
+        """Initialize LRU cache with maximum size."""
+        if maxsize <= 0:
+            raise ValueError("maxsize must be positive")
+        self._maxsize = maxsize
+        self._cache: OrderedDict = OrderedDict()
+
+    def get(self, key):
+        """Get item and move to end (most recently used)."""
+        if key not in self._cache:
+            return None
+        self._cache.move_to_end(key)
+        return self._cache[key]
+
+    def __setitem__(self, key, value):
+        """Set item and evict oldest if at capacity."""
+        if key in self._cache:
+            self._cache.move_to_end(key)
+        else:
+            if len(self._cache) >= self._maxsize:
+                self._cache.popitem(last=False)
+        self._cache[key] = value
+
+    def __getitem__(self, key):
+        """Get item with KeyError if missing, updates LRU order."""
+        if key not in self._cache:
+            raise KeyError(key)
+        self._cache.move_to_end(key)
+        return self._cache[key]
+
+    def __contains__(self, key):
+        """Check if key exists."""
+        return key in self._cache
+
+    def __len__(self):
+        """Return number of cached items."""
+        return len(self._cache)
+
+    def clear(self):
+        """Clear all cached items."""
+        self._cache.clear()
 
 
 @dataclass
@@ -339,18 +386,18 @@ class ImageWorker:
 
     def __init__(self, app):
         """Initialize worker with app reference and start daemon thread."""
-        # TODO: Use priority queue for next page rendering
         # TODO: Add multiple workers for parallel decoding
         # TODO: Cancel stale renders when rapidly page-turning
         self._app = app
-        self._queue = queue.Queue(maxsize=4)
+        self._queue = queue.PriorityQueue(maxsize=4)
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
 
     def request_page(self, index: int, width: int, height: int, preload: bool = False):
         """Request a page be processed in background."""
         try:
-            self._queue.put_nowait((index, width, height, preload))
+            priority = 1 if preload else 0
+            self._queue.put_nowait((priority, index, width, height, preload))
         except queue.Full:
             pass
 
@@ -366,7 +413,7 @@ class ImageWorker:
         """Process resize requests in background."""
         while True:
             try:
-                index, width, height, preload = self._queue.get()
+                priority, index, width, height, preload = self._queue.get()
 
                 if preload:
                     logging.info("Worker preloading page %d at %dx%d", index, width, height)
@@ -446,9 +493,8 @@ class ComicViewer(tk.Frame):
 
         # Lightweight caches
         # TODO: Cache PIL Image objects directly to avoid PNG encode/decode roundtrip (2x faster)
-        # TODO: Implement LRU eviction on _image_cache (currently unlimited)
         self._pil_cache: dict[str, Image.Image] = {}
-        self._image_cache: dict[tuple[int, int, int], bytes] = {}
+        self._image_cache = LRUCache(maxsize=20)
         self._scroll_offset: int = 0
         self._scaled_size: tuple[int, int] | None = None
         self._focus_restorer = FocusRestorer(self.after_idle, self._ensure_focus)
@@ -463,6 +509,7 @@ class ComicViewer(tk.Frame):
         self._pending_quit: bool = False
         self._nav_debounce = Debouncer(150, self._execute_page_change, self)
         self._first_render_done: bool = False
+        self._first_proper_render_completed: bool = False
 
         self._bind_keys()
         self._bind_mouse()
@@ -773,6 +820,50 @@ class ComicViewer(tk.Frame):
         self._canvas_image_id = self.canvas.create_image(x, y, image=self._tk_img, anchor=anchor)
         perf_log("canvas_update", time.perf_counter() - canvas_start)
 
+    def _display_image_fast(self, img: Image.Image):
+        """Display PIL image with fast NEAREST resampling for instant preview."""
+        cw = max(1, self.canvas.winfo_width())
+        ch = max(1, self.canvas.winfo_height())
+
+        iw, ih = img.size
+        scale = min(cw / iw, ch / ih)
+        if scale < 1:
+            nw = max(1, int(iw * scale))
+            nh = max(1, int(ih * scale))
+            img = img.resize((nw, nh), Image.Resampling.NEAREST)
+
+        self._current_pil = img
+
+        imagetk_start = time.perf_counter()
+        if self._imagetk_ready:
+            try:
+                self._tk_img = ImageTk.PhotoImage(img, master=self)
+            except Exception:
+                self._imagetk_ready = False
+                self._tk_img = self._photoimage_from_pil(img)
+        else:
+            self._tk_img = self._photoimage_from_pil(img)
+
+        iw, ih = img.size
+        self._scaled_size = (iw, ih)
+        max_offset = max(0, ih - ch)
+        if ih <= ch:
+            self._scroll_offset = 0
+        else:
+            self._scroll_offset = min(max(self._scroll_offset, 0), max_offset)
+
+        self.canvas.delete("all")
+        self._canvas_image_id = None
+        anchor = "center"
+        x = cw // 2
+        if ih <= ch:
+            y = ch // 2
+        else:
+            anchor = "n"
+            y = -self._scroll_offset
+        self._canvas_image_id = self.canvas.create_image(x, y, image=self._tk_img, anchor=anchor)
+        perf_log("display_fast_image", time.perf_counter() - imagetk_start)
+
     def _update_from_cache(self, index: int, resized_bytes: bytes):
         logging.info("Update from cache: index=%d, current_index=%d", index, self._current_index)
 
@@ -795,6 +886,7 @@ class ComicViewer(tk.Frame):
         logging.info("Update from cache: cached page %d at %dx%d", index, cw, ch)
 
         self._display_cached_image(resized_bytes)
+        self._first_proper_render_completed = True
         self._update_title()
 
     def _quit(self):
@@ -967,10 +1059,6 @@ class ComicViewer(tk.Frame):
             return
         self._dismiss_info()
 
-        # TODO: Fix 1.5s blocking startup - display raw image immediately, then replace with resized
-        # TODO: Use faster lower-quality resize for first render, then high-quality
-        # TODO: Stream JPEG instead of full PNG encode for cache to reduce startup latency
-
         index = self._current_index
         cw = max(1, self.canvas.winfo_width())
         ch = max(1, self.canvas.winfo_height())
@@ -983,25 +1071,36 @@ class ComicViewer(tk.Frame):
             logging.info("Cache hit for page %d", index)
             self._display_cached_image(cached)
             self._update_title()
+            self._first_proper_render_completed = True
             perf_log("render_current_sync", time.perf_counter() - render_start, "cache_hit")
             return
 
-        logging.info("Cache miss for page %d, processing synchronously", index)
+        if not self._first_proper_render_completed:
+            logging.info("First proper render, skipping preview, requesting high-quality resize")
+            self._worker.request_page(index, cw, ch)
+            self._update_title()
+            perf_log("render_current_sync", time.perf_counter() - render_start, "first_render")
+            return
+
+        logging.info("Cache miss for page %d, displaying preview then requesting resize", index)
         raw_start = time.perf_counter()
         raw = self.source.get_bytes(self.source.pages[index])
         perf_log("get_bytes", time.perf_counter() - raw_start)
 
-        resize_start = time.perf_counter()
-        resized_bytes = get_resized_bytes(raw, cw, ch)
-        perf_log("get_resized_bytes", time.perf_counter() - resize_start)
+        decode_start = time.perf_counter()
+        raw_img = Image.open(io.BytesIO(raw))
+        perf_log("pil_decode_preview", time.perf_counter() - decode_start)
 
         display_start = time.perf_counter()
-        self._image_cache[cache_key] = resized_bytes
-        self._display_cached_image(resized_bytes)
+        self._display_image_fast(raw_img)
         self._update_title()
-        perf_log("display_cached_image", time.perf_counter() - display_start)
+        perf_log("display_preview", time.perf_counter() - display_start)
 
-        perf_log("render_current_sync", time.perf_counter() - render_start, "cache_miss")
+        logging.info("Requesting high-quality resize for page %d", index)
+        self._worker.request_page(index, cw, ch)
+        self._update_title()
+
+        perf_log("render_current_sync", time.perf_counter() - render_start, "preview")
 
     def _render_info_with_image(self, name: str) -> None:
         image_index = self._find_next_image_index(self._current_index)

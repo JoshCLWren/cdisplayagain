@@ -45,7 +45,6 @@ WIP limit: 3 cards total in In Progress.
 - You can page with arrows and PageUp/PageDown, pan by dragging, and you quit with X or the pop-up menu, not a modern UI button.
 - Ensure `load_cbr` always cleans up temporary directories on extraction or validation errors.
 - Align supported format handling with file dialog options (decide on `.cbt`/`.cba` support or remove them from the picker).
-- Add bounded image caching to prevent unbounded memory growth on large archives.
 - Decide whether zero-byte archives should surface errors instead of returning placeholder pages.
 
 ## Ready
@@ -61,15 +60,14 @@ WIP limit: 3 cards total in In Progress.
 - Add Linux/X11 mouse wheel bindings (`<Button-4>`/`<Button-5>`) alongside `<MouseWheel>`.
 
 ## In Progress
-- (empty)
 
 ## Blocked
 - (empty)
 
-## Review/QA
-- (empty)
-
 ## Done
+- Add bounded image caching to prevent unbounded memory growth on large archives. (feature/lru-image-cache)
+- Add fast preview to eliminate 1.5s blocking startup (feature/lru-image-cache)
+- Use priority queue for next page rendering (feature/priority-queue-rendering)
 - Completed: Show info overlay while rendering the first image page.
 - Launches into full-screen immediately (takes over the whole screen by default).
 - Uses a minimal UI, prioritizing reading over toolbars and library features (sequential viewer, not a library manager).
