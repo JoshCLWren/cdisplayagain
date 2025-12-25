@@ -1,6 +1,6 @@
 # Packaging plan (macOS + Linux)
 
-This project is a single-file Tk app with Pillow + rarfile + external `unar` for CBR.
+This project is a single-file Tk app with Pillow + pyvips + external `unar` for CBR.
 Goal: ship self-contained builds so users do not need to know Python exists.
 
 ## Overview

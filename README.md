@@ -1,5 +1,9 @@
 ## cdisplayagain
 
+![Python](https://img.shields.io/badge/python-3.12+-blue.svg)
+![Code Coverage](https://codecov.io/gh/joshuajreid/cdisplayagain/branch/main/graph/badge.svg)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
+
 `cdisplayagain` is a minimalist, cross-platform remake of the classic
 Windows-only CDisplay sequential image viewer. The goal is to keep the
 original spirit—fast page flips, zero data mutation, and archive-first
@@ -20,23 +24,23 @@ viewer without wrestling dated IDEs or registry quirks.
   CBZ/CBR archives.
 - Archive abstractions that automatically sort page names using
   `natural_key` to match the reading order you expect.
-- Tk-based viewer with fit-to-screen, fit-to-width, and zoom shortcuts
-  mapped to the same effortless keyboard-first workflow as CDisplay.
+- Tk-based viewer with fit-to-screen navigation mapped to the same
+  effortless keyboard-first workflow as CDisplay.
 - Zero-write runtime: archives stay untouched and temporary extraction
   directories are cleaned automatically.
 
 ### Installation
 
 ```bash
-python -m venv .venv && source .venv/bin/activate
-python -m pip install -e .
+uv venv
+uv sync
 ```
 
-If you already use `uv`, you can skip activation and use its pip shim:
+If you prefer traditional pip:
 
 ```bash
-uv venv
-uv pip install -e .
+python -m venv .venv && source .venv/bin/activate
+python -m pip install -e .
 ```
 
 To install `uv` if you do not have it yet:
@@ -75,8 +79,8 @@ Or via the Makefile:
 make run FILE=path/to/comic.cbz
 ```
 
-While viewing, navigate with the arrow keys or scroll wheel, toggle fit
-and zoom modes from the keyboard, and use `Esc` to close the window.
+While viewing, navigate with the arrow keys, scroll wheel, or spacebar,
+and use `Esc` or `q` to close the window.
 
 ### Makefile targets
 

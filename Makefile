@@ -1,4 +1,4 @@
-.PHONY: help lint pytest sync venv run smoke clean-build build build-onedir install install-bin install-desktop mime-query redo
+.PHONY: help lint pytest sync venv run smoke clean-build build build-onedir install install-bin install-desktop mime-query redo ci-test-debian ci-test-local ci-build-image
 
 # Configuration
 PREFIX ?= /usr/local
@@ -87,3 +87,47 @@ redo: build-onedir install-bin  ## Rebuild and run (Usage: make redo FILE=...)
 	else \
 		echo "Usage: make redo FILE=path/to/comic.cbz"; \
 	fi
+
+ci-test-local:  ## Run CI-like tests locally (requires xvfb and libvips)
+	@echo "Running CI-like test locally..."
+	@if ! command -v xvfb-run >/dev/null 2>&1; then \
+		echo "WARNING: xvfb-run not found. Running without virtual display..."; \
+		uv run pytest tests/ -q --tb=short 2>&1 | tee ci-test-output.log; \
+	else \
+		xvfb-run -a uv run pytest tests/ -q --tb=short 2>&1 | tee ci-test-output.log; \
+	fi
+	@if [ -f ci-test-output.log ]; then \
+		echo ""; \
+		echo "=== CI Test Output Summary ==="; \
+		grep -E "passed|failed|ERROR|coverage" ci-test-output.log | tail -10; \
+	fi
+
+ci-build-image:  ## Build/rebuild cached debian image
+	@echo "Building cached debian image..."
+	@docker compose build ci
+
+ci-test-debian:  ## Run tests in cached debian container (like GitHub CI)
+	@echo "Running tests in cached debian container..."
+	@if ! docker image inspect cdisplayagain-ci:13 >/dev/null 2>&1; then \
+		echo "Cached image not found, building..."; \
+		$(MAKE) ci-build-image; \
+	fi
+	@docker run --rm \
+		-v "$(CURDIR):/app" \
+		-v "$(CURDIR)/.venv:/app/.venv" \
+		-w /app \
+		-e PATH="/root/.local/bin:$$PATH" \
+		cdisplayagain-ci:13 \
+		bash -c 'uv sync --locked && timeout 300 xvfb-run -a --server-args="-screen 0 1280x1024x24" .venv/bin/pytest tests/ -q --tb=short' \
+		2>&1 | tee ci-test-debian-output.log
+	@if [ -f ci-test-debian-output.log ]; then \
+		echo "=== CI Test Output Summary ==="; \
+		grep -E "passed|failed|ERROR|coverage" ci-test-debian-output.log | tail -10; \
+	fi
+
+ci-check:  ## Check if CI prerequisites are installed
+	@echo "Checking CI prerequisites..."
+	@echo "libvips: $$(dpkg -l | grep -q libvips && echo 'INSTALLED' || echo 'NOT FOUND')"
+	@echo "xvfb: $$(command -v xvfb-run && echo 'INSTALLED' || echo 'NOT FOUND')"
+	@echo "python3-tk: $$(dpkg -l | grep -q python3-tk && echo 'INSTALLED' || echo 'NOT FOUND')"
+	@echo "docker: $$(command -v docker && echo 'INSTALLED' || echo 'NOT FOUND')"

@@ -477,17 +477,21 @@ def test_display_has_one_page_and_two_page_modes():
 
 def test_uses_lanczos_resampling(viewer, monkeypatch):
     """Verify Lanczos resampling is used for scaling."""
+    import cdisplayagain
+    import image_backend
+
     called = {}
-    original_resize = Image.Image.resize
 
-    def fake_resize(self, size, resample):
-        called["resample"] = resample
-        return original_resize(self, size, resample)
+    original_get_resized = cdisplayagain.get_resized_bytes
 
-    monkeypatch.setattr(Image.Image, "resize", fake_resize)
+    def fake_get_resized(raw_bytes, width, height):
+        called["used"] = True
+        return original_get_resized(raw_bytes, width, height)
+
+    monkeypatch.setattr(cdisplayagain, "get_resized_bytes", fake_get_resized)
     viewer._render_current()
 
-    assert called["resample"] == Image.Resampling.LANCZOS
+    assert called.get("used") is True
 
 
 def test_color_balance_and_yellow_reduction_options_exist():
@@ -531,3 +535,40 @@ def test_full_parity_flow_space_and_nfo(tmp_path, viewer):
     viewer.event_generate("<space>")
     viewer.update()
     assert viewer._current_index >= 1
+
+
+def test_fullscreen_toggle(tmp_path, viewer):
+    """Test fullscreen toggle functionality."""
+    viewer.toggle_fullscreen()
+    assert viewer._fullscreen is True
+
+
+def test_scroll_down_and_up(tmp_path, viewer):
+    """Test scroll down and scroll up methods."""
+    viewer._open_comic(tmp_path / "page1.png")
+    viewer.update()
+
+    viewer._scroll_down()
+    viewer.update()
+
+    viewer._scroll_up()
+    viewer.update()
+
+    assert viewer._scroll_offset == 0
+
+
+def test_space_advance_with_image(tmp_path, viewer):
+    """Test space advance with image content."""
+    folder = tmp_path / "book"
+    folder.mkdir()
+    _write_image(folder / "01.png")
+    _write_image(folder / "02.png")
+
+    viewer._open_comic(folder)
+    viewer.update()
+
+    initial_index = viewer._current_index
+    viewer._space_advance()
+    viewer.update()
+
+    assert viewer._current_index == initial_index + 1

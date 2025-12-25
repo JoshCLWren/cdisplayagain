@@ -1,6 +1,6 @@
 # Migration Plan: pyvips + Threading + LRU Cache + Debounce
 
-**Status:** Draft
+**Status:** Partially Complete (pyvips implemented, threading pending)
 **Created:** December 24, 2025
 **Goal:** 3-5x performance improvement while keeping UI responsive
 

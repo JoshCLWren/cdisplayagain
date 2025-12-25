@@ -1,0 +1,13 @@
+services:
+  ci:
+    image: cdisplayagain-ci:13
+    build:
+      context: .
+      dockerfile: Dockerfile.ci
+    volumes:
+      - .:/app
+      - .venv:/app/.venv
+    working_dir: /app
+    environment:
+      - PATH=/root/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    command: bash -c 'uv sync --locked && xvfb-run -a --server-args="-screen 0 1280x1024x24" uv run pytest tests/ -q --tb=short'
