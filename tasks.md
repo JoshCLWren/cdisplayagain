@@ -1,11 +1,11 @@
 # Kanban Board (Agentic Use)
 
-This board is the shared source of truth. Keep cards small and move them often.
+This board is the shared source of truth for all work items. Keep cards small and move them often.
 
 Agent workflow:
 - Pick one card at a time, move it to In Progress, and add a short branch tag like "(branch: card/short-slug)".
 - If blocked, move to Blocked and add a one-line note.
-- When done, move to Review/QA and link the branch or PR with a short handoff note.
+- When done, move to Done and link the branch or PR with a short handoff note.
 - After review passes, move to Done.
 - Avoid parallel edits to the same file across cards; split work or sequence merges.
 
@@ -21,8 +21,38 @@ Git worktrees (parallel work):
 WIP limit: 3 cards total in In Progress.
 
 ## Backlog
-- The info screen can be dismissed by double-click.
-- The info screen can be dismissed by pressing any key.
+
+### Documentation
+- See `docs/PARITY.md` for complete CDisplay parity tracking
+- See `docs/PERFORMANCE.md` for performance baselines
+
+### Test Coverage Goals
+
+**Current Coverage:** 85.67% (1005 lines, 144 missing)
+
+**Coverage Milestones:**
+- ✅ 68% threshold (reached)
+- ✅ 74% target (reached)
+- ✅ 80% target (reached)
+- 🎯 **85% target (current - reached!)**
+- 🎯 90% target (next milestone)
+- 🎯 95% target (next milestone)
+- 🎯 100% goal (final target)
+
+**Strategies to increase coverage:**
+- Add tests for placeholder methods in `cdisplayagain.py` (11 methods: set_one_page_mode, set_two_page_mode, toggle_color_balance, toggle_yellow_reduction, toggle_hints, toggle_two_page_advance, set_page_buffer, set_background_color, set_small_cursor, set_mouse_binding)
+- Add tests for UI features (info screen dismissal, F1 help, configuration screen)
+- Add tests for configuration options (page buffer, background color, mouse bindings)
+- Add tests for edge cases (empty archives, corrupted files, large archives)
+- Add integration tests for full workflows (open → read → quit)
+
+**Test Coverage Reports:**
+- Run: `uv run pytest --cov=cdisplayagain --cov-report=term -q`
+- Check missing lines: `uv run pytest --cov=cdisplayagain --cov-report=term-missing`
+- Coverage threshold configured in `pyproject.toml`
+
+### Future Features & Parity Items
+- The info screen can be dismissed by double-click or any key press
 - You can drag the page around with the mouse (panning).
 - Mouse wheel is used for navigation/scrolling in some form.
 - Right-click opens a pop-up menu (see file loading).
