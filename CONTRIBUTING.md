@@ -7,22 +7,24 @@ change.
 ## Pre-commit hook
 
 A pre-commit hook is installed in `.git/hooks/pre-commit` that automatically runs:
+- Check for type/linter ignores in staged files
+- Run the shared lint script (`scripts/lint.sh`)
+
+The lint script runs:
 - Python compilation check
-- Ruff linting (`uv run ruff check .`)
+- Ruff linting
 - Any type usage check (ruff ANN401 rule)
-- Pyright type checking (`uv run pyright .`)
+- Pyright type checking
 
 The hook will block commits containing `# type: ignore`, `# noqa`, `# ruff: ignore`, or `# pylint: ignore`.
 
-To test the hook manually: `make githook` or `./.git/hooks/pre-commit`
+To test the hook manually: `make githook` or `bash scripts/lint.sh`
 
 ## Code quality standards
 
 - Run linting after each change:
-  - `uv run ruff check .`
+  - `make lint` or `bash scripts/lint.sh`
 - Use specific types instead of `Any` in type annotations (ruff ANN401 rule)
-- Run type checking after each change:
-  - `uv run pyright .`
 - Run tests when you touch logic or input handling:
   - `uv run python -m pytest`
 - Perform manual smoke checks (CBZ + CBR) before sharing UI changes:

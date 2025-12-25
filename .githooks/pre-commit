@@ -13,9 +13,9 @@ PYTHON_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.py$' ||
 if [ -n "$PYTHON_FILES" ]; then
     echo ""
     echo "Checking for type ignores and linter ignores in staged files..."
-    
+
     IGNORES_FOUND=0
-    
+
     for file in $PYTHON_FILES; do
         if git show ":$file" | grep -qE '# type:? ?ignore|# noqa|# ruff:? ?ignore|# pylint:? ?ignore' 2>/dev/null; then
             echo "${YELLOW}Found type/linter ignore in $file${NC}"
@@ -23,53 +23,15 @@ if [ -n "$PYTHON_FILES" ]; then
             IGNORES_FOUND=1
         fi
     done
-    
+
     if [ $IGNORES_FOUND -eq 1 ]; then
         echo ""
         echo "${RED}ERROR: Type or linter ignores found in staged files.${NC}"
-        echo "${RED}Please review CONTRIBUTIONS.md and remove these ignores before committing.${NC}"
+        echo "${RED}Please review CONTRIBUTING.md and remove these ignores before committing.${NC}"
         exit 1
     fi
 fi
 
-# Compile check for all Python files
-echo ""
-echo "Checking Python syntax by compiling..."
-python -m compileall . -q
+# Run the shared lint script
+bash scripts/lint.sh
 
-# Run linting
-echo ""
-echo "Running ruff linting..."
-if ! uv run ruff check .; then
-    echo ""
-    echo "${RED}ERROR: Linting failed.${NC}"
-    echo "${RED}Please fix the linting errors and check CONTRIBUTIONS.md for guidelines.${NC}"
-    exit 1
-fi
-
-# Check for Any type usage
-echo ""
-echo "Checking for Any type usage..."
-# Check both tracked files and staged files
-PYTHON_FILES_FOR_ANY=$( { git ls-files '*.py' && git diff --cached --name-only --diff-filter=ACM | grep '\.py$'; } | sort -u | uniq)
-if [ -n "$PYTHON_FILES_FOR_ANY" ]; then
-    if echo "$PYTHON_FILES_FOR_ANY" | xargs rg ': Any\b' 2>/dev/null | grep -v 'type: ignore' | head -1; then
-        echo ""
-        echo "${RED}ERROR: Any type found in codebase.${NC}"
-        echo "${RED}Please replace Any with specific types and check CONTRIBUTING.md for guidelines.${NC}"
-        exit 1
-    fi
-fi
-
-# Run type checking
-echo ""
-echo "Running pyright type checking..."
-if ! uv run pyright .; then
-    echo ""
-    echo "${RED}ERROR: Type checking failed.${NC}"
-    echo "${RED}Please fix the type errors and check CONTRIBUTIONS.md for guidelines.${NC}"
-    exit 1
-fi
-
-echo ""
-echo "${GREEN}All checks passed!${NC}"
