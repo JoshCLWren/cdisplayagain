@@ -9,6 +9,7 @@ change.
 A pre-commit hook is installed in `.git/hooks/pre-commit` that automatically runs:
 - Python compilation check
 - Ruff linting (`uv run ruff check .`)
+- Any type usage check (ruff ANN401 rule)
 - Pyright type checking (`uv run pyright .`)
 
 The hook will block commits containing `# type: ignore`, `# noqa`, `# ruff: ignore`, or `# pylint: ignore`.
@@ -19,6 +20,7 @@ To test the hook manually: `make githook` or `./.git/hooks/pre-commit`
 
 - Run linting after each change:
   - `uv run ruff check .`
+- Use specific types instead of `Any` in type annotations (ruff ANN401 rule)
 - Run type checking after each change:
   - `uv run pyright .`
 - Run tests when you touch logic or input handling:

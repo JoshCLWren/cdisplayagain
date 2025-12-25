@@ -47,6 +47,16 @@ if ! uv run ruff check .; then
     exit 1
 fi
 
+# Check for Any type usage
+echo ""
+echo "Checking for Any type usage..."
+if uv run ruff check . --select ANN401 | grep -q "ANN401"; then
+    echo ""
+    echo "${RED}ERROR: Any type found in codebase.${NC}"
+    echo "${RED}Please replace Any with specific types and check CONTRIBUTIONS.md for guidelines.${NC}"
+    exit 1
+fi
+
 # Run type checking
 echo ""
 echo "Running pyright type checking..."
