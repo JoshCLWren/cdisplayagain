@@ -339,18 +339,18 @@ class ImageWorker:
 
     def __init__(self, app):
         """Initialize worker with app reference and start daemon thread."""
-        # TODO: Use priority queue for next page rendering
         # TODO: Add multiple workers for parallel decoding
         # TODO: Cancel stale renders when rapidly page-turning
         self._app = app
-        self._queue = queue.Queue(maxsize=4)
+        self._queue = queue.PriorityQueue(maxsize=4)
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
 
     def request_page(self, index: int, width: int, height: int, preload: bool = False):
         """Request a page be processed in background."""
         try:
-            self._queue.put_nowait((index, width, height, preload))
+            priority = 1 if preload else 0
+            self._queue.put_nowait((priority, index, width, height, preload))
         except queue.Full:
             pass
 
@@ -366,7 +366,7 @@ class ImageWorker:
         """Process resize requests in background."""
         while True:
             try:
-                index, width, height, preload = self._queue.get()
+                priority, index, width, height, preload = self._queue.get()
 
                 if preload:
                     logging.info("Worker preloading page %d at %dx%d", index, width, height)
