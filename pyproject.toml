@@ -14,7 +14,7 @@ dependencies = [
 ]
 
 [tool.pytest.ini_options]
-addopts = ["--cov=cdisplayagain", "--cov-fail-under=74", "--no-cov-on-fail"]
+addopts = ["--cov=cdisplayagain", "--cov-fail-under=80", "--no-cov-on-fail"]
 pythonpath = ["."]
 
 [tool.ruff]
@@ -22,7 +22,7 @@ line-length = 100
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "UP", "B", "C4", "D"]
+select = ["E", "F", "I", "N", "UP", "B", "C4", "D", "ANN401"]
 ignore = ["D203", "D213", "E501"]
 
 [tool.coverage.run]

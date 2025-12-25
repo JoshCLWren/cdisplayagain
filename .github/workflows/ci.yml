@@ -20,6 +20,15 @@ jobs:
         shell: bash
         run: uv run ruff check .
 
+      - name: Check for Any type usage
+        shell: bash
+        run: |
+          if find . -name '*.py' | xargs rg ': Any\b' 2>/dev/null | grep -v 'type: ignore' | head -1; then
+            echo "ERROR: Any type found in codebase."
+            echo "Please replace Any with specific types and check CONTRIBUTING.md for guidelines."
+            exit 1
+          fi
+
       - name: Run pyright
         shell: bash
         run: uv run pyright .
@@ -33,6 +42,10 @@ jobs:
 
       - name: Setup environment
         uses: ./.github/actions/setup
+
+      - name: Create test fixtures
+        shell: bash
+        run: uv run python tests/create_test_comics.py
 
       - name: Run pytest
         shell: bash

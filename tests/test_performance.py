@@ -5,12 +5,23 @@ import shutil
 import time
 import tkinter as tk
 import zipfile
+from pathlib import Path
 
 import pytest
+import pyvips
 from PIL import Image
 
 import cdisplayagain
-from image_backend import HAS_PYVIPS, get_resized_bytes
+from image_backend import get_resized_bytes
+
+# -----------------------------------------------------------------------------
+# Performance Thresholds (tune as performance improves)
+# These are for synchronous rendering - actual user experience
+# -----------------------------------------------------------------------------
+PERF_CBZ_LAUNCH_MAX = 0.05
+PERF_CBR_LAUNCH_MAX = 0.2
+PERF_COVER_RENDER_MAX = 2.0
+PERF_PAGE_TURN_MAX = 1.0
 
 # -----------------------------------------------------------------------------
 # Helpers for Realistic Data
@@ -190,7 +201,7 @@ def test_perf_cbr_extraction_overhead(tmp_path):
 
 def test_image_backend_pyvips_available():
     """Verify pyvips is available for image backend."""
-    assert HAS_PYVIPS is True, "pyvips should be available for performance testing"
+    assert pyvips is not None, "pyvips should be available"
 
 
 def test_image_backend_lru_cache_hit():
@@ -237,6 +248,25 @@ def test_image_backend_roundtrip():
 
     resized_img = Image.open(io.BytesIO(resized_bytes))
     assert resized_img.size == (target_w, target_h)
+
+
+def test_pyvips_available():
+    """Verify pyvips is available."""
+    assert pyvips is not None
+
+
+def test_lru_cache_hit():
+    """Verify LRU cache works for repeated requests."""
+    from image_backend import get_resized_bytes
+
+    img = Image.new("RGB", (1920, 1080), color=(100, 150, 200))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    raw = buf.getvalue()
+
+    result1 = get_resized_bytes(raw, 1920, 1080)
+    result2 = get_resized_bytes(raw, 1920, 1080)
+    assert result1 == result2
 
 
 def test_cache_first_render_hits_cache(tmp_path, tk_root):
@@ -390,3 +420,75 @@ def test_render_info_with_image_uses_cache(tmp_path, tk_root):
             app._image_cache[cache_key] = resized_bytes
 
             assert cache_key in app._image_cache, "Info with image should use cache"
+
+
+def test_perf_launch_sample_comics(tk_root):
+    """Measure full integration: launch, cover render, and pagination."""
+    fixtures_dir = Path(__file__).parent / "fixtures"
+    cbz_path = fixtures_dir / "test_cbz.cbz"
+    cbr_path = fixtures_dir / "test_cbr.cbr"
+    assert cbz_path.exists(), f"CBZ file not found: {cbz_path}"
+    assert cbr_path.exists(), f"CBR file not found: {cbr_path}"
+
+    results = []
+
+    for label, comic_path in [("CBZ", cbz_path), ("CBR", cbr_path)]:
+        start_time = time.perf_counter()
+        app = cdisplayagain.ComicViewer(tk_root, comic_path)
+        launch_time = time.perf_counter() - start_time
+
+        app.canvas.config(width=1920, height=1080)
+        app.update_idletasks()
+
+        start_time = time.perf_counter()
+        app._render_current_sync()
+        cover_render_time = time.perf_counter() - start_time
+
+        page_turn_times = []
+        for _ in range(5):
+            app.next_page()
+            app.update_idletasks()
+            start_time = time.perf_counter()
+            app._render_current_sync()
+            page_turn_times.append(time.perf_counter() - start_time)
+
+        avg_page_turn = sum(page_turn_times) / len(page_turn_times)
+        total_time = launch_time + cover_render_time + sum(page_turn_times)
+
+        results.append((label, launch_time, cover_render_time, avg_page_turn, total_time))
+        print(f"\nPerformance [{label} Launch]: {launch_time:.6f}s")
+        print(f"Performance [{label} Cover Render]: {cover_render_time:.6f}s")
+        print(f"Performance [{label} Avg Page Turn]: {avg_page_turn:.6f}s")
+        print(f"Performance [{label} Total (5 pages)]: {total_time:.6f}s")
+
+        if app.source and app.source.cleanup:
+            app.source.cleanup()
+        app.destroy()
+
+    cbz_result = next(r for r in results if r[0] == "CBZ")
+    cbr_result = next(r for r in results if r[0] == "CBR")
+    _, cbz_launch, cbz_cover, cbz_page_turn, cbz_total = cbz_result
+    _, cbr_launch, cbr_cover, cbr_page_turn, cbr_total = cbr_result
+
+    print(f"\nPerformance [CBZ Launch]: {cbz_launch:.6f}s (max: {PERF_CBZ_LAUNCH_MAX:.3f}s)")
+    print(f"Performance [CBR Launch]: {cbr_launch:.6f}s (max: {PERF_CBR_LAUNCH_MAX:.3f}s)")
+    print(f"Performance [CBR/CBZ Launch Ratio]: {cbr_launch / cbz_launch:.2f}x")
+
+    assert cbz_launch < PERF_CBZ_LAUNCH_MAX, (
+        f"CBZ launch took too long: {cbz_launch:.4f}s > {PERF_CBZ_LAUNCH_MAX}s"
+    )
+    assert cbr_launch < PERF_CBR_LAUNCH_MAX, (
+        f"CBR launch took too long: {cbr_launch:.4f}s > {PERF_CBR_LAUNCH_MAX}s"
+    )
+    assert cbz_cover < PERF_COVER_RENDER_MAX, (
+        f"CBZ cover render took too long: {cbz_cover:.4f}s > {PERF_COVER_RENDER_MAX}s"
+    )
+    assert cbr_cover < PERF_COVER_RENDER_MAX, (
+        f"CBR cover render took too long: {cbr_cover:.4f}s > {PERF_COVER_RENDER_MAX}s"
+    )
+    assert cbz_page_turn < PERF_PAGE_TURN_MAX, (
+        f"CBZ page turn took too long: {cbz_page_turn:.4f}s > {PERF_PAGE_TURN_MAX}s"
+    )
+    assert cbr_page_turn < PERF_PAGE_TURN_MAX, (
+        f"CBR page turn took too long: {cbr_page_turn:.4f}s > {PERF_PAGE_TURN_MAX}s"
+    )

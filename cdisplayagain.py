@@ -67,6 +67,7 @@ FILE_DIALOG_TYPES = [
 
 LOG_ROOT = Path(os.environ.get("CDISPLAYAGAIN_LOG_DIR", "logs")).expanduser()
 LOG_PATH: Path | None = None
+PERF_LOGGING = os.environ.get("CDISPLAYAGAIN_PERF") == "1"
 
 
 def _init_logging() -> None:
@@ -82,6 +83,34 @@ def _init_logging() -> None:
         format="%(asctime)s %(levelname)s %(message)s",
     )
     logging.info("Logging initialized at %s", LOG_PATH)
+
+
+def perf_log(operation: str, duration: float, extra: str = "") -> None:
+    """Log performance metrics if perf logging is enabled."""
+    if PERF_LOGGING:
+        logging.info("PERF %s: %.6f%s %s", operation, duration, "s", extra)
+
+
+class PerfTimer:
+    """Context manager for timing operations."""
+
+    def __init__(self, operation: str, extra: str = ""):
+        """Initialize timer with operation name and extra metadata."""
+        self.operation = operation
+        self.extra = extra
+        self.start_time: float | None = None
+
+    def __enter__(self):
+        """Start timing and return self."""
+        self.start_time = time.perf_counter()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Stop timing and log performance metric."""
+        if self.start_time is not None:
+            duration = time.perf_counter() - self.start_time
+            perf_log(self.operation, duration, self.extra)
+        return False
 
 
 def natural_key(s: str):
@@ -318,25 +347,39 @@ class ImageWorker:
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
 
-    def request_page(self, index: int, width: int, height: int):
+    def request_page(self, index: int, width: int, height: int, preload: bool = False):
         """Request a page be processed in background."""
         try:
-            self._queue.put_nowait((index, width, height))
+            self._queue.put_nowait((index, width, height, preload))
         except queue.Full:
             pass
+
+    def preload(self, index: int):
+        """Preload a page at current canvas dimensions for future display."""
+        if not self._app:
+            return
+        cw = max(1, self._app.canvas.winfo_width())
+        ch = max(1, self._app.canvas.winfo_height())
+        self.request_page(index, cw, ch, preload=True)
 
     def _run(self):
         """Process resize requests in background."""
         while True:
             try:
-                index, width, height = self._queue.get()
+                index, width, height, preload = self._queue.get()
 
-                logging.info("Worker processing page %d at %dx%d", index, width, height)
+                if preload:
+                    logging.info("Worker preloading page %d at %dx%d", index, width, height)
+                else:
+                    logging.info("Worker processing page %d at %dx%d", index, width, height)
 
                 raw = self._app.source.get_bytes(self._app.source.pages[index])
                 resized_bytes = get_resized_bytes(raw, width, height)
 
-                logging.info("Worker finished page %d, scheduling callback", index)
+                if preload:
+                    logging.info("Worker finished preloading page %d", index)
+                else:
+                    logging.info("Worker finished page %d, scheduling callback", index)
 
                 self._app.after_idle(
                     lambda idx=index, rb=resized_bytes: self._app._update_from_cache(idx, rb)
@@ -372,6 +415,8 @@ class ComicViewer(tk.Frame):
 
     def __init__(self, master: tk.Tk, comic_path: Path):
         """Initialize the viewer frame and load the initial comic."""
+        init_start = time.perf_counter()
+        perf_log("app_init_start", 0, f"path={comic_path.name}")
         super().__init__(master)
         self.comic_path = comic_path
         self.pack(fill=tk.BOTH, expand=True)
@@ -433,6 +478,8 @@ class ComicViewer(tk.Frame):
         # Load file - let Configure event trigger first render
         self._open_comic(comic_path)
         self._request_focus()
+
+        perf_log("app_init_total", time.perf_counter() - init_start)
 
     def _request_focus(self) -> None:
         self._focus_restorer.schedule()
@@ -650,6 +697,9 @@ class ComicViewer(tk.Frame):
         self._request_focus()
 
     def _open_comic(self, path: Path):
+        open_start = time.perf_counter()
+        perf_log("open_comic_start", 0, f"path={path.name}")
+
         if self.source and self.source.cleanup:
             try:
                 self.source.cleanup()
@@ -668,7 +718,9 @@ class ComicViewer(tk.Frame):
 
         try:
             logging.info("Opening comic: %s", path)
+            load_start = time.perf_counter()
             self.source = load_comic(path)
+            perf_log("load_comic", time.perf_counter() - load_start)
         except Exception as e:
             logging.exception("Failed to open comic: %s", path)
             messagebox.showerror("Could not open comic", str(e))
@@ -676,13 +728,17 @@ class ComicViewer(tk.Frame):
             return
 
         self._update_title()
+        perf_log("open_comic_total", time.perf_counter() - open_start)
         # Don't render here - let Configure event trigger first render
 
     def _display_cached_image(self, resized_bytes: bytes):
-        # TODO: Reuse BytesIO buffers instead of allocating new ones each render
-        # TODO: Use ImageTk.PhotoImage directly instead of PNG intermediate when caching PIL objects
+        decode_start = time.perf_counter()
         resized = Image.open(io.BytesIO(resized_bytes))
+        perf_log("pil_decode", time.perf_counter() - decode_start)
+
         self._current_pil = resized
+
+        imagetk_start = time.perf_counter()
         if self._imagetk_ready:
             try:
                 self._tk_img = ImageTk.PhotoImage(resized, master=self)
@@ -691,7 +747,9 @@ class ComicViewer(tk.Frame):
                 self._tk_img = self._photoimage_from_pil(resized)
         else:
             self._tk_img = self._photoimage_from_pil(resized)
+        perf_log("imagetk_conversion", time.perf_counter() - imagetk_start)
 
+        canvas_start = time.perf_counter()
         cw = max(1, self.canvas.winfo_width())
         ch = max(1, self.canvas.winfo_height())
 
@@ -713,6 +771,7 @@ class ComicViewer(tk.Frame):
             anchor = "n"
             y = -self._scroll_offset
         self._canvas_image_id = self.canvas.create_image(x, y, image=self._tk_img, anchor=anchor)
+        perf_log("canvas_update", time.perf_counter() - canvas_start)
 
     def _update_from_cache(self, index: int, resized_bytes: bytes):
         logging.info("Update from cache: index=%d, current_index=%d", index, self._current_index)
@@ -736,7 +795,6 @@ class ComicViewer(tk.Frame):
         logging.info("Update from cache: cached page %d at %dx%d", index, cw, ch)
 
         self._display_cached_image(resized_bytes)
-        # TODO: Preload next page (page+1) while viewing current page for instant page turns
         self._update_title()
 
     def _quit(self):
@@ -886,20 +944,26 @@ class ComicViewer(tk.Frame):
             logging.info("Cache hit for page %d", index)
             self._display_cached_image(cached)
             self._update_title()
-            return
+        else:
+            logging.info("Cache miss for page %d, requesting worker", index)
+            self._worker.request_page(index, cw, ch)
+            self._update_title()
 
-        logging.info("Cache miss for page %d, requesting worker", index)
-        self._worker.request_page(index, cw, ch)
-        self._update_title()
+        next_idx = self._find_next_image_index(index)
+        if next_idx is not None:
+            logging.info("Preloading next image page %d", next_idx)
+            self._worker.preload(next_idx)
 
     def _render_current_sync(self):
         if not self.source:
             return
 
+        render_start = time.perf_counter()
         name = self.source.pages[self._current_index]
         if is_text_name(name):
             self._render_info_with_image(name)
             self._update_title()
+            perf_log("render_current_sync", time.perf_counter() - render_start, "info_page")
             return
         self._dismiss_info()
 
@@ -919,15 +983,25 @@ class ComicViewer(tk.Frame):
             logging.info("Cache hit for page %d", index)
             self._display_cached_image(cached)
             self._update_title()
+            perf_log("render_current_sync", time.perf_counter() - render_start, "cache_hit")
             return
 
         logging.info("Cache miss for page %d, processing synchronously", index)
+        raw_start = time.perf_counter()
         raw = self.source.get_bytes(self.source.pages[index])
-        resized_bytes = get_resized_bytes(raw, cw, ch)
+        perf_log("get_bytes", time.perf_counter() - raw_start)
 
+        resize_start = time.perf_counter()
+        resized_bytes = get_resized_bytes(raw, cw, ch)
+        perf_log("get_resized_bytes", time.perf_counter() - resize_start)
+
+        display_start = time.perf_counter()
         self._image_cache[cache_key] = resized_bytes
         self._display_cached_image(resized_bytes)
         self._update_title()
+        perf_log("display_cached_image", time.perf_counter() - display_start)
+
+        perf_log("render_current_sync", time.perf_counter() - render_start, "cache_miss")
 
     def _render_info_with_image(self, name: str) -> None:
         image_index = self._find_next_image_index(self._current_index)

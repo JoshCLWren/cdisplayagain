@@ -24,6 +24,16 @@ githook: install-githook  ## Run pre-commit hook manually (installs if missing)
 pytest:  ## Run tests
 	uv run pytest
 
+profile-cbz:  ## Profile CBZ launch performance (Usage: make profile-cbz FILE=path/to/comic.cbz)
+	@if [ -z "$(FILE)" ]; then echo "Usage: make profile-cbz FILE=path/to/comic.cbz"; exit 1; fi
+	@echo "Profiling CBZ launch..."
+	@time uv run python cdisplayagain.py "$(FILE)"
+
+profile-cbr:  ## Profile CBR launch performance (Usage: make profile-cbr FILE=path/to/comic.cbr)
+	@if [ -z "$(FILE)" ]; then echo "Usage: make profile-cbr FILE=path/to/comic.cbr"; exit 1; fi
+	@echo "Profiling CBR launch..."
+	@time uv run python cdisplayagain.py "$(FILE)"
+
 sync:  ## Install dependencies
 	uv sync --locked
 
