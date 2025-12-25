@@ -382,16 +382,17 @@ def load_image_file(path: Path) -> PageSource:
 
 
 class ImageWorker:
-    """Background thread for image processing."""
+    """Background thread pool for image processing."""
 
-    def __init__(self, app):
-        """Initialize worker with app reference and start daemon thread."""
-        # TODO: Add multiple workers for parallel decoding
-        # TODO: Cancel stale renders when rapidly page-turning
+    def __init__(self, app, num_workers: int = 4):
+        """Initialize worker pool with app reference and start daemon threads."""
         self._app = app
         self._queue = queue.PriorityQueue(maxsize=4)
-        self._thread = threading.Thread(target=self._run, daemon=True)
-        self._thread.start()
+        self._threads: list[threading.Thread] = []
+        for i in range(num_workers):
+            thread = threading.Thread(target=self._run, daemon=True, name=f"ImageWorker-{i}")
+            thread.start()
+            self._threads.append(thread)
 
     def request_page(self, index: int, width: int, height: int, preload: bool = False):
         """Request a page be processed in background."""

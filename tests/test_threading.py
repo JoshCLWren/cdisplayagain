@@ -139,14 +139,15 @@ def test_image_worker_queue_full(tk_root, tmp_path):
 
 
 def test_image_worker_daemon(tk_root, tmp_path):
-    """Test ImageWorker thread is daemon and doesn't block exit."""
+    """Test ImageWorker threads are daemon and don't block exit."""
     cbz_path = tmp_path / "test.cbz"
     create_test_cbz(cbz_path)
 
     app = cdisplayagain.ComicViewer(tk_root, cbz_path)
     worker = ImageWorker(app)
 
-    assert worker._thread.daemon, "Worker thread should be daemon"
+    assert len(worker._threads) > 0, "Worker should have threads"
+    assert all(t.daemon for t in worker._threads), "All worker threads should be daemon"
 
 
 def test_debouncer_with_action(tk_root):
