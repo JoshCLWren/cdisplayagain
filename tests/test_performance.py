@@ -237,3 +237,156 @@ def test_image_backend_roundtrip():
 
     resized_img = Image.open(io.BytesIO(resized_bytes))
     assert resized_img.size == (target_w, target_h)
+
+
+def test_cache_first_render_hits_cache(tmp_path, tk_root):
+    """Verify that rendering checks cache first and uses cached image."""
+    cbz_path = tmp_path / "cache_test.cbz"
+    create_benchmark_cbz(cbz_path, page_count=3)
+
+    app = cdisplayagain.ComicViewer(tk_root, cbz_path)
+    app.canvas.config(width=1920, height=1080)
+    app.update_idletasks()
+
+    cw = max(1, app.canvas.winfo_width())
+    ch = max(1, app.canvas.winfo_height())
+
+    if app.source:
+        raw_bytes = app.source.get_bytes(app.source.pages[0])
+        from image_backend import get_resized_bytes
+
+        resized_bytes = get_resized_bytes(raw_bytes, cw, ch)
+
+        cache_key = (0, cw, ch)
+        app._image_cache[cache_key] = resized_bytes
+
+        assert cache_key in app._image_cache, "Image should be cached"
+
+        app._display_cached_image(resized_bytes)
+        assert app._tk_img is not None, "Image should be displayed"
+
+        initial_cache_size = len(app._image_cache)
+        app._render_current()
+        assert len(app._image_cache) == initial_cache_size, "Cache should not grow for cache hit"
+
+
+def test_cache_first_render_queues_worker_on_miss(tmp_path, tk_root):
+    """Verify that cache miss triggers background worker request."""
+    cbz_path = tmp_path / "worker_test.cbz"
+    create_benchmark_cbz(cbz_path, page_count=3)
+
+    app = cdisplayagain.ComicViewer(tk_root, cbz_path)
+    app.canvas.config(width=1920, height=1080)
+    app.update_idletasks()
+
+    cw = max(1, app.canvas.winfo_width())
+    ch = max(1, app.canvas.winfo_height())
+    cache_key = (0, cw, ch)
+
+    assert cache_key not in app._image_cache, "Cache should be empty initially"
+
+    initial_queue_size = app._worker._queue.qsize()
+    app._render_current()
+
+    assert app._worker._queue.qsize() >= initial_queue_size, (
+        "Worker should receive request on cache miss"
+    )
+
+
+def test_display_cached_image_updates_canvas(tmp_path, tk_root):
+    """Verify _display_cached_image correctly updates canvas with cached bytes."""
+    cbz_path = tmp_path / "display_test.cbz"
+    create_benchmark_cbz(cbz_path, page_count=1)
+
+    app = cdisplayagain.ComicViewer(tk_root, cbz_path)
+    app.canvas.config(width=1920, height=1080)
+    app.update_idletasks()
+
+    cw = max(1, app.canvas.winfo_width())
+    ch = max(1, app.canvas.winfo_height())
+
+    if app.source:
+        raw_bytes = app.source.get_bytes(app.source.pages[0])
+        from image_backend import get_resized_bytes
+
+        resized_bytes = get_resized_bytes(raw_bytes, cw, ch)
+
+        cache_key = (0, cw, ch)
+        app._image_cache[cache_key] = resized_bytes
+
+        assert cache_key in app._image_cache, "Image should be cached"
+
+        cached_bytes = app._image_cache[cache_key]
+        app.canvas.delete("all")
+        app._tk_img = None
+        app._canvas_image_id = None
+
+        app._display_cached_image(cached_bytes)
+
+        assert app._tk_img is not None, "Image should be displayed"
+        assert app._canvas_image_id is not None, "Canvas should have image item"
+        assert app._scaled_size is not None, "Scaled size should be set"
+
+
+def test_cache_key_includes_dimensions(tmp_path, tk_root):
+    """Verify cache key includes canvas dimensions."""
+    cbz_path = tmp_path / "dimensions_test.cbz"
+    create_benchmark_cbz(cbz_path, page_count=1)
+
+    app = cdisplayagain.ComicViewer(tk_root, cbz_path)
+    app.canvas.config(width=1920, height=1080)
+    app.update_idletasks()
+
+    if app.source:
+        raw_bytes = app.source.get_bytes(app.source.pages[0])
+        from image_backend import get_resized_bytes
+
+        cw1, ch1 = 1920, 1080
+        resized_bytes1 = get_resized_bytes(raw_bytes, cw1, ch1)
+        cache_key1 = (0, cw1, ch1)
+        app._image_cache[cache_key1] = resized_bytes1
+
+        cw2, ch2 = 1280, 720
+        resized_bytes2 = get_resized_bytes(raw_bytes, cw2, ch2)
+        cache_key2 = (0, cw2, ch2)
+        app._image_cache[cache_key2] = resized_bytes2
+
+        assert cache_key1 in app._image_cache, "First dimension should be cached"
+        assert cache_key2 in app._image_cache, "Second dimension should be cached"
+        assert cache_key1 != cache_key2, "Different dimensions should have different cache keys"
+
+
+def test_render_info_with_image_uses_cache(tmp_path, tk_root):
+    """Verify _render_info_with_image also uses cache-first approach."""
+    cbz_path = tmp_path / "info_test.cbz"
+    with zipfile.ZipFile(cbz_path, "w") as zf:
+        img = create_realistic_page(color=(100, 100, 100))
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=80)
+        zf.writestr("info.txt", b"Test info file")
+        zf.writestr("page_001.jpg", buf.getvalue())
+
+    app = cdisplayagain.ComicViewer(tk_root, cbz_path)
+    app.canvas.config(width=1920, height=1080)
+    app.update_idletasks()
+
+    if app.source and len(app.source.pages) > 1:
+        cw = max(1, app.canvas.winfo_width())
+        ch = max(1, app.canvas.winfo_height())
+
+        image_index = None
+        for idx, page in enumerate(app.source.pages):
+            if not cdisplayagain.is_text_name(page):
+                image_index = idx
+                break
+
+        if image_index is not None:
+            raw_bytes = app.source.get_bytes(app.source.pages[image_index])
+            from image_backend import get_resized_bytes
+
+            resized_bytes = get_resized_bytes(raw_bytes, cw, ch)
+
+            cache_key = (image_index, cw, ch)
+            app._image_cache[cache_key] = resized_bytes
+
+            assert cache_key in app._image_cache, "Info with image should use cache"

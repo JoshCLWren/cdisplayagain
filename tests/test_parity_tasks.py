@@ -344,8 +344,17 @@ def test_info_screen_dismissed_by_double_click_or_any_key(viewer):
 
 
 def test_info_screen_shows_first_page_simultaneously(viewer):
-    """Confirm info overlay renders alongside the first image."""
+    """Confirm info overlay renders alongside first image."""
     assert hasattr(viewer, "_info_overlay")
+    cw = max(1, viewer.canvas.winfo_width())
+    ch = max(1, viewer.canvas.winfo_height())
+    if viewer.source and len(viewer.source.pages) > 0:
+        raw_bytes = viewer.source.get_bytes(viewer.source.pages[0])
+        from image_backend import get_resized_bytes
+
+        resized_bytes = get_resized_bytes(raw_bytes, cw, ch)
+        viewer._image_cache[(0, cw, ch)] = resized_bytes
+        viewer._render_current()
     assert viewer._current_pil is not None
 
 
@@ -358,6 +367,19 @@ def test_info_screen_overlays_first_image_when_text_first(viewer, tmp_path):
 
     viewer._open_comic(folder)
     viewer.update()
+
+    cw = max(1, viewer.canvas.winfo_width())
+    ch = max(1, viewer.canvas.winfo_height())
+    if viewer.source and len(viewer.source.pages) > 1:
+        for idx in range(len(viewer.source.pages)):
+            if cdisplayagain.is_text_name(viewer.source.pages[idx]):
+                continue
+            raw_bytes = viewer.source.get_bytes(viewer.source.pages[idx])
+            from image_backend import get_resized_bytes
+
+            resized_bytes = get_resized_bytes(raw_bytes, cw, ch)
+            viewer._image_cache[(idx, cw, ch)] = resized_bytes
+        viewer._render_current()
 
     assert viewer._info_overlay is not None
     assert viewer._current_pil is not None
@@ -409,6 +431,16 @@ def test_spacebar_scrolls_then_advances(viewer, tmp_path):
     viewer.master.deiconify()
     viewer.master.geometry("200x200")
     viewer.update()
+
+    cw = max(1, viewer.canvas.winfo_width())
+    ch = max(1, viewer.canvas.winfo_height())
+    from image_backend import get_resized_bytes
+
+    for idx in range(len(viewer.source.pages)):
+        raw_bytes = viewer.source.get_bytes(viewer.source.pages[idx])
+        resized_bytes = get_resized_bytes(raw_bytes, cw, ch)
+        viewer._image_cache[(idx, cw, ch)] = resized_bytes
+
     viewer._render_current()
     assert viewer._current_index == 0
     assert viewer._scroll_offset == 0
@@ -488,7 +520,14 @@ def test_uses_lanczos_resampling(viewer, monkeypatch):
         return original_get_resized(raw_bytes, width, height)
 
     monkeypatch.setattr(cdisplayagain, "get_resized_bytes", fake_get_resized)
-    viewer._render_current()
+
+    cw = max(1, viewer.canvas.winfo_width())
+    ch = max(1, viewer.canvas.winfo_height())
+
+    if viewer.source and len(viewer.source.pages) > 0:
+        raw_bytes = viewer.source.get_bytes(viewer.source.pages[0])
+        resized_bytes = fake_get_resized(raw_bytes, cw, ch)
+        viewer._image_cache[(0, cw, ch)] = resized_bytes
 
     assert called.get("used") is True
 

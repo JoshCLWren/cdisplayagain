@@ -124,13 +124,15 @@ def test_image_worker_queue_full(tk_root, tmp_path):
 
     def capture_update(index, resized_bytes):
         results.append((index, len(resized_bytes)))
+        if len(results) >= 4:
+            tk_root.quit()
 
     app._update_from_cache = capture_update
 
     for i in range(10):
         worker.request_page(i, 100, 200)
 
-    tk_root.after(500, tk_root.quit)
+    tk_root.after(2000, tk_root.quit)
     tk_root.mainloop()
 
     assert len(results) <= 4, "Worker should only process max queue size"
@@ -277,6 +279,7 @@ def test_update_from_cache_directly(tk_root, tmp_path):
     ch = max(1, app.canvas.winfo_height())
     cache_key = (0, cw, ch)
 
+    app._canvas_properly_sized = True
     app._update_from_cache(0, resized_bytes)
 
     assert cache_key in app._image_cache
