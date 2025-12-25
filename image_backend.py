@@ -12,6 +12,7 @@ HAS_PYVIPS = importlib.util.find_spec("pyvips") is not None
 @functools.lru_cache(maxsize=32)
 def get_resized_bytes(raw_bytes: bytes, target_width: int, target_height: int) -> bytes:
     """Resize image bytes using pyvips (fast) or Pillow (fallback)."""
+    # TODO: Implement predictive caching - preload pages 1-3 when viewing page 0
     if HAS_PYVIPS:
         return _resize_with_pyvips(raw_bytes, target_width, target_height)
     return _resize_with_pillow(raw_bytes, target_width, target_height)

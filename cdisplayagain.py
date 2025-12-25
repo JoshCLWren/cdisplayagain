@@ -301,6 +301,9 @@ class ImageWorker:
 
     def __init__(self, app):
         """Initialize worker with app reference and start daemon thread."""
+        # TODO: Use priority queue for next page rendering
+        # TODO: Add multiple workers for parallel decoding
+        # TODO: Cancel stale renders when rapidly page-turning
         self._app = app
         self._queue = queue.Queue(maxsize=4)
         self._thread = threading.Thread(target=self._run, daemon=True)
@@ -389,6 +392,8 @@ class ComicViewer(tk.Frame):
         self._canvas_image_id: int | None = None
 
         # Lightweight caches
+        # TODO: Cache PIL Image objects directly to avoid PNG encode/decode roundtrip (2x faster)
+        # TODO: Implement LRU eviction on _image_cache (currently unlimited)
         self._pil_cache: dict[str, Image.Image] = {}
         self._image_cache: dict[tuple[int, int, int], bytes] = {}
         self._scroll_offset: int = 0
@@ -666,6 +671,8 @@ class ComicViewer(tk.Frame):
         # Don't render here - let Configure event trigger first render
 
     def _display_cached_image(self, resized_bytes: bytes):
+        # TODO: Reuse BytesIO buffers instead of allocating new ones each render
+        # TODO: Use ImageTk.PhotoImage directly instead of PNG intermediate when caching PIL objects
         resized = Image.open(io.BytesIO(resized_bytes))
         self._current_pil = resized
         if self._imagetk_ready:
@@ -719,6 +726,7 @@ class ComicViewer(tk.Frame):
         logging.info("Update from cache: cached page %d at %dx%d", index, cw, ch)
 
         self._display_cached_image(resized_bytes)
+        # TODO: Preload next page (page+1) while viewing current page for instant page turns
         self._update_title()
 
     def _quit(self):
@@ -885,6 +893,10 @@ class ComicViewer(tk.Frame):
             self._update_title()
             return
         self._dismiss_info()
+
+        # TODO: Fix 1.5s blocking startup - display raw image immediately, then replace with resized
+        # TODO: Use faster lower-quality resize for first render, then high-quality
+        # TODO: Stream JPEG instead of full PNG encode for cache to reduce startup latency
 
         index = self._current_index
         cw = max(1, self.canvas.winfo_width())
