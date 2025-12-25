@@ -13,17 +13,17 @@ The viewer lives entirely in the repository root. `cdisplayagain.py` exposes the
 ## Build, Test, and Development Commands
 - `uv venv`: create a uv-managed virtualenv (skip activation).
 - `uv sync`: install dependencies via uv without activating the venv.
-- `uv run python cdisplayagain.py path/to/comic.cbz`: open a specific archive immediately, useful for manual regression runs.
-- `uv run python cdisplayagain.py path/to/comic.cbz`: alternative if you prefer the fast `uv` workflow already tracked via `uv.lock`.
+- `python cdisplayagain.py path/to/comic.cbz`: open a specific archive immediately (assumes venv is activated).
+- `uv run --active pytest`: run tests using the currently activated virtualenv.
 
 ## Coding Style & Naming Conventions
 Follow standard PEP 8 spacing (4 spaces, 100-character soft wrap) and favor descriptive snake_case for functions and variables (`natural_key`, `open_archive`). Retain the current pattern of dataclasses (`Archive`, `PageSource`) for typed data containers and keep public functions annotated with precise types. Prefer explicit helper names (e.g., `load_cbz`) and guard Tk callbacks with early returns rather than nesting.
 
 ## Testing Guidelines
-- Automated tests live in `tests/` and run with `uv run pytest` (or `make pytest`).
+- Automated tests live in `tests/` and run with `python -m pytest` (or `make pytest`).
 - When adding tests, keep `pytest` naming like `test_load_cbz_sorts_pages`.
 - When using fakes, mirror the real `ComicViewer` interface rather than relaxing production code.
-- For manual smoke tests, run `uv run python cdisplayagain.py path/to/sample.cbz`, open both `.cbz` and `.cbr` samples, page through images, toggle fit/zoom, and ensure cleanup of temporary directories. Document any manual checklist you execute inside the pull request.
+- For manual smoke tests, run `python cdisplayagain.py path/to/sample.cbz`, open both `.cbz` and `.cbr` samples, page through images, toggle fit/zoom, and ensure cleanup of temporary directories. Document any manual checklist you execute inside the pull request.
 
 ## Commit & Pull Request Guidelines
 Use imperative, component-scoped commits such as `Add CBR extraction error copy` or `Refine zoom keyboard shortcuts`. Bundle related changes per commit, referencing issue numbers in the footer when applicable. Pull requests should summarize user impact, list testing performed (commands and archive types opened), note any new dependencies (system packages like `unar`), and attach screenshots when UI is affected.

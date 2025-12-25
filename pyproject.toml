@@ -21,8 +21,8 @@ line-length = 100
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["D"]
-ignore = ["D203", "D213"]
+select = ["E", "F", "I", "N", "UP", "B", "C4", "D"]
+ignore = ["D203", "D213", "E501"]
 
 [tool.coverage.run]
 source = ["."]
