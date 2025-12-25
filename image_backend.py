@@ -23,11 +23,8 @@ def _resize_with_pyvips(raw_bytes: bytes, width: int, height: int) -> bytes:
 
     img = pyvips.Image.new_from_buffer(raw_bytes, "")
     orig_w = img.width
-    orig_h = img.height
 
-    scale_w = width / orig_w
-    scale_h = height / orig_h
-    scale = min(scale_w, scale_h)
+    scale = width / orig_w
 
     resized = img.resize(scale, kernel="lanczos3")
     return resized.write_to_buffer(".png")
@@ -36,7 +33,12 @@ def _resize_with_pyvips(raw_bytes: bytes, width: int, height: int) -> bytes:
 def _resize_with_pillow(raw_bytes: bytes, width: int, height: int) -> bytes:
     """Fallback resize using Pillow."""
     img = Image.open(io.BytesIO(raw_bytes))
-    resized = img.resize((width, height), Image.Resampling.LANCZOS)
+    orig_w, orig_h = img.size
+
+    scale = width / orig_w
+    new_h = max(1, int(orig_h * scale))
+
+    resized = img.resize((width, new_h), Image.Resampling.LANCZOS)
     buf = io.BytesIO()
     resized.save(buf, format="PNG")
     return buf.getvalue()
