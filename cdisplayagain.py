@@ -713,19 +713,68 @@ class ComicViewer(tk.Frame):
             self._set_cursor_hidden(False)
         path = None
         try:
-            path = filedialog.askopenfilename(
-                parent=self,
-                title="Open Comic",
-                filetypes=FILE_DIALOG_TYPES,
-            )
-            if not path:
-                selections = filedialog.askopenfilenames(
-                    parent=self,
+            dialog = tk.Toplevel(self.master)
+            dialog.title("Open Comic")
+            _as_wm(dialog).transient(_as_wm(self.master))
+            dialog.resizable(False, False)
+            dialog.protocol("WM_DELETE_WINDOW", lambda: dialog.destroy())
+
+            dialog.bind("<Escape>", lambda e: self._quit())
+            dialog.bind("q", lambda e: self._quit())
+            dialog.bind("Q", lambda e: self._quit())
+            dialog.bind("x", lambda e: self._quit())
+
+            from tkinter import ttk
+
+            frame = ttk.Frame(dialog, padding=10)
+            frame.pack(fill=tk.BOTH, expand=True)
+
+            ttk.Label(frame, text="File:").grid(row=0, column=0, sticky=tk.W)
+            entry_var: tk.StringVar = tk.StringVar()
+            entry = ttk.Entry(frame, textvariable=entry_var, width=50)
+            entry.grid(row=0, column=1, sticky=tk.EW)
+
+            def browse():
+                file_path = filedialog.askopenfilename(
+                    parent=dialog,
                     title="Open Comic",
                     filetypes=FILE_DIALOG_TYPES,
                 )
-                if selections:
-                    path = selections[0]
+                if file_path:
+                    entry_var.set(file_path)
+
+            def browse_multi():
+                file_paths = filedialog.askopenfilenames(
+                    parent=dialog,
+                    title="Open Comic",
+                    filetypes=FILE_DIALOG_TYPES,
+                )
+                if file_paths:
+                    entry_var.set(file_paths[0])
+
+            ttk.Button(frame, text="Browse...", command=browse).grid(row=0, column=2)
+
+            button_frame = ttk.Frame(frame)
+            button_frame.grid(row=1, column=0, columnspan=3, pady=10)
+
+            result = {"path": ""}
+
+            def on_ok():
+                result["path"] = entry_var.get()
+                dialog.destroy()
+
+            def on_cancel():
+                dialog.destroy()
+
+            ttk.Button(button_frame, text="Open", command=on_ok).pack(side=tk.LEFT, padx=5)
+            ttk.Button(button_frame, text="Cancel", command=on_cancel).pack(side=tk.LEFT, padx=5)
+
+            dialog.grab_set()
+            entry.focus_set()
+            self.master.wait_window(dialog)
+
+            path = result["path"]
+
             if not path:
                 logging.info("Open dialog canceled by user.")
             else:
