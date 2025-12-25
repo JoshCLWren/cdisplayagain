@@ -750,7 +750,6 @@ class ComicViewer(tk.Frame):
         logging.info("Update from cache: cached page %d at %dx%d", index, cw, ch)
 
         self._display_cached_image(resized_bytes)
-        # TODO: Preload next page (page+1) while viewing current page for instant page turns
         self._update_title()
 
     def _quit(self):

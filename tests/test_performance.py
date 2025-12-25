@@ -5,6 +5,7 @@ import shutil
 import time
 import tkinter as tk
 import zipfile
+from pathlib import Path
 
 import pytest
 from PIL import Image
@@ -239,6 +240,27 @@ def test_image_backend_roundtrip():
     assert resized_img.size == (target_w, target_h)
 
 
+def test_pyvips_available():
+    """Verify pyvips is available."""
+    import image_backend
+
+    assert image_backend.HAS_PYVIPS
+
+
+def test_lru_cache_hit():
+    """Verify LRU cache works for repeated requests."""
+    from image_backend import get_resized_bytes
+
+    img = Image.new("RGB", (1920, 1080), color=(100, 150, 200))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    raw = buf.getvalue()
+
+    result1 = get_resized_bytes(raw, 1920, 1080)
+    result2 = get_resized_bytes(raw, 1920, 1080)
+    assert result1 == result2
+
+
 def test_cache_first_render_hits_cache(tmp_path, tk_root):
     """Verify that rendering checks cache first and uses cached image."""
     cbz_path = tmp_path / "cache_test.cbz"
@@ -393,17 +415,10 @@ def test_render_info_with_image_uses_cache(tmp_path, tk_root):
 
 
 def test_perf_launch_sample_comics(tk_root):
-    """Measure launch performance for real CBZ and CBR files from profile collection."""
-    from pathlib import Path
-
-    home = Path.home()
-    cbz_path = (
-        home / "vpn-torrent/share/The New Teen Titans 01 (1980) (digital) (OkC.O.M.P.U.T.O.).cbz"
-    )
-    cbr_path = (
-        home
-        / "vpn-torrent/share/Adventure Time (2012)/Adventure Time 001 (2012) (5 covers) (digital-TheGroup).cbr"
-    )
+    """Measure launch performance for local test CBZ and CBR files."""
+    fixtures_dir = Path(__file__).parent / "fixtures"
+    cbz_path = fixtures_dir / "test_cbz.cbz"
+    cbr_path = fixtures_dir / "test_cbr.cbr"
 
     if not cbz_path.exists():
         pytest.skip(f"CBZ file not found: {cbz_path}")
