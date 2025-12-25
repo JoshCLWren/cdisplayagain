@@ -62,6 +62,9 @@ WIP limit: 3 cards total in In Progress.
 - Spacebar is a smart forward mechanism (scrolls around the current page until fully shown, then advances).
 - Add Linux/X11 mouse wheel bindings (`<Button-4>`/`<Button-5>`) alongside `<MouseWheel>`.
 
+## Review/QA
+- Use priority queue for next page rendering (branch: feature/priority-queue-rendering)
+
 ## In Progress
 
 ## Blocked
