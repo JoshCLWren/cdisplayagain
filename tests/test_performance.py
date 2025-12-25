@@ -12,16 +12,17 @@ import pyvips
 from PIL import Image
 
 import cdisplayagain
-from image_backend import get_resized_bytes
+from image_backend import get_resized_pil
 
 # -----------------------------------------------------------------------------
 # Performance Thresholds (tune as performance improves)
 # These are for synchronous rendering - actual user experience
+# Updated 2025-12-25 after PIL Image caching optimization
 # -----------------------------------------------------------------------------
 PERF_CBZ_LAUNCH_MAX = 0.01
-PERF_CBR_LAUNCH_MAX = 0.3
-PERF_COVER_RENDER_MAX = 0.1
-PERF_PAGE_TURN_MAX = 0.1
+PERF_CBR_LAUNCH_MAX = 0.15
+PERF_COVER_RENDER_MAX = 0.01
+PERF_PAGE_TURN_MAX = 0.01
 
 # -----------------------------------------------------------------------------
 # Helpers for Realistic Data
@@ -213,12 +214,12 @@ def test_image_backend_lru_cache_hit():
 
     target_w, target_h = 960, 540
 
-    result1 = get_resized_bytes(raw_bytes, target_w, target_h)
-    result2 = get_resized_bytes(raw_bytes, target_w, target_h)
+    result1 = get_resized_pil(raw_bytes, target_w, target_h)
+    result2 = get_resized_pil(raw_bytes, target_w, target_h)
 
-    assert len(result1) > 0
-    assert len(result2) > 0
-    assert result1 == result2, "LRU cache should return same result for same inputs"
+    assert isinstance(result1, Image.Image)
+    assert isinstance(result2, Image.Image)
+    assert result1 is result2, "LRU cache should return same object for same inputs"
 
 
 def test_image_backend_different_sizes():
@@ -228,12 +229,12 @@ def test_image_backend_different_sizes():
     img.save(buf, format="PNG")
     raw_bytes = buf.getvalue()
 
-    result1 = get_resized_bytes(raw_bytes, 1920, 1080)
-    result2 = get_resized_bytes(raw_bytes, 960, 540)
+    result1 = get_resized_pil(raw_bytes, 1920, 1080)
+    result2 = get_resized_pil(raw_bytes, 960, 540)
 
-    assert len(result1) > 0
-    assert len(result2) > 0
-    assert result1 != result2, "Different sizes should produce different outputs"
+    assert isinstance(result1, Image.Image)
+    assert isinstance(result2, Image.Image)
+    assert result1.size != result2.size, "Different sizes should produce different outputs"
 
 
 def test_image_backend_roundtrip():
@@ -244,9 +245,9 @@ def test_image_backend_roundtrip():
     raw_bytes = buf.getvalue()
 
     target_w, target_h = 960, 540
-    resized_bytes = get_resized_bytes(raw_bytes, target_w, target_h)
+    resized_img = get_resized_pil(raw_bytes, target_w, target_h)
 
-    resized_img = Image.open(io.BytesIO(resized_bytes))
+    pass
     assert resized_img.size == (target_w, target_h)
 
 
@@ -257,16 +258,16 @@ def test_pyvips_available():
 
 def test_lru_cache_hit():
     """Verify LRU cache works for repeated requests."""
-    from image_backend import get_resized_bytes
+    from image_backend import get_resized_pil
 
     img = Image.new("RGB", (1920, 1080), color=(100, 150, 200))
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     raw = buf.getvalue()
 
-    result1 = get_resized_bytes(raw, 1920, 1080)
-    result2 = get_resized_bytes(raw, 1920, 1080)
-    assert result1 == result2
+    result1 = get_resized_pil(raw, 1920, 1080)
+    result2 = get_resized_pil(raw, 1920, 1080)
+    assert result1 is result2, "LRU cache should return same object"
 
 
 def test_cache_first_render_hits_cache(tmp_path, tk_root):
@@ -283,16 +284,16 @@ def test_cache_first_render_hits_cache(tmp_path, tk_root):
 
     if app.source:
         raw_bytes = app.source.get_bytes(app.source.pages[0])
-        from image_backend import get_resized_bytes
+        from image_backend import get_resized_pil
 
-        resized_bytes = get_resized_bytes(raw_bytes, cw, ch)
+        resized_img = get_resized_pil(raw_bytes, cw, ch)
 
         cache_key = (0, cw, ch)
-        app._image_cache[cache_key] = resized_bytes
+        app._image_cache[cache_key] = resized_img
 
         assert cache_key in app._image_cache, "Image should be cached"
 
-        app._display_cached_image(resized_bytes)
+        app._display_cached_image(resized_img)
         assert app._tk_img is not None, "Image should be displayed"
 
         initial_cache_size = len(app._image_cache)
@@ -337,21 +338,21 @@ def test_display_cached_image_updates_canvas(tmp_path, tk_root):
 
     if app.source:
         raw_bytes = app.source.get_bytes(app.source.pages[0])
-        from image_backend import get_resized_bytes
+        from image_backend import get_resized_pil
 
-        resized_bytes = get_resized_bytes(raw_bytes, cw, ch)
+        resized_img = get_resized_pil(raw_bytes, cw, ch)
 
         cache_key = (0, cw, ch)
-        app._image_cache[cache_key] = resized_bytes
+        app._image_cache[cache_key] = resized_img
 
         assert cache_key in app._image_cache, "Image should be cached"
 
-        cached_bytes = app._image_cache[cache_key]
+        cached_img = app._image_cache[cache_key]
         app.canvas.delete("all")
         app._tk_img = None
         app._canvas_image_id = None
 
-        app._display_cached_image(cached_bytes)
+        app._display_cached_image(cached_img)
 
         assert app._tk_img is not None, "Image should be displayed"
         assert app._canvas_image_id is not None, "Canvas should have image item"
@@ -369,15 +370,15 @@ def test_cache_key_includes_dimensions(tmp_path, tk_root):
 
     if app.source:
         raw_bytes = app.source.get_bytes(app.source.pages[0])
-        from image_backend import get_resized_bytes
+        from image_backend import get_resized_pil
 
         cw1, ch1 = 1920, 1080
-        resized_bytes1 = get_resized_bytes(raw_bytes, cw1, ch1)
+        resized_bytes1 = get_resized_pil(raw_bytes, cw1, ch1)
         cache_key1 = (0, cw1, ch1)
         app._image_cache[cache_key1] = resized_bytes1
 
         cw2, ch2 = 1280, 720
-        resized_bytes2 = get_resized_bytes(raw_bytes, cw2, ch2)
+        resized_bytes2 = get_resized_pil(raw_bytes, cw2, ch2)
         cache_key2 = (0, cw2, ch2)
         app._image_cache[cache_key2] = resized_bytes2
 
@@ -412,12 +413,12 @@ def test_render_info_with_image_uses_cache(tmp_path, tk_root):
 
         if image_index is not None:
             raw_bytes = app.source.get_bytes(app.source.pages[image_index])
-            from image_backend import get_resized_bytes
+            from image_backend import get_resized_pil
 
-            resized_bytes = get_resized_bytes(raw_bytes, cw, ch)
+            resized_img = get_resized_pil(raw_bytes, cw, ch)
 
             cache_key = (image_index, cw, ch)
-            app._image_cache[cache_key] = resized_bytes
+            app._image_cache[cache_key] = resized_img
 
             assert cache_key in app._image_cache, "Info with image should use cache"
 

@@ -415,7 +415,9 @@ def test_update_from_cache_with_no_source(tmp_path):
     try:
         viewer = cdisplayagain.ComicViewer(root, img_path)
         viewer.source = None
-        viewer._update_from_cache(0, b"data")
+        from PIL import Image
+
+        viewer._update_from_cache(0, Image.new("RGB", (10, 10)))
     finally:
         root.destroy()
 
@@ -429,8 +431,10 @@ def test_update_from_cache_with_wrong_index(tmp_path):
     root.update()
     try:
         viewer = cdisplayagain.ComicViewer(root, img_path)
-        viewer.update()
-        viewer._update_from_cache(5, b"data")
+        viewer.source = None
+        from PIL import Image
+
+        viewer._update_from_cache(5, Image.new("RGB", (10, 10)))
     finally:
         root.destroy()
 

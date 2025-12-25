@@ -40,8 +40,8 @@ def test_single_worker_vs_parallel_performance(tk_root, tmp_path):
 
     results = []
 
-    def capture_update(index, resized_bytes):
-        results.append((index, len(resized_bytes)))
+    def capture_update(index, img):
+        results.append((index, img.size))
 
     app._update_from_cache = capture_update
 
@@ -83,8 +83,8 @@ def test_throughput_with_multiple_workers(tk_root, tmp_path):
 
     results = []
 
-    def capture_update(index, resized_bytes):
-        results.append((index, len(resized_bytes)))
+    def capture_update(index, img):
+        results.append((index, img.size))
 
     app._update_from_cache = capture_update
 
