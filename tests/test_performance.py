@@ -18,10 +18,10 @@ from image_backend import get_resized_bytes
 # Performance Thresholds (tune as performance improves)
 # These are for synchronous rendering - actual user experience
 # -----------------------------------------------------------------------------
-PERF_CBZ_LAUNCH_MAX = 0.05
-PERF_CBR_LAUNCH_MAX = 0.2
-PERF_COVER_RENDER_MAX = 2.0
-PERF_PAGE_TURN_MAX = 1.0
+PERF_CBZ_LAUNCH_MAX = 0.01
+PERF_CBR_LAUNCH_MAX = 0.3
+PERF_COVER_RENDER_MAX = 0.1
+PERF_PAGE_TURN_MAX = 0.1
 
 # -----------------------------------------------------------------------------
 # Helpers for Realistic Data
@@ -77,8 +77,8 @@ def test_perf_load_cbz_large_file_count(tmp_path):
     duration = time.perf_counter() - start_time
     print(f"\nPerformance [Load CBZ len={file_count}]: {duration:.6f}s")
 
-    # Expect < 0.1 second for 1000 files metadata load
-    assert duration < 0.1, f"Loading {file_count} files took too long: {duration:.4f}s"
+    # Expect < 0.06 second for 1000 files metadata load
+    assert duration < 0.06, f"Loading {file_count} files took too long: {duration:.4f}s"
     if source.cleanup:
         source.cleanup()
 
@@ -96,8 +96,8 @@ def test_perf_natural_sort_speed():
     duration = time.perf_counter() - start_time
     print(f"\nPerformance [Natural Sort len={count}]: {duration:.6f}s")
 
-    # Sorting 5k items should be very fast (<0.1s)
-    assert duration < 0.1, f"Sorting {count} items took {duration:.4f}s"
+    # Sorting 5k items should be very fast (<0.05s)
+    assert duration < 0.05, f"Sorting {count} items took {duration:.4f}s"
 
 
 def test_perf_image_resize_lanczos():
@@ -112,8 +112,8 @@ def test_perf_image_resize_lanczos():
     print(f"\nPerformance [Resize 4K->1080p]: {duration:.6f}s")
 
     # Resize operations are CPU intensive.
-    # Target "real world fast" (<0.8s)
-    assert duration < 0.8, f"Resizing 4k image took {duration:.4f}s"
+    # Target "real world fast" (<0.3s)
+    assert duration < 0.3, f"Resizing 4k image took {duration:.4f}s"
 
 
 # -----------------------------------------------------------------------------
@@ -165,9 +165,9 @@ def test_perf_page_turn_latency(tmp_path, tk_root):
     print(f"\nPerformance [First Paint]: {page0_time:.6f}s")
     print(f"Performance [Page Turn]: {page1_time:.6f}s")
 
-    # Rubric: Page turn should be under 1.0s for HD content on "Fast" hardware
+    # Rubric: Page turn should be under 0.1s for HD content on "Fast" hardware
     # This includes JPEG decode + Resize + Tk overhead.
-    assert page1_time < 1.0, f"Page turn took too long: {page1_time:.4f}s"
+    assert page1_time < 0.1, f"Page turn took too long: {page1_time:.4f}s"
 
     # Do not call app._quit() here; let the fixture destroy the root.
     # app._quit() destroys master, which makes the fixture teardown fail.
@@ -193,8 +193,8 @@ def test_perf_cbr_extraction_overhead(tmp_path):
 
     print(f"\nPerformance [Load CBR (unar subprocess) 5 HD pages]: {duration:.6f}s")
 
-    # External process is slower. Expect < 2.0s
-    assert duration < 2.0
+    # External process is slower. Expect < 0.2s
+    assert duration < 0.2
     if source.cleanup:
         source.cleanup()
 

@@ -41,6 +41,17 @@ To test the hook manually: `make githook` or `./.git/hooks/pre-commit`
 - Avoid shell-specific shortcuts; prefer Python APIs and `pathlib.Path` helpers.
 - Do not mutate archives or leave temporary files behind.
 
+## Branch workflow
+
+- Always create a feature branch from `main` before making changes:
+  - `git checkout -b feature-name`
+  - Use descriptive names like `fix-zoom-bug` or `add-cbr-support`
+- Push the feature branch to create a pull request
+- After your PR is merged, update your local `main`:
+  - `git checkout main`
+  - `git pull`
+  - Delete the merged branch: `git branch -d feature-name`
+
 ## Pull request guidelines
 
 - Use imperative, component-scoped commit messages (e.g., "Add CBR extraction error copy")
