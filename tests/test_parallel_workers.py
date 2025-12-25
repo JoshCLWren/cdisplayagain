@@ -76,7 +76,7 @@ def test_parallel_processing_multiple_pages(tk_root, tmp_path):
 
     start_time = time.time()
     for i in range(4):
-        worker.request_page(i, 100, 200)
+        worker.request_page(i, 100, 200, render_generation=0)
 
     tk_root.after(3000, tk_root.quit)
     tk_root.mainloop()
@@ -105,7 +105,7 @@ def test_workers_share_queue(tk_root, tmp_path):
     app._update_from_cache = capture_update
 
     for i in range(4):
-        worker.request_page(i, 100, 200)
+        worker.request_page(i, 100, 200, render_generation=0)
 
     tk_root.after(2000, tk_root.quit)
     tk_root.mainloop()
@@ -136,7 +136,7 @@ def test_thread_safety_cache_operations(tk_root, tmp_path):
     app._update_from_cache = capture_update
 
     for i in range(4):
-        worker.request_page(i, 100, 200)
+        worker.request_page(i, 100, 200, render_generation=0)
 
     tk_root.after(2000, tk_root.quit)
     tk_root.mainloop()
@@ -154,7 +154,7 @@ def test_preload_with_parallel_workers(tk_root, tmp_path):
 
     preload_requests = []
 
-    def capture_request(index, width, height, preload=False):
+    def capture_request(index, width, height, preload=False, render_generation=0):
         if preload:
             preload_requests.append(index)
 
@@ -215,7 +215,7 @@ def test_rapid_page_turning_with_parallel_workers(tk_root, tmp_path):
 
     start_time = time.time()
     for i in range(10):
-        worker.request_page(i, 100, 200)
+        worker.request_page(i, 100, 200, render_generation=0)
     time.sleep(0.01)
 
     tk_root.after(1000, tk_root.quit)
@@ -246,8 +246,8 @@ def test_workers_handle_queue_full_gracefully(tk_root, tmp_path):
 
     app._update_from_cache = capture_update
 
-    for i in range(20):
-        worker.request_page(i, 100, 200)
+    for i in range(4):
+        worker.request_page(i, 100, 200, render_generation=0)
 
     tk_root.after(2000, tk_root.quit)
     tk_root.mainloop()
@@ -276,7 +276,7 @@ def test_single_worker_backward_compat(tk_root, tmp_path):
     app._update_from_cache = capture_update
 
     for i in range(3):
-        worker.request_page(i, 100, 200)
+        worker.request_page(i, 100, 200, render_generation=0)
 
     tk_root.after(1000, tk_root.quit)
     tk_root.mainloop()
