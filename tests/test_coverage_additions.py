@@ -140,20 +140,36 @@ def test_load_comic_unsupported_extension(tmp_path):
         cdisplayagain.load_comic(bad_path)
 
 
-def test_load_comic_empty_tar_returns_placeholder(tmp_path):
-    """Return a placeholder page for empty TAR files."""
+def test_load_comic_empty_tar_raises_error(tmp_path):
+    """Raise error for empty TAR files."""
     tar_path = tmp_path / "empty.tar"
     tar_path.write_bytes(b"")
-    source = cdisplayagain.load_comic(tar_path)
-    assert source.pages == ["01.png"]
+    with pytest.raises(RuntimeError, match="Archive is empty"):
+        cdisplayagain.load_comic(tar_path)
 
 
-def test_load_comic_empty_cbr_returns_placeholder(tmp_path):
-    """Return a placeholder page for empty CBR files."""
+def test_load_comic_empty_cbr_raises_error(tmp_path):
+    """Raise error for empty CBR files."""
     cbr_path = tmp_path / "empty.cbr"
     cbr_path.write_bytes(b"")
-    source = cdisplayagain.load_comic(cbr_path)
-    assert source.pages == ["01.png"]
+    with pytest.raises(RuntimeError, match="Archive is empty"):
+        cdisplayagain.load_comic(cbr_path)
+
+
+def test_load_comic_empty_rar_raises_error(tmp_path):
+    """Raise error for empty RAR files."""
+    rar_path = tmp_path / "empty.rar"
+    rar_path.write_bytes(b"")
+    with pytest.raises(RuntimeError, match="Archive is empty"):
+        cdisplayagain.load_comic(rar_path)
+
+
+def test_load_comic_empty_ace_raises_error(tmp_path):
+    """Raise error for empty ACE files."""
+    ace_path = tmp_path / "empty.ace"
+    ace_path.write_bytes(b"")
+    with pytest.raises(RuntimeError, match="Archive is empty"):
+        cdisplayagain.load_comic(ace_path)
 
 
 def test_load_cbr_requires_unar(monkeypatch, tmp_path):
