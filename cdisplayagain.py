@@ -266,42 +266,49 @@ def load_cbr(path: Path) -> PageSource:
         raise RuntimeError("CBR support requires 'unar'. Install with: brew install unar")
 
     tmpdir = Path(tempfile.mkdtemp(prefix="cdisplayagain_"))
-    proc = subprocess.run(
-        [unar, "-q", "-o", str(tmpdir), str(path)],
-        capture_output=True,
-        text=True,
-    )
-    if proc.returncode != 0:
-        raise RuntimeError(f"unar failed:\n{proc.stderr.strip() or proc.stdout.strip()}")
+    try:
+        proc = subprocess.run(
+            [unar, "-q", "-o", str(tmpdir), str(path)],
+            capture_output=True,
+            text=True,
+        )
+        if proc.returncode != 0:
+            raise RuntimeError(f"unar failed:\n{proc.stderr.strip() or proc.stdout.strip()}")
 
-    text_files: list[Path] = []
-    image_files: list[Path] = []
-    for p in tmpdir.rglob("*"):
-        if not p.is_file():
-            continue
-        if is_text_name(p.name):
-            text_files.append(p)
-        elif p.suffix.casefold() in IMAGE_EXTS:
-            image_files.append(p)
+        text_files: list[Path] = []
+        image_files: list[Path] = []
+        for p in tmpdir.rglob("*"):
+            if not p.is_file():
+                continue
+            if is_text_name(p.name):
+                text_files.append(p)
+            elif p.suffix.casefold() in IMAGE_EXTS:
+                image_files.append(p)
 
-    text_files.sort(key=lambda p: natural_key(str(p.relative_to(tmpdir))))
-    image_files.sort(key=lambda p: natural_key(str(p.relative_to(tmpdir))))
+        text_files.sort(key=lambda p: natural_key(str(p.relative_to(tmpdir))))
+        image_files.sort(key=lambda p: natural_key(str(p.relative_to(tmpdir))))
 
-    if not text_files and not image_files:
-        raise RuntimeError("No images or info files found after extracting CBR.")
+        if not text_files and not image_files:
+            raise RuntimeError("No images or info files found after extracting CBR.")
 
-    rel_names = [str(p.relative_to(tmpdir)) for p in text_files + image_files]
+        rel_names = [str(p.relative_to(tmpdir)) for p in text_files + image_files]
 
-    def get_bytes(rel_name: str) -> bytes:
-        return (tmpdir / rel_name).read_bytes()
+        def get_bytes(rel_name: str) -> bytes:
+            return (tmpdir / rel_name).read_bytes()
 
-    def cleanup():
+        def cleanup():
+            try:
+                shutil.rmtree(tmpdir, ignore_errors=True)
+            except Exception:
+                pass
+
+        return PageSource(pages=rel_names, get_bytes=get_bytes, cleanup=cleanup)
+    except Exception:
         try:
             shutil.rmtree(tmpdir, ignore_errors=True)
         except Exception as e:
-            logging.warning("Cleanup failed: %s", e)
-
-    return PageSource(pages=rel_names, get_bytes=get_bytes, cleanup=cleanup)
+            logging.warning("CBR cleanup failed: %s", e)
+        raise
 
 
 def load_tar(path: Path) -> PageSource:
@@ -598,36 +605,43 @@ class ComicViewer(tk.Frame):
         """Ensure Pillow's Tk bindings register the PyImagingPhoto command."""
         if self._imagetk_ready:
             return
+
         try:
             _imagingtk = importlib.import_module("PIL._imagingtk")
-        except Exception:
+        except Exception as e:
+            logging.warning("ImageTk initialization failed: could not import PIL._imagingtk: %s", e)
             return
 
         tkapp = getattr(self, "tk", None)
         if not tkapp or not hasattr(tkapp, "interpaddr"):
+            logging.warning("ImageTk initialization failed: Tk interpreter not available")
             return
 
         try:
             interp_addr = tkapp.interpaddr()
-        except Exception:
+        except Exception as e:
+            logging.warning(
+                "ImageTk initialization failed: could not get interpreter address: %s", e
+            )
             return
 
-        if isinstance(interp_addr, (bytes, bytearray)):
-            interp_addr = int.from_bytes(interp_addr, sys.byteorder)
-        elif isinstance(interp_addr, str):
-            try:
+        try:
+            if isinstance(interp_addr, (bytes, bytearray)):
+                interp_addr = int.from_bytes(interp_addr, sys.byteorder)
+            elif isinstance(interp_addr, str):
                 interp_addr = int(interp_addr, 0)
-            except ValueError:
-                return
-        else:
-            try:
+            else:
                 interp_addr = int(interp_addr)
-            except Exception:
-                return
+        except (ValueError, TypeError) as e:
+            logging.warning(
+                "ImageTk initialization failed: could not convert interpreter address: %s", e
+            )
+            return
 
         try:
             _imagingtk.tkinit(interp_addr)
-        except TypeError:
+        except Exception as e:
+            logging.warning("ImageTk initialization failed: tkinit call failed: %s", e)
             return
 
         self._imagetk_ready = True
