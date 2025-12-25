@@ -31,8 +31,6 @@ def test_l_key_triggers_open_dialog():
         mock_load.return_value = mock_source
 
         with (
-            patch("tkinter.filedialog.askopenfilename", return_value="dummy.cbz"),
-            patch("tkinter.filedialog.askopenfilenames", return_value=["dummy.cbz"]),
             patch("tkinter.messagebox.showerror"),
             patch("tkinter.messagebox.showinfo"),
         ):
@@ -60,11 +58,18 @@ def test_l_key_triggers_open_dialog():
                 # We patch it on the instance
                 app._open_dialog = Mock(wraps=app._open_dialog)
 
-                # Simulate pressing 'l'. explicit keysym is safer for tests
-                # Generate on app widget
-                app.event_generate("l")  # Try simple char first as bind_all "l" matches keypress
-                root.update()
+                def mock_wait_window(widget):
+                    """Mock wait_window to avoid blocking on actual dialogs."""
+                    widget.destroy()
 
-                app._open_dialog.assert_called_once()
+                with patch.object(root, "wait_window", mock_wait_window):
+                    # Simulate pressing 'l'. explicit keysym is safer for tests
+                    # Generate on app widget
+                    app.event_generate(
+                        "l"
+                    )  # Try simple char first as bind_all "l" matches keypress
+                    root.update()
+
+                    app._open_dialog.assert_called_once()
 
     root.destroy()
