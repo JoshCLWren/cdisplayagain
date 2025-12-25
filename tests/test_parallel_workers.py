@@ -66,8 +66,9 @@ def test_parallel_processing_multiple_pages(tk_root, tmp_path):
 
     results = []
 
-    def capture_update(index, resized_bytes):
-        results.append((index, len(resized_bytes)))
+    def capture_update(index, img):
+        assert isinstance(img, Image.Image)
+        results.append((index, img.size))
         if len(results) >= 4:
             tk_root.quit()
 
@@ -95,8 +96,9 @@ def test_workers_share_queue(tk_root, tmp_path):
 
     results = []
 
-    def capture_update(index, resized_bytes):
-        results.append((index, len(resized_bytes)))
+    def capture_update(index, img):
+        assert isinstance(img, Image.Image)
+        results.append((index, img.size))
         if len(results) >= 4:
             tk_root.quit()
 
@@ -123,7 +125,7 @@ def test_thread_safety_cache_operations(tk_root, tmp_path):
 
     results = []
 
-    def capture_update(index, resized_bytes):
+    def capture_update(index, img):
         cw = max(1, app.canvas.winfo_width())
         ch = max(1, app.canvas.winfo_height())
         cache_key = (index, cw, ch)
@@ -174,8 +176,9 @@ def test_parallel_processing_priority_order(tk_root, tmp_path):
 
     results = []
 
-    def capture_update(index, resized_bytes):
-        results.append((index, len(resized_bytes)))
+    def capture_update(index, img):
+        assert isinstance(img, Image.Image)
+        results.append((index, img.size))
         if len(results) >= 4:
             tk_root.quit()
 
@@ -204,8 +207,9 @@ def test_rapid_page_turning_with_parallel_workers(tk_root, tmp_path):
 
     results = []
 
-    def capture_update(index, resized_bytes):
-        results.append((index, len(resized_bytes)))
+    def capture_update(index, img):
+        assert isinstance(img, Image.Image)
+        results.append((index, img.size))
 
     app._update_from_cache = capture_update
 
@@ -234,8 +238,9 @@ def test_workers_handle_queue_full_gracefully(tk_root, tmp_path):
 
     results = []
 
-    def capture_update(index, resized_bytes):
-        results.append((index, len(resized_bytes)))
+    def capture_update(index, img):
+        assert isinstance(img, Image.Image)
+        results.append((index, img.size))
         if len(results) >= 4:
             tk_root.quit()
 
@@ -262,8 +267,9 @@ def test_single_worker_backward_compat(tk_root, tmp_path):
 
     results = []
 
-    def capture_update(index, resized_bytes):
-        results.append((index, len(resized_bytes)))
+    def capture_update(index, img):
+        assert isinstance(img, Image.Image)
+        results.append((index, img.size))
         if len(results) >= 3:
             tk_root.quit()
 
