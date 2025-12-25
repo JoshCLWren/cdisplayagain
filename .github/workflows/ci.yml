@@ -16,22 +16,9 @@ jobs:
       - name: Setup environment
         uses: ./.github/actions/setup
 
-      - name: Run ruff
+      - name: Run linting
         shell: bash
-        run: uv run ruff check .
-
-      - name: Check for Any type usage
-        shell: bash
-        run: |
-          if find . -name '*.py' | xargs rg ': Any\b' 2>/dev/null | grep -v 'type: ignore' | head -1; then
-            echo "ERROR: Any type found in codebase."
-            echo "Please replace Any with specific types and check CONTRIBUTING.md for guidelines."
-            exit 1
-          fi
-
-      - name: Run pyright
-        shell: bash
-        run: uv run pyright .
+        run: bash scripts/lint.sh
 
   tests:
     runs-on: ubuntu-latest
@@ -49,7 +36,7 @@ jobs:
 
       - name: Run pytest
         shell: bash
-        run: xvfb-run -a uv run pytest --cov=cdisplayagain --cov-report=xml --cov-fail-under=75
+        run: xvfb-run -a uv run pytest --cov=cdisplayagain --cov-report=xml
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5

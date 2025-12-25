@@ -1,7 +1,7 @@
 ## cdisplayagain
 
 ![Python](https://img.shields.io/badge/python-3.12+-blue.svg)
-![Code Coverage](https://codecov.io/gh/joshuajreid/cdisplayagain/branch/main/graph/badge.svg)
+![codecov](https://codecov.io/gh/joshuajreid/cdisplayagain/graph/badge.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
 `cdisplayagain` is a minimalist, cross-platform remake of the classic
