@@ -284,3 +284,109 @@ def test_update_from_cache_directly(tk_root, tmp_path):
 
     assert cache_key in app._image_cache
     assert app._tk_img is not None
+
+
+def test_preload_next_page(tk_root, tmp_path):
+    """Test that _render_current preloads the next page."""
+    cbz_path = tmp_path / "test.cbz"
+    create_test_cbz(cbz_path, page_count=5)
+
+    app = cdisplayagain.ComicViewer(tk_root, cbz_path)
+    app.update()
+
+    preload_requests = []
+
+    original_preload = app._worker.preload
+
+    def capture_preload(index):
+        preload_requests.append(index)
+        original_preload(index)
+
+    app._worker.preload = capture_preload
+
+    app._render_current()
+
+    assert len(preload_requests) == 1
+    assert preload_requests[0] == 1
+
+
+def test_preload_on_last_page(tk_root, tmp_path):
+    """Test that preloading is skipped on the last page."""
+    cbz_path = tmp_path / "test.cbz"
+    create_test_cbz(cbz_path, page_count=3)
+
+    app = cdisplayagain.ComicViewer(tk_root, cbz_path)
+    app.update()
+
+    preload_requests = []
+
+    def capture_preload(index):
+        preload_requests.append(index)
+
+    app._worker.preload = capture_preload
+
+    app._current_index = 2
+    app._render_current()
+
+    assert len(preload_requests) == 0
+
+
+def test_preload_skips_text_pages(tk_root, tmp_path):
+    """Test that preloading skips text info pages."""
+    import zipfile
+
+    cbz_path = tmp_path / "test_with_text.cbz"
+    with zipfile.ZipFile(cbz_path, "w") as zf:
+        img = Image.new("RGB", (100, 200), color=(50, 100, 150))
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+
+        zf.writestr("01_page_000.png", buf.getvalue())
+        zf.writestr("02_info.txt", b"Test info")
+        zf.writestr("03_page_001.png", buf.getvalue())
+
+    app = cdisplayagain.ComicViewer(tk_root, cbz_path)
+    app.update()
+
+    preload_requests = []
+    original_request = app._worker.request_page
+
+    def capture_request(index, width, height, preload=False):
+        if preload:
+            preload_requests.append(index)
+        original_request(index, width, height, preload)
+
+    app._worker.request_page = capture_request
+
+    app._current_index = 1
+    app._render_current()
+
+    assert len(preload_requests) == 1
+    assert preload_requests[0] == 2
+
+
+def test_worker_preload_method(tk_root, tmp_path):
+    """Test ImageWorker.preload uses canvas dimensions."""
+    cbz_path = tmp_path / "test.cbz"
+    create_test_cbz(cbz_path, page_count=3)
+
+    app = cdisplayagain.ComicViewer(tk_root, cbz_path)
+    app.update()
+
+    worker = ImageWorker(app)
+
+    queue_items = []
+
+    def capture_request(index, width, height, preload=False):
+        queue_items.append((index, width, height, preload))
+
+    worker.request_page = capture_request
+
+    worker.preload(1)
+
+    assert len(queue_items) == 1
+    index, width, height, preload = queue_items[0]
+    assert index == 1
+    assert width > 0
+    assert height > 0
+    assert preload is True

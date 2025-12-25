@@ -318,25 +318,39 @@ class ImageWorker:
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
 
-    def request_page(self, index: int, width: int, height: int):
+    def request_page(self, index: int, width: int, height: int, preload: bool = False):
         """Request a page be processed in background."""
         try:
-            self._queue.put_nowait((index, width, height))
+            self._queue.put_nowait((index, width, height, preload))
         except queue.Full:
             pass
+
+    def preload(self, index: int):
+        """Preload a page at current canvas dimensions for future display."""
+        if not self._app:
+            return
+        cw = max(1, self._app.canvas.winfo_width())
+        ch = max(1, self._app.canvas.winfo_height())
+        self.request_page(index, cw, ch, preload=True)
 
     def _run(self):
         """Process resize requests in background."""
         while True:
             try:
-                index, width, height = self._queue.get()
+                index, width, height, preload = self._queue.get()
 
-                logging.info("Worker processing page %d at %dx%d", index, width, height)
+                if preload:
+                    logging.info("Worker preloading page %d at %dx%d", index, width, height)
+                else:
+                    logging.info("Worker processing page %d at %dx%d", index, width, height)
 
                 raw = self._app.source.get_bytes(self._app.source.pages[index])
                 resized_bytes = get_resized_bytes(raw, width, height)
 
-                logging.info("Worker finished page %d, scheduling callback", index)
+                if preload:
+                    logging.info("Worker finished preloading page %d", index)
+                else:
+                    logging.info("Worker finished page %d, scheduling callback", index)
 
                 self._app.after_idle(
                     lambda idx=index, rb=resized_bytes: self._app._update_from_cache(idx, rb)
@@ -886,11 +900,15 @@ class ComicViewer(tk.Frame):
             logging.info("Cache hit for page %d", index)
             self._display_cached_image(cached)
             self._update_title()
-            return
+        else:
+            logging.info("Cache miss for page %d, requesting worker", index)
+            self._worker.request_page(index, cw, ch)
+            self._update_title()
 
-        logging.info("Cache miss for page %d, requesting worker", index)
-        self._worker.request_page(index, cw, ch)
-        self._update_title()
+        next_idx = self._find_next_image_index(index)
+        if next_idx is not None:
+            logging.info("Preloading next image page %d", next_idx)
+            self._worker.preload(next_idx)
 
     def _render_current_sync(self):
         if not self.source:

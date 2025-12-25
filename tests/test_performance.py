@@ -390,3 +390,45 @@ def test_render_info_with_image_uses_cache(tmp_path, tk_root):
             app._image_cache[cache_key] = resized_bytes
 
             assert cache_key in app._image_cache, "Info with image should use cache"
+
+
+def test_perf_launch_sample_comics(tk_root):
+    """Measure launch performance for real CBZ and CBR files from profile collection."""
+    from pathlib import Path
+
+    home = Path.home()
+    cbz_path = (
+        home / "vpn-torrent/share/The New Teen Titans 01 (1980) (digital) (OkC.O.M.P.U.T.O.).cbz"
+    )
+    cbr_path = (
+        home
+        / "vpn-torrent/share/Adventure Time (2012)/Adventure Time 001 (2012) (5 covers) (digital-TheGroup).cbr"
+    )
+
+    if not cbz_path.exists():
+        pytest.skip(f"CBZ file not found: {cbz_path}")
+    if not cbr_path.exists():
+        pytest.skip(f"CBR file not found: {cbr_path}")
+
+    results = []
+
+    for label, comic_path in [("CBZ", cbz_path), ("CBR", cbr_path)]:
+        start_time = time.perf_counter()
+        app = cdisplayagain.ComicViewer(tk_root, comic_path)
+        load_time = time.perf_counter() - start_time
+        results.append((label, load_time))
+        print(f"\nPerformance [Launch {label}]: {load_time:.6f}s")
+
+        if app.source and app.source.cleanup:
+            app.source.cleanup()
+        app.destroy()
+
+    cbz_time = next(t for label, t in results if label == "CBZ")
+    cbr_time = next(t for label, t in results if label == "CBR")
+
+    print(f"\nPerformance [Launch CBZ]: {cbz_time:.6f}s")
+    print(f"Performance [Launch CBR]: {cbr_time:.6f}s")
+    print(f"Performance [CBR/CBZ Ratio]: {cbr_time / cbz_time:.2f}x")
+
+    assert cbz_time < 5.0, f"CBZ launch took too long: {cbz_time:.4f}s"
+    assert cbr_time < 10.0, f"CBR launch took too long: {cbr_time:.4f}s"
