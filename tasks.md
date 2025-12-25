@@ -48,16 +48,6 @@ WIP limit: 3 cards total in In Progress.
 - Decide whether zero-byte archives should surface errors instead of returning placeholder pages.
 
 ## Ready
-- Right-click opens a pop-up menu, with the top entry being "load files".
-- When browsing a directory, all files in the directory are pre-selected initially.
-- Uses standard Windows selection patterns in the file picker:
-  - Shift + left click selects a range.
-  - Ctrl + left click toggles selection.
-  - Ctrl + A selects all.
-- Page Down advances a page.
-- Page Up goes back a page.
-- Spacebar is a smart forward mechanism (scrolls around the current page until fully shown, then advances).
-- Add Linux/X11 mouse wheel bindings (`<Button-4>`/`<Button-5>`) alongside `<MouseWheel>`.
 
 ## In Progress
 
@@ -65,22 +55,46 @@ WIP limit: 3 cards total in In Progress.
 - (empty)
 
 ## Done
-- Add bounded image caching to prevent unbounded memory growth on large archives. (feature/lru-image-cache)
-- Add fast preview to eliminate 1.5s blocking startup (feature/lru-image-cache)
-- Use priority queue for next page rendering (feature/priority-queue-rendering)
-- Completed: Show info overlay while rendering the first image page.
-- Launches into full-screen immediately (takes over the whole screen by default).
-- Uses a minimal UI, prioritizing reading over toolbars and library features (sequential viewer, not a library manager).
-- Supports full-screen or windowed viewing, including an option/behavior for hiding the mouse pointer while full-screen.
-- "Load files" opens a file browser.
-- Can load either: a folder of images, or a single archive, and then auto-select pages inside the archive.
-- Reads images in: JPEG, GIF (static), PNG.
-- Reads archives: ZIP, RAR, ACE, TAR (commonly used as CBZ/CBR/CBA/CBT).
-- Sorts pages into alphabetical order for display.
-- Displays .nfo or .txt files first (comic info screens) before image pages.
-- While the info is displayed/dismissed, the initial page is also shown (simultaneous).
-- Arrow keys move through the comic (forward/back).
-- Spacebar smart-forward: scrolls around the current page until the whole page has been shown.
-- Spacebar smart-forward: then advances to the next page.
-- Spacebar smart-forward: intended that you can read the entire comic using Space alone.
-- Uses high-quality resizing (Lanczos resampling).
+
+### Bug Fixes
+- Fix crash when pressing `l` then `q` (PR #8)
+- Fix quit command not working with load dialog open (PR #10)
+- Remove fake page placeholder for empty archives (PR #9, #17)
+
+### Code Quality
+- Add error logging to cleanup functions (PR #12)
+- Consolidate ImageTk initialization with error logging (PR #14)
+
+### Performance
+- Cache PIL Image objects directly (PR #13)
+- Add multiple workers for parallel decoding (PR #15)
+- Cancel stale renders when rapidly page-turning (PR #18)
+- Optimize PhotoImage fallback to eliminate double-encoding (PR #19)
+
+### Features
+- Right-click popup menu with "Load Files" (PR #11)
+- Page navigation features (PR #16)
+  - Page Down/Up navigation
+  - Spacebar smart-forward
+  - Linux/X11 mouse wheel bindings (Button-4/5)
+
+### Core Features (Previously Completed)
+- Add bounded image caching to prevent unbounded memory growth on large archives
+- Add fast preview to eliminate 1.5s blocking startup
+- Use priority queue for next page rendering
+- Show info overlay while rendering the first image page
+- Launches into full-screen immediately (takes over the whole screen by default)
+- Uses a minimal UI, prioritizing reading over toolbars and library features (sequential viewer, not a library manager)
+- Supports full-screen or windowed viewing, including an option/behavior for hiding the mouse pointer while full-screen
+- "Load files" opens a file browser
+- Can load either: a folder of images, or a single archive, and then auto-select pages inside the archive
+- Reads images in: JPEG, GIF (static), PNG
+- Reads archives: ZIP, RAR, ACE, TAR (commonly used as CBZ/CBR/CBA/CBT)
+- Sorts pages into alphabetical order for display
+- Displays .nfo or .txt files first (comic info screens) before image pages
+- While the info is displayed/dismissed, the initial page is also shown (simultaneous)
+- Arrow keys move through the comic (forward/back)
+- Spacebar smart-forward: scrolls around the current page until the whole page has been shown
+- Spacebar smart-forward: then advances to the next page
+- Spacebar smart-forward: intended that you can read the entire comic using Space alone
+- Uses high-quality resizing (Lanczos resampling)
