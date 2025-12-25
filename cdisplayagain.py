@@ -8,11 +8,13 @@ import base64
 import io
 import logging
 import os
+import queue
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -120,6 +122,28 @@ class FocusRestorer:
     def _run(self) -> None:
         self._pending = False
         self._focus_fn()
+
+
+class Debouncer:
+    """Debounce rapid-fire events to prevent spam."""
+
+    def __init__(self, delay_ms: int, callback: Callable, app):
+        """Initialize with delay, callback, and Tk app reference."""
+        self._delay = delay_ms
+        self._callback = callback
+        self._app = app
+        self._timer_id: Optional[int] = None
+
+    def trigger(self, *args, **kwargs):
+        """Trigger callback after delay (reset if already pending)."""
+        if self._timer_id:
+            self._app.after_cancel(self._timer_id)
+
+        def wrapper():
+            self._callback(*args, **kwargs)
+            self._timer_id = None
+
+        self._timer_id = self._app.after(self._delay, wrapper)
 
 
 def load_cbz(path: Path) -> PageSource:
@@ -276,6 +300,43 @@ def load_image_file(path: Path) -> PageSource:
     return PageSource(pages=[name], get_bytes=get_bytes, cleanup=None)
 
 
+class ImageWorker:
+    """Background thread for image processing."""
+
+    def __init__(self, app):
+        """Initialize worker with app reference and start daemon thread."""
+        self._app = app
+        self._queue = queue.Queue(maxsize=4)
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+
+    def request_page(self, index: int, width: int, height: int):
+        """Request a page be processed in background."""
+        try:
+            self._queue.put_nowait((index, width, height))
+        except queue.Full:
+            pass
+
+    def _run(self):
+        """Process resize requests in background."""
+        while True:
+            try:
+                index, width, height = self._queue.get()
+
+                raw = self._app.source.get_bytes(self._app.source.pages[index])
+                resized_bytes = get_resized_bytes(raw, width, height)
+
+                self._app.after_idle(
+                    lambda idx=index, rb=resized_bytes: self._app._update_from_cache(idx, rb)
+                )
+
+            except Exception as e:
+                logging.error("Image worker error: %s", e)
+
+    def _update_from_cache(self, index: int, resized_bytes: bytes):
+        pass
+
+
 def load_comic(path: Path) -> PageSource:
     """Load a path containing a directory, archive, or image."""
     if path.is_dir():
@@ -332,6 +393,7 @@ class ComicViewer(tk.Frame):
 
         # Lightweight caches
         self._pil_cache: dict[str, Image.Image] = {}
+        self._image_cache: dict[tuple[int, int, int], bytes] = {}
         self._scroll_offset: int = 0
         self._scaled_size: Optional[tuple[int, int]] = None
         self._focus_restorer = FocusRestorer(self.after_idle, self._ensure_focus)
@@ -339,6 +401,10 @@ class ComicViewer(tk.Frame):
         self._context_menu = self._build_context_menu()
         self._dialog_active = False
         self._pending_quit = False
+
+        self._worker = ImageWorker(self)
+        self._pending_index: Optional[int] = None
+        self._nav_debounce = Debouncer(150, self._execute_page_change, self)
 
         self._bind_keys()
         self._bind_mouse()
@@ -470,12 +536,12 @@ class ComicViewer(tk.Frame):
 
     def _bind_keys(self):
         self.bind_all("<KeyPress>", self._log_key_event, add=True)
-        self.bind_all("<Right>", lambda e: self.next_page())
-        self.bind_all("<Left>", lambda e: self.prev_page())
-        self.bind_all("<Next>", lambda e: self.next_page())
-        self.bind_all("<Prior>", lambda e: self.prev_page())
-        self.bind_all("<space>", lambda e: self._space_advance())
-        self.bind_all("<BackSpace>", lambda e: self.prev_page())
+        self.bind_all("<Right>", lambda e: self._trigger_next())
+        self.bind_all("<Left>", lambda e: self._trigger_prev())
+        self.bind_all("<Next>", lambda e: self._trigger_next())
+        self.bind_all("<Prior>", lambda e: self._trigger_prev())
+        self.bind_all("<space>", lambda e: self._trigger_space())
+        self.bind_all("<BackSpace>", lambda e: self._trigger_prev())
         self.bind_all("<Down>", lambda e: self._scroll_down())
         self.bind_all("<Up>", lambda e: self._scroll_up())
         self.bind_all("<Home>", lambda e: self.first_page())
@@ -491,6 +557,18 @@ class ComicViewer(tk.Frame):
         self.bind_all("L", lambda e: self._open_dialog())
         self.bind_all("<F1>", lambda e: self._show_help())
         self.bind_all("<Button-3>", self._show_context_menu)
+
+    def _trigger_next(self):
+        self._nav_debounce.trigger(lambda: self.next_page())
+
+    def _trigger_prev(self):
+        self._nav_debounce.trigger(lambda: self.prev_page())
+
+    def _trigger_space(self):
+        self._nav_debounce.trigger(lambda: self._space_advance())
+
+    def _execute_page_change(self, action):
+        action()
 
     def _log_key_event(self, event) -> None:
         logging.info(
@@ -559,7 +637,6 @@ class ComicViewer(tk.Frame):
         self._request_focus()
 
     def _open_comic(self, path: Path):
-        # Cleanup previous source
         if self.source and self.source.cleanup:
             try:
                 self.source.cleanup()
@@ -568,6 +645,7 @@ class ComicViewer(tk.Frame):
 
         self.source = None
         self._pil_cache.clear()
+        self._image_cache.clear()
         self._current_pil = None
         self._tk_img = None
         self._current_index = 0
@@ -586,6 +664,51 @@ class ComicViewer(tk.Frame):
 
         self._update_title()
         self._render_current()
+
+    def _update_from_cache(self, index: int, resized_bytes: bytes):
+        if not self.source:
+            return
+        if index != self._current_index:
+            return
+
+        cw = max(1, self.canvas.winfo_width())
+        ch = max(1, self.canvas.winfo_height())
+
+        cache_key = (index, cw, ch)
+        self._image_cache[cache_key] = resized_bytes
+
+        resized = Image.open(io.BytesIO(resized_bytes))
+        if self._imagetk_ready:
+            try:
+                self._tk_img = ImageTk.PhotoImage(resized, master=self)
+            except Exception:
+                self._imagetk_ready = False
+                self._tk_img = self._photoimage_from_pil(resized)
+        else:
+            self._tk_img = self._photoimage_from_pil(resized)
+
+        iw, ih = resized.size
+        scale = cw / iw
+        new_w = max(1, int(iw * scale))
+        new_h = max(1, int(ih * scale))
+        self._scaled_size = (new_w, new_h)
+        max_offset = max(0, new_h - ch)
+        if new_h <= ch:
+            self._scroll_offset = 0
+        else:
+            self._scroll_offset = min(max(self._scroll_offset, 0), max_offset)
+
+        self.canvas.delete("all")
+        self._canvas_image_id = None
+        anchor = "center"
+        x = cw // 2
+        if new_h <= ch:
+            y = ch // 2
+        else:
+            anchor = "n"
+            y = -self._scroll_offset
+        self._canvas_image_id = self.canvas.create_image(x, y, image=self._tk_img, anchor=anchor)
+        self._update_title()
 
     def _quit(self):
         if self._dialog_active:
