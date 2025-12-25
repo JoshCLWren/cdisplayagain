@@ -17,11 +17,12 @@ from image_backend import get_resized_pil
 # -----------------------------------------------------------------------------
 # Performance Thresholds (tune as performance improves)
 # These are for synchronous rendering - actual user experience
+# Updated 2025-12-25 after PIL Image caching optimization
 # -----------------------------------------------------------------------------
 PERF_CBZ_LAUNCH_MAX = 0.01
-PERF_CBR_LAUNCH_MAX = 0.3
-PERF_COVER_RENDER_MAX = 0.1
-PERF_PAGE_TURN_MAX = 0.1
+PERF_CBR_LAUNCH_MAX = 0.12
+PERF_COVER_RENDER_MAX = 0.01
+PERF_PAGE_TURN_MAX = 0.01
 
 # -----------------------------------------------------------------------------
 # Helpers for Realistic Data
