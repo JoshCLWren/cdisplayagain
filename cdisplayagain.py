@@ -96,8 +96,8 @@ class PageSource:
     """Abstraction over where pages come from."""
 
     pages: list[str]  # display/order names
-    get_bytes: callable  # (page_name:str) -> bytes
-    cleanup: callable | None = None  # called on exit
+    get_bytes: Callable[[str], bytes]
+    cleanup: Callable[[], None] | None = None  # called on exit
 
 
 class FocusRestorer:
@@ -319,8 +319,12 @@ class ImageWorker:
             try:
                 index, width, height = self._queue.get()
 
+                logging.info("Worker processing page %d at %dx%d", index, width, height)
+
                 raw = self._app.source.get_bytes(self._app.source.pages[index])
                 resized_bytes = get_resized_bytes(raw, width, height)
+
+                logging.info("Worker finished page %d, scheduling callback", index)
 
                 self._app.after_idle(
                     lambda idx=index, rb=resized_bytes: self._app._update_from_cache(idx, rb)
@@ -328,9 +332,6 @@ class ImageWorker:
 
             except Exception as e:
                 logging.error("Image worker error: %s", e)
-
-    def _update_from_cache(self, index: int, resized_bytes: bytes):
-        pass
 
 
 def load_comic(path: Path) -> PageSource:
@@ -396,7 +397,8 @@ class ComicViewer(tk.Frame):
         self._info_overlay: tk.Label | None = None
         self._context_menu = self._build_context_menu()
         self._dialog_active = False
-        self._pending_quit = False
+        self._pending_quit: bool = False
+        self._canvas_properly_sized: bool = False
 
         self._worker = ImageWorker(self)
         self._pending_index: int | None = None
@@ -412,12 +414,10 @@ class ComicViewer(tk.Frame):
         self.bind("<Key>", lambda _: self._dismiss_info())
 
         # Redraw on resize
-        self.canvas.bind("<Configure>", lambda e: self._render_current())
+        self.canvas.bind("<Configure>", self._on_canvas_configure)
 
         # Load file
         self._open_comic(comic_path)
-
-        # First render after window appears
         self.after(50, self._render_current)
         self._request_focus()
 
@@ -665,19 +665,9 @@ class ComicViewer(tk.Frame):
         self._update_title()
         self._render_current()
 
-    def _update_from_cache(self, index: int, resized_bytes: bytes):
-        if not self.source:
-            return
-        if index != self._current_index:
-            return
-
-        cw = max(1, self.canvas.winfo_width())
-        ch = max(1, self.canvas.winfo_height())
-
-        cache_key = (index, cw, ch)
-        self._image_cache[cache_key] = resized_bytes
-
+    def _display_cached_image(self, resized_bytes: bytes):
         resized = Image.open(io.BytesIO(resized_bytes))
+        self._current_pil = resized
         if self._imagetk_ready:
             try:
                 self._tk_img = ImageTk.PhotoImage(resized, master=self)
@@ -686,6 +676,9 @@ class ComicViewer(tk.Frame):
                 self._tk_img = self._photoimage_from_pil(resized)
         else:
             self._tk_img = self._photoimage_from_pil(resized)
+
+        cw = max(1, self.canvas.winfo_width())
+        ch = max(1, self.canvas.winfo_height())
 
         iw, ih = resized.size
         scale = cw / iw
@@ -708,6 +701,31 @@ class ComicViewer(tk.Frame):
             anchor = "n"
             y = -self._scroll_offset
         self._canvas_image_id = self.canvas.create_image(x, y, image=self._tk_img, anchor=anchor)
+
+    def _update_from_cache(self, index: int, resized_bytes: bytes):
+        logging.info("Update from cache: index=%d, current_index=%d", index, self._current_index)
+
+        if not self.source:
+            logging.warning("Update from cache: no source")
+            return
+        if index != self._current_index:
+            logging.info("Update from cache: index mismatch, skipping")
+            return
+
+        cw = max(1, self.canvas.winfo_width())
+        ch = max(1, self.canvas.winfo_height())
+
+        # Only cache when canvas has proper dimensions to avoid caching tiny images
+        if self._canvas_properly_sized:
+            cache_key = (index, cw, ch)
+            self._image_cache[cache_key] = resized_bytes
+            logging.info("Update from cache: cached page %d at %dx%d", index, cw, ch)
+        else:
+            logging.info(
+                "Update from cache: displaying page %d at %dx%d (not cached)", index, cw, ch
+            )
+
+        self._display_cached_image(resized_bytes)
         self._update_title()
 
     def _quit(self):
@@ -804,6 +822,17 @@ class ComicViewer(tk.Frame):
             else:
                 self.prev_page()
 
+    def _on_canvas_configure(self, event):
+        """Handle canvas resize events."""
+        cw = event.width
+        ch = event.height
+        # Mark canvas as properly sized when we get reasonable dimensions
+        if cw >= 100 and ch >= 100:
+            self._canvas_properly_sized = True
+            logging.info("Canvas properly sized: %dx%d", cw, ch)
+            # Force re-render with correct dimensions
+            self._render_current()
+
     def _update_title(self):
         if not self.source:
             self.master.title(f"cdisplayagain - {self.comic_path.name}")
@@ -812,29 +841,6 @@ class ComicViewer(tk.Frame):
         self.master.title(
             f"cdisplayagain - {self.comic_path.name} ({self._current_index + 1}/{total})"
         )
-
-    def _get_current_pil(self) -> Image.Image | None:
-        return self._get_pil_for_index(self._current_index)
-
-    def _get_pil_for_index(self, index: int) -> Image.Image | None:
-        if not self.source:
-            return None
-        if not self.source.pages:
-            return None
-        if index < 0 or index >= len(self.source.pages):
-            return None
-
-        name = self.source.pages[index]
-        if name in self._pil_cache:
-            return self._pil_cache[name]
-
-        raw = self.source.get_bytes(name)
-        img = Image.open(io.BytesIO(raw))
-        # Normalize modes for Tk
-        if img.mode not in ("RGB", "RGBA"):
-            img = img.convert("RGBA")
-        self._pil_cache[name] = img
-        return img
 
     def _find_next_image_index(self, start_index: int) -> int | None:
         if not self.source:
@@ -856,7 +862,23 @@ class ComicViewer(tk.Frame):
             self._update_title()
             return
         self._dismiss_info()
-        self._render_image_for_index(self._current_index)
+
+        index = self._current_index
+        cw = max(1, self.canvas.winfo_width())
+        ch = max(1, self.canvas.winfo_height())
+        cache_key = (index, cw, ch)
+
+        logging.info("Rendering page %d at %dx%d", index, cw, ch)
+
+        cached = self._image_cache.get(cache_key)
+        if cached:
+            logging.info("Cache hit for page %d", index)
+            self._display_cached_image(cached)
+            self._update_title()
+            return
+
+        logging.info("Cache miss for page %d, requesting worker", index)
+        self._worker.request_page(index, cw, ch)
         self._update_title()
 
     def _render_info_with_image(self, name: str) -> None:
@@ -869,56 +891,19 @@ class ComicViewer(tk.Frame):
             self._scroll_offset = 0
             self._show_info_overlay(name)
             return
-        self._render_image_for_index(image_index)
-        self._show_info_overlay(name)
-
-    def _render_image_for_index(self, index: int) -> None:
-        img = self._get_pil_for_index(index)
-        if img is None:
-            self.canvas.delete("all")
-            self._canvas_image_id = None
-            return
-
-        self._current_pil = img
 
         cw = max(1, self.canvas.winfo_width())
         ch = max(1, self.canvas.winfo_height())
+        cache_key = (image_index, cw, ch)
 
-        iw, ih = img.size
-        scale = cw / iw
-        new_w = max(1, int(iw * scale))
-        new_h = max(1, int(ih * scale))
-        self._scaled_size = (new_w, new_h)
-        max_offset = max(0, new_h - ch)
-        if new_h <= ch:
-            self._scroll_offset = 0
-        else:
-            self._scroll_offset = min(max(self._scroll_offset, 0), max_offset)
+        cached = self._image_cache.get(cache_key)
+        if cached:
+            self._display_cached_image(cached)
+            self._show_info_overlay(name)
+            return
 
-        buf = io.BytesIO()
-        img.save(buf, format="PNG")
-        raw_bytes = buf.getvalue()
-        resized_bytes = get_resized_bytes(raw_bytes, new_w, new_h)
-        resized = Image.open(io.BytesIO(resized_bytes))
-        if self._imagetk_ready:
-            try:
-                self._tk_img = ImageTk.PhotoImage(resized, master=self)
-            except Exception:
-                self._imagetk_ready = False
-                self._tk_img = self._photoimage_from_pil(resized)
-        else:
-            self._tk_img = self._photoimage_from_pil(resized)
-
-        self.canvas.delete("all")
-        self._canvas_image_id = None
-        anchor = "center"
-        x = cw // 2
-        if new_h <= ch:
-            y = ch // 2
-        else:
-            anchor = "n"
-            y = -self._scroll_offset
-        self._canvas_image_id = self.canvas.create_image(x, y, image=self._tk_img, anchor=anchor)
+        self._worker.request_page(image_index, cw, ch)
+        self._show_info_overlay(name)
 
     def _show_info_overlay(self, name: str) -> None:
         if not self.source:
@@ -1126,9 +1111,11 @@ def main():
         root.destroy()
         sys.exit(1)
 
-    app = ComicViewer(root, path)
-    # Set initial full screen state
+    # Set initial full screen state BEFORE creating viewer
+    # to ensure first render uses correct canvas dimensions
     root.attributes("-fullscreen", True)
+
+    app = ComicViewer(root, path)
     app._fullscreen = True
     app._set_cursor_hidden(True)
     app._request_focus()

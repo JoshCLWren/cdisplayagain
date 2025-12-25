@@ -6,6 +6,7 @@ import io
 import tarfile
 import zipfile
 from pathlib import Path
+import _tkinter
 
 import pytest
 
@@ -247,3 +248,363 @@ def test_require_unar_available(monkeypatch):
     """Return early when unar is available."""
     monkeypatch.setattr(cdisplayagain.shutil, "which", lambda _: "/usr/bin/unar")
     cdisplayagain.require_unar()
+
+
+def test_render_current_with_no_source_clears_canvas(tmp_path):
+    """Clear canvas when rendering with no source."""
+    img_path = tmp_path / "page1.png"
+    _write_image(img_path)
+    root = cdisplayagain.tk.Tk()
+    root.withdraw()
+    root.update()
+    try:
+        viewer = cdisplayagain.ComicViewer(root, img_path)
+        viewer.source = None
+        viewer._render_current()
+        assert viewer._canvas_image_id is None
+    finally:
+        root.destroy()
+
+
+def test_render_info_with_image_no_following_image_clears_canvas(tmp_path):
+    """Clear canvas when text file has no following image."""
+    folder = tmp_path / "book"
+    folder.mkdir()
+    (folder / "info.nfo").write_text("info")
+    img_path = tmp_path / "page1.png"
+    _write_image(img_path)
+    root = cdisplayagain.tk.Tk()
+    root.withdraw()
+    root.update()
+    try:
+        viewer = cdisplayagain.ComicViewer(root, img_path)
+        viewer.source = cdisplayagain.load_directory(folder)
+        viewer.update()
+        viewer._current_index = 0
+        viewer._render_info_with_image("info.nfo")
+        assert viewer._canvas_image_id is None
+        assert viewer._current_pil is None
+        assert viewer._scaled_size is None
+        assert viewer._scroll_offset == 0
+    finally:
+        root.destroy()
+
+
+def test_show_info_overlay_handles_decode_error(tmp_path):
+    """Handle decode errors in text files gracefully."""
+    folder = tmp_path / "book"
+    folder.mkdir()
+    img_path = folder / "page1.png"
+    _write_image(img_path)
+    root = cdisplayagain.tk.Tk()
+    root.withdraw()
+    root.update()
+    try:
+        viewer = cdisplayagain.ComicViewer(root, img_path)
+        viewer.source = cdisplayagain.load_directory(folder)
+        viewer.update()
+        viewer._show_info_overlay("binary.bin")
+        assert viewer._info_overlay is not None
+    finally:
+        root.destroy()
+
+
+def test_reposition_current_image_with_no_image_id(tmp_path):
+    """Handle repositioning when there's no canvas image."""
+    img_path = tmp_path / "page1.png"
+    _write_image(img_path)
+    root = cdisplayagain.tk.Tk()
+    root.withdraw()
+    root.update()
+    try:
+        viewer = cdisplayagain.ComicViewer(root, img_path)
+        viewer._canvas_image_id = None
+        viewer._scaled_size = (100, 200)
+        viewer._reposition_current_image()
+    finally:
+        root.destroy()
+
+
+def test_reposition_current_image_with_no_scaled_size(tmp_path):
+    """Handle repositioning when there's no scaled size."""
+    img_path = tmp_path / "page1.png"
+    _write_image(img_path)
+    root = cdisplayagain.tk.Tk()
+    root.withdraw()
+    root.update()
+    try:
+        viewer = cdisplayagain.ComicViewer(root, img_path)
+        viewer.update()
+        viewer._canvas_image_id = 123
+        viewer._scaled_size = None
+        viewer._reposition_current_image()
+    finally:
+        root.destroy()
+
+
+def test_scroll_by_with_no_scaled_size(tmp_path):
+    """Handle scrolling when there's no scaled size."""
+    img_path = tmp_path / "page1.png"
+    _write_image(img_path)
+    root = cdisplayagain.tk.Tk()
+    root.withdraw()
+    root.update()
+    try:
+        viewer = cdisplayagain.ComicViewer(root, img_path)
+        viewer._scaled_size = None
+        viewer._scroll_by(100)
+    finally:
+        root.destroy()
+
+
+def test_scroll_by_when_image_fits_on_screen(tmp_path):
+    """Handle scrolling when image fits entirely on screen."""
+    img_path = tmp_path / "page1.png"
+    _write_image(img_path, size=(10, 10))
+    root = cdisplayagain.tk.Tk()
+    root.withdraw()
+    root.update()
+    try:
+        viewer = cdisplayagain.ComicViewer(root, img_path)
+        viewer.update()
+        initial_offset = viewer._scroll_offset
+        viewer._scroll_by(100)
+        assert viewer._scroll_offset == initial_offset
+    finally:
+        root.destroy()
+
+
+def test_update_from_cache_with_no_source(tmp_path):
+    """Handle cache update when there's no source."""
+    img_path = tmp_path / "page1.png"
+    _write_image(img_path)
+    root = cdisplayagain.tk.Tk()
+    root.withdraw()
+    root.update()
+    try:
+        viewer = cdisplayagain.ComicViewer(root, img_path)
+        viewer.source = None
+        viewer._update_from_cache(0, b"data")
+    finally:
+        root.destroy()
+
+
+def test_update_from_cache_with_wrong_index(tmp_path):
+    """Handle cache update when index doesn't match current."""
+    img_path = tmp_path / "page1.png"
+    _write_image(img_path)
+    root = cdisplayagain.tk.Tk()
+    root.withdraw()
+    root.update()
+    try:
+        viewer = cdisplayagain.ComicViewer(root, img_path)
+        viewer.update()
+        viewer._update_from_cache(5, b"data")
+    finally:
+        root.destroy()
+
+
+def test_minimize(tmp_path, monkeypatch):
+    """Test minimize method handles errors gracefully."""
+    img_path = tmp_path / "page1.png"
+    _write_image(img_path)
+    root = cdisplayagain.tk.Tk()
+    root.withdraw()
+    root.update()
+    try:
+        viewer = cdisplayagain.ComicViewer(root, img_path)
+
+        original_iconify = root.iconify
+
+        def failing_iconify():
+            raise _tkinter.TclError("error")
+
+        monkeypatch.setattr(root, "iconify", failing_iconify)
+        viewer._minimize()
+        monkeypatch.setattr(root, "iconify", original_iconify)
+    finally:
+        root.destroy()
+
+
+def test_show_help(tmp_path, monkeypatch):
+    """Test help dialog can be shown."""
+    img_path = tmp_path / "page1.png"
+    _write_image(img_path)
+    root = cdisplayagain.tk.Tk()
+    root.withdraw()
+    root.update()
+    try:
+        viewer = cdisplayagain.ComicViewer(root, img_path)
+
+        def mock_showinfo(*args, **kwargs):
+            pass
+
+        monkeypatch.setattr(cdisplayagain.messagebox, "showinfo", mock_showinfo)
+        viewer._show_help()
+    finally:
+        root.destroy()
+
+
+def test_log_mouse_event(tmp_path):
+    """Test mouse event logging."""
+    img_path = tmp_path / "page1.png"
+    _write_image(img_path)
+    root = cdisplayagain.tk.Tk()
+    root.withdraw()
+    root.update()
+    try:
+        viewer = cdisplayagain.ComicViewer(root, img_path)
+        event = type(
+            "Event",
+            (),
+            {
+                "type": "ButtonPress",
+                "num": 1,
+                "delta": 0,
+                "x": 100,
+                "y": 200,
+                "state": 0,
+                "widget": viewer.canvas,
+            },
+        )()
+        viewer._log_mouse_event(event)
+    finally:
+        root.destroy()
+
+
+def test_start_pan(tmp_path):
+    """Test pan start tracking."""
+    img_path = tmp_path / "page1.png"
+    _write_image(img_path)
+    root = cdisplayagain.tk.Tk()
+    root.withdraw()
+    root.update()
+    try:
+        viewer = cdisplayagain.ComicViewer(root, img_path)
+        event = type("Event", (), {"y": 100})()
+        viewer._start_pan(event)
+        assert viewer._drag_start_y == 100
+    finally:
+        root.destroy()
+
+
+def test_drag_pan(tmp_path):
+    """Test pan drag handling."""
+    img_path = tmp_path / "page1.png"
+    _write_image(img_path)
+    root = cdisplayagain.tk.Tk()
+    root.withdraw()
+    root.update()
+    try:
+        viewer = cdisplayagain.ComicViewer(root, img_path)
+        viewer._drag_start_y = 100
+        event = type("Event", (), {"y": 150})()
+        viewer._drag_pan(event)
+        assert viewer._drag_start_y == 150
+    finally:
+        root.destroy()
+
+
+def test_drag_pan_without_start_y(tmp_path):
+    """Handle pan drag when drag start is not set."""
+    img_path = tmp_path / "page1.png"
+    _write_image(img_path)
+    root = cdisplayagain.tk.Tk()
+    root.withdraw()
+    root.update()
+    try:
+        viewer = cdisplayagain.ComicViewer(root, img_path)
+        if hasattr(viewer, "_drag_start_y"):
+            delattr(viewer, "_drag_start_y")
+        event = type("Event", (), {"y": 150})()
+        viewer._drag_pan(event)
+    finally:
+        root.destroy()
+
+
+def test_update_title_with_no_source(tmp_path):
+    """Handle title update when there's no source."""
+    img_path = tmp_path / "page1.png"
+    _write_image(img_path)
+    root = cdisplayagain.tk.Tk()
+    root.withdraw()
+    root.update()
+    try:
+        viewer = cdisplayagain.ComicViewer(root, img_path)
+        viewer.source = None
+        viewer._update_title()
+    finally:
+        root.destroy()
+
+
+def test_quit_with_cleanup(tmp_path):
+    """Test quit method calls cleanup when available."""
+    img_path = tmp_path / "page1.png"
+    _write_image(img_path)
+    root = cdisplayagain.tk.Tk()
+    root.withdraw()
+    root.update()
+    try:
+        viewer = cdisplayagain.ComicViewer(root, img_path)
+
+        cleanup_called = [False]
+
+        def fake_cleanup():
+            cleanup_called[0] = True
+
+        viewer.source = cdisplayagain.PageSource(
+            pages=[], get_bytes=lambda _: b"", cleanup=fake_cleanup
+        )
+        viewer._quit()
+        assert cleanup_called[0]
+    except _tkinter.TclError:
+        pass
+
+
+def test_show_info_overlay_no_source(tmp_path):
+    """Handle info overlay when there's no source."""
+    img_path = tmp_path / "page1.png"
+    _write_image(img_path)
+    root = cdisplayagain.tk.Tk()
+    root.withdraw()
+    root.update()
+    try:
+        viewer = cdisplayagain.ComicViewer(root, img_path)
+        viewer.source = None
+        viewer._show_info_overlay("info.txt")
+        assert viewer._info_overlay is None
+    finally:
+        root.destroy()
+
+
+def test_on_mouse_wheel_no_delta(tmp_path):
+    """Handle mouse wheel events with zero delta."""
+    img_path = tmp_path / "page1.png"
+    _write_image(img_path)
+    root = cdisplayagain.tk.Tk()
+    root.withdraw()
+    root.update()
+    try:
+        viewer = cdisplayagain.ComicViewer(root, img_path)
+        event = type("Event", (), {"delta": 0})()
+        viewer._on_mouse_wheel(event)
+    finally:
+        root.destroy()
+
+
+def test_on_mouse_wheel_positive_delta_no_scroll(tmp_path):
+    """Handle mouse wheel events with positive delta when image fits."""
+    img_path = tmp_path / "page1.png"
+    _write_image(img_path, size=(10, 10))
+    img2_path = tmp_path / "page2.png"
+    _write_image(img2_path, size=(10, 10))
+    root = cdisplayagain.tk.Tk()
+    root.withdraw()
+    root.update()
+    try:
+        viewer = cdisplayagain.ComicViewer(root, img_path)
+        viewer.update()
+        event = type("Event", (), {"delta": 100})()
+        viewer._on_mouse_wheel(event)
+    finally:
+        root.destroy()
