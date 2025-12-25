@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import base64
 import importlib
 import io
 import logging
@@ -648,10 +647,10 @@ class ComicViewer(tk.Frame):
 
     def _photoimage_from_pil(self, img: Image.Image) -> tk.PhotoImage:
         rgb = img.convert("RGB")
-        buf = io.BytesIO()
-        rgb.save(buf, format="PNG")
-        encoded = base64.encodebytes(buf.getvalue()).decode("ascii")
-        return tk.PhotoImage(data=encoded, format="PNG", master=self)
+        width, height = rgb.size
+        header = f"P6\n{width} {height}\n255\n".encode("ascii")
+        data = header + rgb.tobytes()
+        return tk.PhotoImage(width=width, height=height, data=data, format="PPM", master=self)
 
     def _bind_keys(self):
         self.bind_all("<KeyPress>", self._log_key_event, add=True)
