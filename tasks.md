@@ -47,9 +47,6 @@ WIP limit: 3 cards total in In Progress.
 - Align supported format handling with file dialog options (decide on `.cbt`/`.cba` support or remove them from the picker).
 - Decide whether zero-byte archives should surface errors instead of returning placeholder pages.
 
-## Review/QA
-- Add bounded image caching to prevent unbounded memory growth on large archives. (branch: feature/lru-image-cache, commit: 2a1eb47)
-
 ## Ready
 - Right-click opens a pop-up menu, with the top entry being "load files".
 - When browsing a directory, all files in the directory are pre-selected initially.
@@ -62,18 +59,15 @@ WIP limit: 3 cards total in In Progress.
 - Spacebar is a smart forward mechanism (scrolls around the current page until fully shown, then advances).
 - Add Linux/X11 mouse wheel bindings (`<Button-4>`/`<Button-5>`) alongside `<MouseWheel>`.
 
-## Review/QA
-- Use priority queue for next page rendering (branch: feature/priority-queue-rendering)
-
 ## In Progress
 
 ## Blocked
 - (empty)
 
-## Review/QA
-- (empty)
-
 ## Done
+- Add bounded image caching to prevent unbounded memory growth on large archives. (feature/lru-image-cache)
+- Add fast preview to eliminate 1.5s blocking startup (feature/lru-image-cache)
+- Use priority queue for next page rendering (feature/priority-queue-rendering)
 - Completed: Show info overlay while rendering the first image page.
 - Launches into full-screen immediately (takes over the whole screen by default).
 - Uses a minimal UI, prioritizing reading over toolbars and library features (sequential viewer, not a library manager).
