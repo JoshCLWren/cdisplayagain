@@ -57,11 +57,13 @@ grep PERF logs/$(ls -t logs/ | head -1)/cdisplayagain.log
 Edit `tests/test_performance.py`:
 
 ```python
-PERF_CBZ_LAUNCH_MAX = 0.01    # CBZ launch time
-PERF_CBR_LAUNCH_MAX = 0.2     # CBR launch time
-PERF_COVER_RENDER_MAX = 2.0    # Cover render time
-PERF_PAGE_TURN_MAX = 1.0       # Page turn time
+PERF_CBZ_LAUNCH_MAX = 0.02    # CBZ launch time
+PERF_CBR_LAUNCH_MAX = 0.06    # CBR launch time
+PERF_COVER_RENDER_MAX = 0.01   # Cover render time
+PERF_PAGE_TURN_MAX = 0.01      # Page turn time
 ```
+
+These thresholds are based on actual measured high-water marks from performance benchmarks.
 
 ## Performance Tuning Workflow
 
