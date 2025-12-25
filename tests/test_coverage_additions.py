@@ -747,6 +747,28 @@ def test_load_cbr_cleanup_failure_logged(tmp_path, monkeypatch, caplog):
             assert any("CBR cleanup failed" in record.message for record in caplog.records)
 
 
+def test_load_cbr_success_with_test_fixture():
+    """Test load_cbr successfully loads a valid CBR file."""
+    from pathlib import Path
+
+    fixtures_dir = Path(__file__).parent / "fixtures"
+    cbr_path = fixtures_dir / "test_cbr.cbr"
+
+    if not cbr_path.exists():
+        pytest.skip("Test CBR fixture not found")
+
+    source = cdisplayagain.load_cbr(cbr_path)
+
+    try:
+        assert len(source.pages) > 0
+        assert isinstance(source.pages[0], str)
+
+        first_page_bytes = source.get_bytes(source.pages[0])
+        assert len(first_page_bytes) > 0
+    finally:
+        if source.cleanup:
+            source.cleanup()
+
     """Test platform-specific install hints."""
 
     for platform, expected_hint in [
