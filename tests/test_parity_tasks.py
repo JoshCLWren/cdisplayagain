@@ -295,33 +295,21 @@ def test_reads_jpeg_gif_png(tmp_path):
     assert cdisplayagain.load_comic(png).pages == ["page.png"]
 
 
-def test_reads_zip_rar_ace_tar_archives(tmp_path):
+def test_reads_zip_tar_archives(tmp_path):
     """Load multiple archive types and ensure pages list is set."""
     zip_path = tmp_path / "comic.zip"
     _make_cbz(zip_path, ["01.png"])
-    rar_path = tmp_path / "comic.rar"
-    _make_cbz(rar_path, ["01.png"])
-    ace_path = tmp_path / "comic.ace"
-    _make_cbz(ace_path, ["01.png"])
     tar_path = tmp_path / "comic.tar"
     _make_tar(tar_path, ["01.png"])
 
     zip_source = cdisplayagain.load_comic(zip_path)
-    rar_source = cdisplayagain.load_comic(rar_path)
-    ace_source = cdisplayagain.load_comic(ace_path)
     tar_source = cdisplayagain.load_comic(tar_path)
     try:
         assert zip_source.pages == ["01.png"]
-        assert rar_source.pages == ["01.png"]
-        assert ace_source.pages == ["01.png"]
         assert tar_source.pages == ["01.png"]
     finally:
         if zip_source.cleanup:
             zip_source.cleanup()
-        if rar_source.cleanup:
-            rar_source.cleanup()
-        if ace_source.cleanup:
-            ace_source.cleanup()
         if tar_source.cleanup:
             tar_source.cleanup()
 

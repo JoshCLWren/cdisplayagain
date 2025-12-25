@@ -5,12 +5,16 @@ from __future__ import annotations
 import _tkinter
 import io
 import logging
+import shutil
+import sys
 import tarfile
 import tempfile
 import zipfile
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
+from unrar.cffi import rarfile as rarfile_cffi
 
 import cdisplayagain
 
@@ -174,34 +178,12 @@ def test_load_comic_empty_ace_raises_error(tmp_path):
         cdisplayagain.load_comic(ace_path)
 
 
-def test_load_cbr_requires_unar(monkeypatch, tmp_path):
-    """Require unar for CBR extraction."""
-    cbr_path = tmp_path / "comic.cbr"
-    cbr_path.write_bytes(b"data")
-    monkeypatch.setattr(cdisplayagain.shutil, "which", lambda _: None)
-    with pytest.raises(RuntimeError, match="requires 'unar'"):
-        cdisplayagain.load_cbr(cbr_path)
-
-
 def test_load_comic_dispatches_image(tmp_path):
     """Dispatch image files through the image loader."""
     img_path = tmp_path / "page.png"
     _write_image(img_path)
     source = cdisplayagain.load_comic(img_path)
     assert source.pages == ["page.png"]
-
-
-def test_load_cbr_unar_subprocess_failure(tmp_path, monkeypatch):
-    """Raise when unar subprocess fails."""
-    cbr_path = tmp_path / "comic.cbr"
-
-    def fake_run(*args, **kwargs):
-        return type("FakeResult", (), {"returncode": 1, "stderr": "error", "stdout": ""})()
-
-    monkeypatch.setattr(cdisplayagain.subprocess, "run", fake_run)
-    monkeypatch.setattr(cdisplayagain.shutil, "which", lambda _: "/usr/bin/unar")
-    with pytest.raises(RuntimeError, match="unar failed"):
-        cdisplayagain.load_cbr(cbr_path)
 
 
 def test_load_directory_text_file(tmp_path):
@@ -269,15 +251,16 @@ def test_natural_key_various_formats():
 
 
 def test_require_unar_missing_unar(monkeypatch):
-    """Raise SystemExit when unar is not available."""
-    monkeypatch.setattr(cdisplayagain.shutil, "which", lambda _: None)
+    """Raise SystemExit when unrar2-cffi is not available."""
+    mock_util = MagicMock()
+    mock_util.find_spec = lambda _: None
+    monkeypatch.setattr(cdisplayagain.importlib, "util", mock_util)
     with pytest.raises(SystemExit, match="CBR support requires"):
         cdisplayagain.require_unar()
 
 
-def test_require_unar_available(monkeypatch):
-    """Return early when unar is available."""
-    monkeypatch.setattr(cdisplayagain.shutil, "which", lambda _: "/usr/bin/unar")
+def test_require_unar_available():
+    """Return early when unrar2-cffi is available."""
     cdisplayagain.require_unar()
 
 
@@ -709,8 +692,8 @@ def test_prime_imagetk_logs_interp_addr_failure(monkeypatch, caplog):
             root.destroy()
 
 
-def test_load_cbr_cleans_up_on_unar_failure(tmp_path, monkeypatch):
-    """Test load_cbr cleans up temp dir when unar subprocess fails."""
+def test_load_cbr_cleans_up_on_error(tmp_path, monkeypatch):
+    """Test load_cbr cleans up temp dir when unrar2-cffi fails."""
     cbr_path = tmp_path / "comic.cbr"
     cbr_path.write_bytes(b"data")
 
@@ -725,43 +708,172 @@ def test_load_cbr_cleans_up_on_unar_failure(tmp_path, monkeypatch):
 
     monkeypatch.setattr(tempfile, "mkdtemp", track_mkdtemp)
 
-    def fake_run(*args, **kwargs):
-        return type("FakeResult", (), {"returncode": 1, "stderr": "error", "stdout": ""})()
-
-    monkeypatch.setattr(cdisplayagain.subprocess, "run", fake_run)
-    monkeypatch.setattr(cdisplayagain.shutil, "which", lambda _: "/usr/bin/unar")
-
-    with pytest.raises(RuntimeError, match="unar failed"):
+    with pytest.raises((rarfile_cffi.RarFileError, RuntimeError)):
         cdisplayagain.load_cbr(cbr_path)
 
     assert len(temp_dirs_created) == 1
     assert not Path(temp_dirs_created[0]).exists()
 
 
-def test_load_cbr_cleans_up_on_empty_extraction(tmp_path, monkeypatch):
-    """Test load_cbr cleans up temp dir when no images found."""
+def test_require_unar_success_when_cffi_available():
+    """Return early when unrar2-cffi is available."""
+    cdisplayagain.require_unar()
+
+
+def test_lru_cache_keyerror():
+    """Test LRU cache raises KeyError when key doesn't exist."""
+    cache = cdisplayagain.LRUCache(maxsize=2)
+    cache["key1"] = "value1"
+    cache["key2"] = "value2"
+    with pytest.raises(KeyError):
+        _ = cache["missing_key"]
+
+
+def test_load_cbr_cleanup_failure_logged(tmp_path, monkeypatch, caplog):
+    """Test cleanup failure in load_cbr is logged."""
     cbr_path = tmp_path / "comic.cbr"
-    cbr_path.write_bytes(b"data")
+    cbr_path.write_bytes(b"invalid rar data")
 
-    temp_dirs_created = []
+    original_rmtree = shutil.rmtree
 
-    original_mkdtemp = tempfile.mkdtemp
+    def failing_rmtree(path, *args, **kwargs):
+        original_rmtree(path, *args, **kwargs)
+        raise RuntimeError("Cleanup error")
 
-    def track_mkdtemp(*args, **kwargs):
-        result = original_mkdtemp(*args, **kwargs)
-        temp_dirs_created.append(result)
-        return result
+    mock_rar = MagicMock()
+    mock_rar.namelist.return_value = ["page1.jpg"]
+    mock_rar.read.return_value = b"content"
 
-    monkeypatch.setattr(tempfile, "mkdtemp", track_mkdtemp)
+    with patch("unrar.cffi.rarfile.RarFile", return_value=mock_rar):
+        with patch("cdisplayagain.shutil.rmtree", side_effect=failing_rmtree):
+            with caplog.at_level(logging.WARNING):
+                source = cdisplayagain.load_cbr(cbr_path)
+                if source.cleanup:
+                    try:
+                        source.cleanup()
+                    except RuntimeError:
+                        pass
+                assert any("Cleanup failed" in record.message for record in caplog.records)
 
-    def fake_run(*args, **kwargs):
-        return type("FakeResult", (), {"returncode": 0, "stderr": "", "stdout": ""})()
 
-    monkeypatch.setattr(cdisplayagain.subprocess, "run", fake_run)
-    monkeypatch.setattr(cdisplayagain.shutil, "which", lambda _: "/usr/bin/unar")
+def test_load_cbr_success_with_test_fixture():
+    """Test load_cbr successfully loads a valid CBR file."""
+    from pathlib import Path
 
-    with pytest.raises(RuntimeError, match="No images or info files found"):
-        cdisplayagain.load_cbr(cbr_path)
+    fixtures_dir = Path(__file__).parent / "fixtures"
+    cbr_path = fixtures_dir / "test_cbr.cbr"
 
-    assert len(temp_dirs_created) == 1
-    assert not Path(temp_dirs_created[0]).exists()
+    if not cbr_path.exists():
+        pytest.skip("Test CBR fixture not found")
+
+    source = cdisplayagain.load_cbr(cbr_path)
+
+    try:
+        assert len(source.pages) > 0
+        assert isinstance(source.pages[0], str)
+
+        first_page_bytes = source.get_bytes(source.pages[0])
+        assert len(first_page_bytes) > 0
+    finally:
+        if source.cleanup:
+            source.cleanup()
+
+
+def test_load_cbr_with_text_file(tmp_path):
+    """Test load_cbr handles text files in archives."""
+    cbr_path = tmp_path / "comic.cbr"
+    cbr_path.write_bytes(b"invalid rar")
+
+    mock_rar = MagicMock()
+    mock_rar.namelist.return_value = ["subdir/", "readme.txt", "page1.jpg", ""]
+    mock_rar.read.return_value = b"content"
+
+    with patch("unrar.cffi.rarfile.RarFile", return_value=mock_rar):
+        source = cdisplayagain.load_cbr(cbr_path)
+        try:
+            assert any("readme.txt" in p for p in source.pages)
+            assert any("page1.jpg" in p for p in source.pages)
+        finally:
+            if source.cleanup:
+                source.cleanup()
+
+
+def test_load_cbr_with_directory_entries(tmp_path):
+    """Test load_cbr handles directory entries in archives."""
+    cbr_path = tmp_path / "comic.cbr"
+    cbr_path.write_bytes(b"invalid rar")
+
+    mock_rar = MagicMock()
+    mock_rar.namelist.return_value = ["subdir/", "page1.jpg"]
+    mock_rar.read.return_value = b"content"
+
+    with patch("unrar.cffi.rarfile.RarFile", return_value=mock_rar):
+        source = cdisplayagain.load_cbr(cbr_path)
+        try:
+            assert any("page1.jpg" in p for p in source.pages)
+        finally:
+            if source.cleanup:
+                source.cleanup()
+
+
+def test_load_cbr_empty_filenames(tmp_path):
+    """Test load_cbr handles empty filenames in archives."""
+    cbr_path = tmp_path / "comic.cbr"
+    cbr_path.write_bytes(b"invalid rar")
+
+    mock_rar = MagicMock()
+    mock_rar.namelist.return_value = ["", "page1.jpg"]
+    mock_rar.read.return_value = b"content"
+
+    with patch("unrar.cffi.rarfile.RarFile", return_value=mock_rar):
+        source = cdisplayagain.load_cbr(cbr_path)
+        try:
+            assert any("page1.jpg" in p for p in source.pages)
+        finally:
+            if source.cleanup:
+                source.cleanup()
+
+
+def test_load_cbr_no_valid_files_raises_error(tmp_path):
+    """Test load_cbr raises error when archive has no valid files."""
+    cbr_path = tmp_path / "comic.cbr"
+    cbr_path.write_bytes(b"invalid rar")
+
+    mock_rar = MagicMock()
+    mock_rar.namelist.return_value = ["subdir/", "data.bin"]
+
+    with patch("unrar.cffi.rarfile.RarFile", return_value=mock_rar):
+        with pytest.raises(RuntimeError, match="No images or info files found"):
+            cdisplayagain.load_cbr(cbr_path)
+
+    """Test platform-specific install hints."""
+
+    for platform, expected_hint in [
+        ("linux", "uv pip install unrar2-cffi"),
+        ("darwin", "uv pip install unrar2-cffi"),
+        ("win32", "pip install unrar2-cffi"),
+    ]:
+        with patch("sys.platform", platform):
+            mock_util = MagicMock()
+            mock_util.find_spec = lambda _: None
+            with patch("cdisplayagain.importlib.util", mock_util):
+                with patch("cdisplayagain.sys", sys):
+                    with pytest.raises(SystemExit) as exc_info:
+                        cdisplayagain.require_unar()
+                    assert expected_hint in str(exc_info.value)
+
+
+def test_natural_key_with_leading_zeros():
+    """Test natural key handles leading zeros correctly."""
+    assert cdisplayagain.natural_key("001.png") < cdisplayagain.natural_key("002.png")
+    assert cdisplayagain.natural_key("009.png") < cdisplayagain.natural_key("010.png")
+
+
+def test_natural_key_with_no_numbers():
+    """Test natural key with no numbers."""
+    assert cdisplayagain.natural_key("abc.png") == cdisplayagain.natural_key("abc.png")
+
+
+def test_natural_key_mixed():
+    """Test natural key with mixed alphanumeric."""
+    assert cdisplayagain.natural_key("page1a.png") < cdisplayagain.natural_key("page2a.png")

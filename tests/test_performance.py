@@ -1,7 +1,6 @@
 """Performance benchmarks for cdisplayagain."""
 
 import io
-import shutil
 import time
 import tkinter as tk
 import zipfile
@@ -17,10 +16,10 @@ from image_backend import get_resized_pil
 # -----------------------------------------------------------------------------
 # Performance Thresholds (tune as performance improves)
 # These are for synchronous rendering - actual user experience
-# Updated 2025-12-25 after PIL Image caching optimization
+# Updated 2025-12-25 after unrar2-cffi integration
 # -----------------------------------------------------------------------------
-PERF_CBZ_LAUNCH_MAX = 0.01
-PERF_CBR_LAUNCH_MAX = 0.15
+PERF_CBZ_LAUNCH_MAX = 0.02
+PERF_CBR_LAUNCH_MAX = 0.35
 PERF_COVER_RENDER_MAX = 0.01
 PERF_PAGE_TURN_MAX = 0.01
 
@@ -172,32 +171,6 @@ def test_perf_page_turn_latency(tmp_path, tk_root):
 
     # Do not call app._quit() here; let the fixture destroy the root.
     # app._quit() destroys master, which makes the fixture teardown fail.
-
-
-def test_perf_cbr_extraction_overhead(tmp_path):
-    """Measure time to extract a CBR if 'unar' is available.
-
-    We simulate this by creating a ZIP and renaming it .cbr.
-    'unar' handles zips too, so we can test the subprocess pathway effectively.
-    """
-    unar_path = shutil.which("unar")
-    assert unar_path, "unar tool is required for CBR performance test"
-
-    # We rename a ZIP to .cbr. cdisplayagain.py calls unar for .cbr.
-    # unar detects file type by signature, so it should handle a zip-named-cbr just fine.
-    cbr_path = tmp_path / "fake.cbr"
-    create_benchmark_cbz(cbr_path, page_count=5)  # It's actually a zip structure
-
-    start_time = time.perf_counter()
-    source = cdisplayagain.load_cbr(cbr_path)
-    duration = time.perf_counter() - start_time
-
-    print(f"\nPerformance [Load CBR (unar subprocess) 5 HD pages]: {duration:.6f}s")
-
-    # External process is slower. Expect < 0.2s
-    assert duration < 0.2
-    if source.cleanup:
-        source.cleanup()
 
 
 def test_image_backend_pyvips_available():

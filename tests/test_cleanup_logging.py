@@ -1,10 +1,7 @@
 """Test cleanup error logging in load functions."""
 
 import io
-import shutil
-import subprocess
 import tarfile
-import tempfile
 import zipfile
 from pathlib import Path
 from unittest.mock import patch
@@ -43,35 +40,6 @@ def test_load_cbz_cleanup_logs_error_on_failure(tmp_path, caplog):
             assert len(caplog.records) == 1
             assert "Cleanup failed" in caplog.text
             assert "Zip file error" in caplog.text
-
-
-def test_load_cbr_cleanup_logs_error_on_failure(tmp_path, caplog):
-    """Verify load_cbr cleanup logs warning when rmtree fails."""
-    tmpdir = Path(tempfile.mkdtemp(prefix="cdisplayagain_test_"))
-    try:
-        img_path = tmpdir / "page1.png"
-        _write_image(img_path, color=(100, 50, 0))
-
-        mock_proc = subprocess.CompletedProcess(
-            args=["unar", "-q", "-o", str(tmpdir), "test.cbr"], returncode=0, stdout="", stderr=""
-        )
-
-        with patch("cdisplayagain.tempfile.mkdtemp", return_value=str(tmpdir)):
-            with patch("cdisplayagain.subprocess.run", return_value=mock_proc):
-                source = cdisplayagain.load_cbr(Path("test.cbr"))
-    finally:
-        if tmpdir.exists():
-            shutil.rmtree(tmpdir, ignore_errors=True)
-
-    assert source is not None
-    assert source.cleanup is not None
-
-    with patch("cdisplayagain.shutil.rmtree", side_effect=RuntimeError("Permission denied")):
-        with caplog.at_level("WARNING"):
-            source.cleanup()
-            assert len(caplog.records) == 1
-            assert "Cleanup failed" in caplog.text
-            assert "Permission denied" in caplog.text
 
 
 def test_load_tar_cleanup_logs_error_on_failure(tmp_path, caplog):

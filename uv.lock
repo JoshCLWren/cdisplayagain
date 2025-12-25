@@ -22,6 +22,7 @@ dependencies = [
     { name = "pytest-cov" },
     { name = "pyvips" },
     { name = "ruff" },
+    { name = "unrar2-cffi" },
 ]
 
 [package.dev-dependencies]
@@ -37,6 +38,7 @@ requires-dist = [
     { name = "pytest-cov", specifier = ">=6.1.0" },
     { name = "pyvips", specifier = ">=2.2.0" },
     { name = "ruff", specifier = ">=0.11.2" },
+    { name = "unrar2-cffi", specifier = ">=0.4.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -470,4 +472,27 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/72/94/1a15dd82efb362ac84269196e94cf00f187f7ed21c242792a923cdb1c61f/typing_extensions-4.15.0.tar.gz", hash = "sha256:0cea48d173cc12fa28ecabc3b837ea3cf6f38c6d1136f85cbaaf598984861466", size = 109391, upload-time = "2025-08-25T13:49:26.313Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/18/67/36e9267722cc04a6b9f15c7f3441c2363321a3ea07da7ae0c0707beb2a9c/typing_extensions-4.15.0-py3-none-any.whl", hash = "sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548", size = 44614, upload-time = "2025-08-25T13:49:24.86Z" },
+]
+
+[[package]]
+name = "unrar2-cffi"
+version = "0.4.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "cffi" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/36/f1/dcd1d9a2a1a8b0952bab8c49af6d827dd65d486f9f5006073666cce928b8/unrar2_cffi-0.4.1.tar.gz", hash = "sha256:3fe3174a6a0c888924e3630462826af4e91dd494d5c043cb0a31865eb9e9c833", size = 275516, upload-time = "2025-05-25T20:13:59.267Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b6/62/870e6749f2b9a29263a49c3274bae4102f688e449cf1e1088cbe07ae0ddb/unrar2_cffi-0.4.1-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:c28ad76bfcc7251bb60c41521cbeda31c53d7655dec079073cc9128b4aefaf85", size = 204805, upload-time = "2025-05-25T20:13:22.681Z" },
+    { url = "https://files.pythonhosted.org/packages/cb/7e/09108440fa5fdd5b2382b2f1e8fedca1ddf24577cd149d4102bf89444f2e/unrar2_cffi-0.4.1-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:d4e60f042e360ddc0fb42b0cce0b0677432e1680198499c40167651df0c15d67", size = 188384, upload-time = "2025-05-25T20:13:24.219Z" },
+    { url = "https://files.pythonhosted.org/packages/30/25/d3d331d3884b8d0c7be204a11af97c15e81105d92785a70fb79a1d135fea/unrar2_cffi-0.4.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:2e9e9a6224a0f7058a8f7e6f7e70d10d5fb0980b420eb09e7e4e6a9137b1f7e5", size = 272659, upload-time = "2025-05-25T20:13:25.693Z" },
+    { url = "https://files.pythonhosted.org/packages/bb/e2/8c42ce344ff9e3063603afeb9e31dc129e6f5d3adc8fb2cdafaf9a77b87d/unrar2_cffi-0.4.1-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:5f349700c9ffd92943c0b0d2e2524cc648d57fcb68d723b2538e5a9d3fef30c1", size = 1236327, upload-time = "2025-05-25T20:13:27.336Z" },
+    { url = "https://files.pythonhosted.org/packages/f9/73/bc5ca1974aee9147b0276820003f2126a86bdd6aeaad4530d99878504098/unrar2_cffi-0.4.1-cp312-cp312-win32.whl", hash = "sha256:aecc3d7b147582a19f0005f8dfb5ba534bdce539b2f71b59d8b831e526329c94", size = 189448, upload-time = "2025-05-25T20:13:28.819Z" },
+    { url = "https://files.pythonhosted.org/packages/dc/24/5dbe64b1da86dffedf7116d24f5b1708fd2f078ace130496ec4a3b52991d/unrar2_cffi-0.4.1-cp312-cp312-win_amd64.whl", hash = "sha256:873c2c1b192ad89a473a87e7908efc4aec58ccb88bb90170dafc5832365ebe51", size = 219009, upload-time = "2025-05-25T20:13:30.341Z" },
+    { url = "https://files.pythonhosted.org/packages/57/2c/7651cb43c25aa992b4e4d35b834addc6dc66e945bfe0c4b0939544111676/unrar2_cffi-0.4.1-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:6e49330aaa9979c1c86f5e90d83c02a896887359bcd02ee3c0e8c0565ee196e8", size = 204804, upload-time = "2025-05-25T20:13:32.189Z" },
+    { url = "https://files.pythonhosted.org/packages/e0/5e/e7a672c0c062685fc90c3ebeee55e1f0bec63c1482cc129dde2a638a66ea/unrar2_cffi-0.4.1-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:3d0f39480557f5e14e8dc8bb15ca10d9a573d8b3d985419906681cf6bdf3b4ba", size = 188387, upload-time = "2025-05-25T20:13:33.591Z" },
+    { url = "https://files.pythonhosted.org/packages/cd/fb/dd7b8b10e1dcedcc4e530d26d3cbfc8c7c06c0bfb01581f12597bdae5422/unrar2_cffi-0.4.1-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:19ed018a498ae03fab2912703daf02cff69410576be7ba26748451590a61ddfe", size = 272562, upload-time = "2025-05-25T20:13:35.452Z" },
+    { url = "https://files.pythonhosted.org/packages/5b/36/2da9db3101e05635e3ff0aee6b1a8eafae0e55c4d5c38018370396b4bd88/unrar2_cffi-0.4.1-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:5c7a6c06f34fc8d8f0a2af7689100dcc04e14042aaa6fb9c3125c3a617408800", size = 1236320, upload-time = "2025-05-25T20:13:37.552Z" },
+    { url = "https://files.pythonhosted.org/packages/d2/1e/e5a405e377f5ed8a8ae0f97f359d95a2f2a7581da8d52bddcb5e916a4605/unrar2_cffi-0.4.1-cp313-cp313-win32.whl", hash = "sha256:17ae2cb75218a2df671d6b5c369f417927697da198c33cc9aa5c838f2e2626fc", size = 189448, upload-time = "2025-05-25T20:13:45.683Z" },
+    { url = "https://files.pythonhosted.org/packages/c4/4c/ec67323cb8095cb5fbe7ba2748950ee37fd5ac4400d30c8935e5ca526c7d/unrar2_cffi-0.4.1-cp313-cp313-win_amd64.whl", hash = "sha256:b4d1b357f0238c24ffb4271197962d033e9b5a98e7a66ce1858e7f95b511cad7", size = 219009, upload-time = "2025-05-25T20:13:47.077Z" },
 ]
