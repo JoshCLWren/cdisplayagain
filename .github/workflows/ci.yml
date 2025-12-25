@@ -43,6 +43,10 @@ jobs:
       - name: Setup environment
         uses: ./.github/actions/setup
 
+      - name: Create test fixtures
+        shell: bash
+        run: uv run python tests/create_test_comics.py
+
       - name: Run pytest
         shell: bash
         run: xvfb-run -a uv run pytest --cov=cdisplayagain --cov-report=xml --cov-fail-under=75

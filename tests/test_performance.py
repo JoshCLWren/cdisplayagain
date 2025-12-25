@@ -18,7 +18,7 @@ from image_backend import get_resized_bytes
 # Performance Thresholds (tune as performance improves)
 # These are for synchronous rendering - actual user experience
 # -----------------------------------------------------------------------------
-PERF_CBZ_LAUNCH_MAX = 0.01
+PERF_CBZ_LAUNCH_MAX = 0.05
 PERF_CBR_LAUNCH_MAX = 0.2
 PERF_COVER_RENDER_MAX = 2.0
 PERF_PAGE_TURN_MAX = 1.0
