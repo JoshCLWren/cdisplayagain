@@ -819,6 +819,50 @@ class ComicViewer(tk.Frame):
         self._canvas_image_id = self.canvas.create_image(x, y, image=self._tk_img, anchor=anchor)
         perf_log("canvas_update", time.perf_counter() - canvas_start)
 
+    def _display_image_fast(self, img: Image.Image):
+        """Display PIL image with fast NEAREST resampling for instant preview."""
+        cw = max(1, self.canvas.winfo_width())
+        ch = max(1, self.canvas.winfo_height())
+
+        iw, ih = img.size
+        scale = min(cw / iw, ch / ih)
+        if scale < 1:
+            nw = max(1, int(iw * scale))
+            nh = max(1, int(ih * scale))
+            img = img.resize((nw, nh), Image.Resampling.NEAREST)
+
+        self._current_pil = img
+
+        imagetk_start = time.perf_counter()
+        if self._imagetk_ready:
+            try:
+                self._tk_img = ImageTk.PhotoImage(img, master=self)
+            except Exception:
+                self._imagetk_ready = False
+                self._tk_img = self._photoimage_from_pil(img)
+        else:
+            self._tk_img = self._photoimage_from_pil(img)
+
+        iw, ih = img.size
+        self._scaled_size = (iw, ih)
+        max_offset = max(0, ih - ch)
+        if ih <= ch:
+            self._scroll_offset = 0
+        else:
+            self._scroll_offset = min(max(self._scroll_offset, 0), max_offset)
+
+        self.canvas.delete("all")
+        self._canvas_image_id = None
+        anchor = "center"
+        x = cw // 2
+        if ih <= ch:
+            y = ch // 2
+        else:
+            anchor = "n"
+            y = -self._scroll_offset
+        self._canvas_image_id = self.canvas.create_image(x, y, image=self._tk_img, anchor=anchor)
+        perf_log("display_fast_image", time.perf_counter() - imagetk_start)
+
     def _update_from_cache(self, index: int, resized_bytes: bytes):
         logging.info("Update from cache: index=%d, current_index=%d", index, self._current_index)
 
@@ -1013,10 +1057,6 @@ class ComicViewer(tk.Frame):
             return
         self._dismiss_info()
 
-        # TODO: Fix 1.5s blocking startup - display raw image immediately, then replace with resized
-        # TODO: Use faster lower-quality resize for first render, then high-quality
-        # TODO: Stream JPEG instead of full PNG encode for cache to reduce startup latency
-
         index = self._current_index
         cw = max(1, self.canvas.winfo_width())
         ch = max(1, self.canvas.winfo_height())
@@ -1032,22 +1072,25 @@ class ComicViewer(tk.Frame):
             perf_log("render_current_sync", time.perf_counter() - render_start, "cache_hit")
             return
 
-        logging.info("Cache miss for page %d, processing synchronously", index)
+        logging.info("Cache miss for page %d, displaying preview then requesting resize", index)
         raw_start = time.perf_counter()
         raw = self.source.get_bytes(self.source.pages[index])
         perf_log("get_bytes", time.perf_counter() - raw_start)
 
-        resize_start = time.perf_counter()
-        resized_bytes = get_resized_bytes(raw, cw, ch)
-        perf_log("get_resized_bytes", time.perf_counter() - resize_start)
+        decode_start = time.perf_counter()
+        raw_img = Image.open(io.BytesIO(raw))
+        perf_log("pil_decode_preview", time.perf_counter() - decode_start)
 
         display_start = time.perf_counter()
-        self._image_cache[cache_key] = resized_bytes
-        self._display_cached_image(resized_bytes)
+        self._display_image_fast(raw_img)
         self._update_title()
-        perf_log("display_cached_image", time.perf_counter() - display_start)
+        perf_log("display_preview", time.perf_counter() - display_start)
 
-        perf_log("render_current_sync", time.perf_counter() - render_start, "cache_miss")
+        logging.info("Requesting high-quality resize for page %d", index)
+        self._worker.request_page(index, cw, ch)
+        self._update_title()
+
+        perf_log("render_current_sync", time.perf_counter() - render_start, "preview")
 
     def _render_info_with_image(self, name: str) -> None:
         image_index = self._find_next_image_index(self._current_index)
