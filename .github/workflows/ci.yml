@@ -20,6 +20,10 @@ jobs:
         shell: bash
         run: uv run ruff check .
 
+      - name: Run pyright
+        shell: bash
+        run: uv run pyright .
+
   tests:
     runs-on: ubuntu-latest
     container: debian:13

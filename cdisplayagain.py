@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import importlib
 import io
 import logging
 import os
@@ -21,10 +22,18 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from tkinter import filedialog, messagebox
+from typing import cast
 
 from PIL import Image, ImageTk
 
 from image_backend import get_resized_bytes
+
+TkPhotoImage = tk.PhotoImage | ImageTk.PhotoImage
+
+
+def _as_wm(obj: tk.Misc) -> tk.Wm:
+    """Treat a Misc (Tk root) as Wm for type checking."""
+    return cast(tk.Wm, obj)
 
 
 def require_unar() -> None:
@@ -365,7 +374,6 @@ class ComicViewer(tk.Frame):
         """Initialize the viewer frame and load the initial comic."""
         super().__init__(master)
         self.comic_path = comic_path
-        self.master = master
         self.pack(fill=tk.BOTH, expand=True)
 
         self.source: PageSource | None = None
@@ -376,9 +384,9 @@ class ComicViewer(tk.Frame):
         self._cursor_hidden = False
         self._fullscreen = False
 
-        self.master.title(f"cdisplayagain - {comic_path.name}")
+        _as_wm(self.master).title(f"cdisplayagain - {comic_path.name}")
         self.configure(bg="#111111")
-        self.master.configure(bg="#111111")
+        cast(tk.Tk, self.master).configure(bg="#111111")
         self._configure_cursor()
 
         self.canvas = tk.Canvas(self, bg="#111111", highlightthickness=0)
@@ -386,7 +394,7 @@ class ComicViewer(tk.Frame):
         self.canvas.configure(cursor=self._cursor_name)
 
         # Keep reference to avoid Tk garbage-collecting the image
-        self._tk_img: tk.PhotoImage | None = None
+        self._tk_img: TkPhotoImage | None = None
         self._current_pil: Image.Image | None = None
         self._current_index: int = 0
         self._canvas_image_id: int | None = None
@@ -472,14 +480,14 @@ class ComicViewer(tk.Frame):
         """Toggle fullscreen state and sync cursor visibility."""
         logging.info("Toggle fullscreen requested.")
         try:
-            current = self.master.attributes("-fullscreen")
+            current = _as_wm(self.master).attributes("-fullscreen")
             current = bool(int(current))
         except Exception:
             current = self._fullscreen
         new_state = not current
         self._fullscreen = new_state
         try:
-            self.master.attributes("-fullscreen", new_state)
+            _as_wm(self.master).attributes("-fullscreen", new_state)
         except tk.TclError:
             return
         self._set_cursor_hidden(new_state)
@@ -496,7 +504,7 @@ class ComicViewer(tk.Frame):
         if self._imagetk_ready:
             return
         try:
-            from PIL import _imagingtk  # type: ignore[attr-defined]
+            _imagingtk = importlib.import_module("PIL._imagingtk")
         except Exception:
             return
 
@@ -719,10 +727,12 @@ class ComicViewer(tk.Frame):
         cw = max(1, self.canvas.winfo_width())
         ch = max(1, self.canvas.winfo_height())
 
+        cache_key: tuple[int, int, int] | None = None
         # Only cache when canvas has proper dimensions to avoid caching tiny images
         if self._canvas_properly_sized:
             cache_key = (index, cw, ch)
-        self._image_cache[cache_key] = resized_bytes
+        if cache_key is not None:
+            self._image_cache[cache_key] = resized_bytes
         logging.info("Update from cache: cached page %d at %dx%d", index, cw, ch)
 
         self._display_cached_image(resized_bytes)
@@ -746,7 +756,7 @@ class ComicViewer(tk.Frame):
     def _minimize(self) -> None:
         logging.info("Minimize requested.")
         try:
-            self.master.iconify()
+            _as_wm(self.master).iconify()
         except tk.TclError:
             pass
 
@@ -836,13 +846,12 @@ class ComicViewer(tk.Frame):
                 logging.info("Canvas resized: %dx%d", cw, ch)
 
     def _update_title(self):
+        wm = _as_wm(self.master)
         if not self.source:
-            self.master.title(f"cdisplayagain - {self.comic_path.name}")
+            wm.title(f"cdisplayagain - {self.comic_path.name}")
             return
         total = len(self.source.pages)
-        self.master.title(
-            f"cdisplayagain - {self.comic_path.name} ({self._current_index + 1}/{total})"
-        )
+        wm.title(f"cdisplayagain - {self.comic_path.name} ({self._current_index + 1}/{total})")
 
     def _find_next_image_index(self, start_index: int) -> int | None:
         if not self.source:

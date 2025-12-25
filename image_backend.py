@@ -3,8 +3,29 @@
 import functools
 import importlib.util
 import io
+from typing import TYPE_CHECKING, Any, cast
 
 from PIL import Image
+
+if TYPE_CHECKING:
+
+    class VipsImage:
+        """Stub for pyvips.Image to work around incomplete type stubs."""
+
+        width: int
+
+        def resize(self, scale: float, kernel: str) -> "VipsImage":
+            """Resize image by scale factor."""
+            ...
+
+        def write_to_buffer(self, format: str) -> bytes:
+            """Write image to buffer in given format."""
+            ...
+else:
+    try:
+        from pyvips import Image as VipsImage
+    except Exception:
+        VipsImage = Any
 
 HAS_PYVIPS = importlib.util.find_spec("pyvips") is not None
 
@@ -22,7 +43,7 @@ def _resize_with_pyvips(raw_bytes: bytes, width: int, height: int) -> bytes:
     """Fast resize using libvips via pyvips."""
     import pyvips
 
-    img = pyvips.Image.new_from_buffer(raw_bytes, "")
+    img: VipsImage = cast(VipsImage, pyvips.Image.new_from_buffer(raw_bytes, ""))
     orig_w = img.width
 
     scale = width / orig_w

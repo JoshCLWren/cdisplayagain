@@ -10,6 +10,7 @@ help:  ## Show this help message
 
 lint:  ## Run code linting
 	uv run ruff check .
+	uv run pyright .
 
 pytest:  ## Run tests
 	uv run pytest

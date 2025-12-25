@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import _tkinter
 import io
 import tarfile
 import zipfile
 from pathlib import Path
-import _tkinter
 
 import pytest
 
@@ -77,7 +77,8 @@ def test_load_cbz_cleanup_handles_close_failure(tmp_path, monkeypatch):
 
     source = cdisplayagain.load_cbz(cbz_path)
     monkeypatch.setattr(zipfile.ZipFile, "close", fail_close)
-    source.cleanup()
+    if source.cleanup is not None:
+        source.cleanup()
     monkeypatch.setattr(zipfile.ZipFile, "close", original_close)
 
 
