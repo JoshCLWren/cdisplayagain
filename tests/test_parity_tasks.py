@@ -386,7 +386,7 @@ def test_info_screen_shows_first_page_simultaneously(viewer):
     ch = max(1, viewer.canvas.winfo_height())
     if viewer.source and len(viewer.source.pages) > 0:
         raw_bytes = viewer.source.get_bytes(viewer.source.pages[0])
-        from image_backend import get_resized_bytes
+        from image_backend import get_resized_pil
 
         resized_bytes = get_resized_bytes(raw_bytes, cw, ch)
         viewer._image_cache[(0, cw, ch)] = resized_bytes
@@ -411,7 +411,7 @@ def test_info_screen_overlays_first_image_when_text_first(viewer, tmp_path):
             if cdisplayagain.is_text_name(viewer.source.pages[idx]):
                 continue
             raw_bytes = viewer.source.get_bytes(viewer.source.pages[idx])
-            from image_backend import get_resized_bytes
+            from image_backend import get_resized_pil
 
             resized_bytes = get_resized_bytes(raw_bytes, cw, ch)
             viewer._image_cache[(idx, cw, ch)] = resized_bytes
@@ -470,7 +470,7 @@ def test_spacebar_scrolls_then_advances(viewer, tmp_path):
 
     cw = max(1, viewer.canvas.winfo_width())
     ch = max(1, viewer.canvas.winfo_height())
-    from image_backend import get_resized_bytes
+    from image_backend import get_resized_pil
 
     for idx in range(len(viewer.source.pages)):
         raw_bytes = viewer.source.get_bytes(viewer.source.pages[idx])

@@ -26,7 +26,7 @@ from typing import cast
 
 from PIL import Image, ImageTk
 
-from image_backend import get_resized_bytes
+from image_backend import get_resized_pil
 
 TkPhotoImage = tk.PhotoImage | ImageTk.PhotoImage
 
@@ -428,7 +428,7 @@ class ImageWorker:
                     logging.info("Worker processing page %d at %dx%d", index, width, height)
 
                 raw = self._app.source.get_bytes(self._app.source.pages[index])
-                resized_bytes = get_resized_bytes(raw, width, height)
+                resized_pil = get_resized_pil(raw, width, height)
 
                 if preload:
                     logging.info("Worker finished preloading page %d", index)
@@ -436,7 +436,7 @@ class ImageWorker:
                     logging.info("Worker finished page %d, scheduling callback", index)
 
                 self._app.after_idle(
-                    lambda idx=index, rb=resized_bytes: self._app._update_from_cache(idx, rb)
+                    lambda idx=index, img=resized_pil: self._app._update_from_cache(idx, img)
                 )
 
             except Exception as e:
@@ -498,10 +498,9 @@ class ComicViewer(tk.Frame):
         self._current_index: int = 0
         self._canvas_image_id: int | None = None
 
-        # Lightweight caches
-        # TODO: Cache PIL Image objects directly to avoid PNG encode/decode roundtrip (2x faster)
+        # Lightweight caches - store PIL Image objects directly to avoid encode/decode roundtrip
         self._pil_cache: dict[str, Image.Image] = {}
-        self._image_cache = LRUCache(maxsize=20)
+        self._image_cache: LRUCache = LRUCache(maxsize=20)
         self._scroll_offset: int = 0
         self._scaled_size: tuple[int, int] | None = None
         self._focus_restorer = FocusRestorer(self.after_idle, self._ensure_focus)
@@ -841,29 +840,25 @@ class ComicViewer(tk.Frame):
         perf_log("open_comic_total", time.perf_counter() - open_start)
         # Don't render here - let Configure event trigger first render
 
-    def _display_cached_image(self, resized_bytes: bytes):
-        decode_start = time.perf_counter()
-        resized = Image.open(io.BytesIO(resized_bytes))
-        perf_log("pil_decode", time.perf_counter() - decode_start)
-
-        self._current_pil = resized
+    def _display_cached_image(self, img: Image.Image):
+        self._current_pil = img
 
         imagetk_start = time.perf_counter()
         if self._imagetk_ready:
             try:
-                self._tk_img = ImageTk.PhotoImage(resized, master=self)
+                self._tk_img = ImageTk.PhotoImage(img, master=self)
             except Exception:
                 self._imagetk_ready = False
-                self._tk_img = self._photoimage_from_pil(resized)
+                self._tk_img = self._photoimage_from_pil(img)
         else:
-            self._tk_img = self._photoimage_from_pil(resized)
+            self._tk_img = self._photoimage_from_pil(img)
         perf_log("imagetk_conversion", time.perf_counter() - imagetk_start)
 
         canvas_start = time.perf_counter()
         cw = max(1, self.canvas.winfo_width())
         ch = max(1, self.canvas.winfo_height())
 
-        iw, ih = resized.size
+        iw, ih = img.size
         self._scaled_size = (iw, ih)
         max_offset = max(0, ih - ch)
         if ih <= ch:
@@ -927,7 +922,7 @@ class ComicViewer(tk.Frame):
         self._canvas_image_id = self.canvas.create_image(x, y, image=self._tk_img, anchor=anchor)
         perf_log("display_fast_image", time.perf_counter() - imagetk_start)
 
-    def _update_from_cache(self, index: int, resized_bytes: bytes):
+    def _update_from_cache(self, index: int, img: Image.Image):
         logging.info("Update from cache: index=%d, current_index=%d", index, self._current_index)
 
         if not self.source:
@@ -945,10 +940,10 @@ class ComicViewer(tk.Frame):
         if self._canvas_properly_sized:
             cache_key = (index, cw, ch)
         if cache_key is not None:
-            self._image_cache[cache_key] = resized_bytes
+            self._image_cache[cache_key] = img
         logging.info("Update from cache: cached page %d at %dx%d", index, cw, ch)
 
-        self._display_cached_image(resized_bytes)
+        self._display_cached_image(img)
         self._first_proper_render_completed = True
         self._update_title()
 

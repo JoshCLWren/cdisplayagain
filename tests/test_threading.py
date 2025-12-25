@@ -274,16 +274,20 @@ def test_update_from_cache_directly(tk_root, tmp_path):
     img = Image.new("RGB", (100, 200), color=(50, 100, 150))
     buf = io.BytesIO()
     img.save(buf, format="PNG")
-    resized_bytes = buf.getvalue()
+    raw_bytes = buf.getvalue()
 
     cw = max(1, app.canvas.winfo_width())
     ch = max(1, app.canvas.winfo_height())
     cache_key = (0, cw, ch)
 
+    from image_backend import get_resized_pil
+    resized_img = get_resized_pil(raw_bytes, cw, ch)
+
     app._canvas_properly_sized = True
-    app._update_from_cache(0, resized_bytes)
+    app._update_from_cache(0, resized_img)
 
     assert cache_key in app._image_cache
+    assert isinstance(resized_img, Image.Image)
     assert app._tk_img is not None
 
 

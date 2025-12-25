@@ -45,10 +45,10 @@ def test_first_render_from_cache_marks_completed(tmp_path, tk_root):
 
     if app.source:
         raw_bytes = app.source.get_bytes(app.source.pages[0])
-        from image_backend import get_resized_bytes
+        from image_backend import get_resized_pil
 
-        resized_bytes = get_resized_bytes(raw_bytes, cw, ch)
-        app._image_cache[cache_key] = resized_bytes
+        resized_img = get_resized_pil(raw_bytes, cw, ch)
+        app._image_cache[cache_key] = resized_img
 
     app._render_current_sync()
 
@@ -71,10 +71,10 @@ def test_second_render_shows_preview(tmp_path, tk_root):
 
     if app.source:
         raw_bytes = app.source.get_bytes(app.source.pages[0])
-        from image_backend import get_resized_bytes
+        from image_backend import get_resized_pil
 
-        resized_bytes = get_resized_bytes(raw_bytes, cw, ch)
-        app._image_cache[cache_key] = resized_bytes
+        resized_img = get_resized_pil(raw_bytes, cw, ch)
+        app._image_cache[cache_key] = resized_img
 
     app._render_current_sync()
     assert app._first_proper_render_completed, "First render should be completed"
