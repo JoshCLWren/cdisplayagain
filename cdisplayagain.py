@@ -18,6 +18,7 @@ import tempfile
 import threading
 import time
 import tkinter as tk
+from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -127,6 +128,52 @@ def is_image_name(name: str) -> bool:
 def is_text_name(name: str) -> bool:
     """Return True when a path looks like an info text file."""
     return Path(name).suffix.casefold() in {".nfo", ".txt"}
+
+
+class LRUCache:
+    """Fixed-size LRU cache using OrderedDict for fast eviction."""
+
+    def __init__(self, maxsize: int = 20):
+        """Initialize LRU cache with maximum size."""
+        if maxsize <= 0:
+            raise ValueError("maxsize must be positive")
+        self._maxsize = maxsize
+        self._cache: OrderedDict = OrderedDict()
+
+    def get(self, key):
+        """Get item and move to end (most recently used)."""
+        if key not in self._cache:
+            return None
+        self._cache.move_to_end(key)
+        return self._cache[key]
+
+    def __setitem__(self, key, value):
+        """Set item and evict oldest if at capacity."""
+        if key in self._cache:
+            self._cache.move_to_end(key)
+        else:
+            if len(self._cache) >= self._maxsize:
+                self._cache.popitem(last=False)
+        self._cache[key] = value
+
+    def __getitem__(self, key):
+        """Get item with KeyError if missing, updates LRU order."""
+        if key not in self._cache:
+            raise KeyError(key)
+        self._cache.move_to_end(key)
+        return self._cache[key]
+
+    def __contains__(self, key):
+        """Check if key exists."""
+        return key in self._cache
+
+    def __len__(self):
+        """Return number of cached items."""
+        return len(self._cache)
+
+    def clear(self):
+        """Clear all cached items."""
+        self._cache.clear()
 
 
 @dataclass
@@ -446,9 +493,8 @@ class ComicViewer(tk.Frame):
 
         # Lightweight caches
         # TODO: Cache PIL Image objects directly to avoid PNG encode/decode roundtrip (2x faster)
-        # TODO: Implement LRU eviction on _image_cache (currently unlimited)
         self._pil_cache: dict[str, Image.Image] = {}
-        self._image_cache: dict[tuple[int, int, int], bytes] = {}
+        self._image_cache = LRUCache(maxsize=20)
         self._scroll_offset: int = 0
         self._scaled_size: tuple[int, int] | None = None
         self._focus_restorer = FocusRestorer(self.after_idle, self._ensure_focus)
