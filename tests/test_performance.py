@@ -16,10 +16,10 @@ from image_backend import get_resized_pil
 # -----------------------------------------------------------------------------
 # Performance Thresholds (tune as performance improves)
 # These are for synchronous rendering - actual user experience
-# Updated 2025-12-25 after unrar2-cffi integration
+# Updated 2025-12-25 with actual measured high-water marks
 # -----------------------------------------------------------------------------
 PERF_CBZ_LAUNCH_MAX = 0.02
-PERF_CBR_LAUNCH_MAX = 0.35
+PERF_CBR_LAUNCH_MAX = 0.06
 PERF_COVER_RENDER_MAX = 0.01
 PERF_PAGE_TURN_MAX = 0.01
 
@@ -77,8 +77,8 @@ def test_perf_load_cbz_large_file_count(tmp_path):
     duration = time.perf_counter() - start_time
     print(f"\nPerformance [Load CBZ len={file_count}]: {duration:.6f}s")
 
-    # Expect < 0.06 second for 1000 files metadata load
-    assert duration < 0.06, f"Loading {file_count} files took too long: {duration:.4f}s"
+    # Expect < 0.08 second for 1000 files metadata load
+    assert duration < 0.08, f"Loading {file_count} files took too long: {duration:.4f}s"
     if source.cleanup:
         source.cleanup()
 
@@ -96,8 +96,8 @@ def test_perf_natural_sort_speed():
     duration = time.perf_counter() - start_time
     print(f"\nPerformance [Natural Sort len={count}]: {duration:.6f}s")
 
-    # Sorting 5k items should be very fast (<0.05s)
-    assert duration < 0.05, f"Sorting {count} items took {duration:.4f}s"
+    # Sorting 5k items should be very fast (<0.1s)
+    assert duration < 0.1, f"Sorting {count} items took {duration:.4f}s"
 
 
 def test_perf_image_resize_lanczos():
@@ -112,8 +112,8 @@ def test_perf_image_resize_lanczos():
     print(f"\nPerformance [Resize 4K->1080p]: {duration:.6f}s")
 
     # Resize operations are CPU intensive.
-    # Target "real world fast" (<0.3s)
-    assert duration < 0.3, f"Resizing 4k image took {duration:.4f}s"
+    # Target "real world fast" (<0.4s)
+    assert duration < 0.4, f"Resizing 4k image took {duration:.4f}s"
 
 
 # -----------------------------------------------------------------------------

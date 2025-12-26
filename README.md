@@ -4,11 +4,11 @@
 ![codecov](https://codecov.io/gh/JoshCLWren/cdisplayagain/graph/badge.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
-`cdisplayagain` is a minimalist, cross-platform remake of the classic
-Windows-only CDisplay sequential image viewer. The goal is to keep the
-original spirit—fast page flips, zero data mutation, and archive-first
-comic reading—while modernizing the codebase with Python, Pillow, and a
-clean CLI workflow.
+ `cdisplayagain` is a minimalist, cross-platform remake of the classic
+ Windows-only CDisplay sequential image viewer. The goal is to keep the
+ original spirit—fast page flips, zero data mutation, and archive-first
+ comic reading—while modernizing the codebase with Python, Pillow, pyvips, and a
+ clean CLI workflow.
 
 ### Why it exists
 
@@ -20,14 +20,15 @@ viewer without wrestling dated IDEs or registry quirks.
 
 ### Features
 
-- Sequential viewing of JPEG, PNG, and GIF pages sourced directly from
-  CBZ/CBR archives.
-- Archive abstractions that automatically sort page names using
-  `natural_key` to match the reading order you expect.
-- Tk-based viewer with fit-to-screen navigation mapped to the same
-  effortless keyboard-first workflow as CDisplay.
-- Zero-write runtime: archives stay untouched and temporary extraction
-  directories are cleaned automatically.
+ - Sequential viewing of JPEG, PNG, and GIF pages sourced directly from
+   CBZ/CBR archives.
+ - Archive abstractions that automatically sort page names using
+   `natural_key` to match the reading order you expect.
+ - Tk-based viewer with fit-to-screen navigation mapped to the same
+   effortless keyboard-first workflow as CDisplay.
+ - Zero-write runtime: archives stay untouched and temporary extraction
+   directories are cleaned automatically.
+ - Fast image processing using pyvips with LRU caching for instant page turns.
 
 ### Installation
 
@@ -55,9 +56,16 @@ Or, via the official installer:
 curl -Ls https://astral.sh/uv/install.sh | sh
 ```
 
-CBR support depends on the external `unar` binary. Install it via your
-package manager (`brew install unar`, `apt install unar`, etc.) and
-ensure it is on `PATH` before launching the viewer.
+ CBR support uses `unrar2-cffi` for in-process extraction. The external
+ `unar` binary is used as a fallback if needed. Install it via your
+ package manager (`brew install unar`, `apt install unar`, etc.) for
+ maximum compatibility.
+
+ The project requires `pyvips` for fast image processing. Install the
+ libvips library via your package manager:
+ - Linux: `sudo apt install libvips`
+ - macOS: `brew install vips`
+ - Windows: Download from libvips.org or `conda install -c conda-forge pyvips`
 
 ### Usage
 
@@ -82,14 +90,16 @@ make run FILE=path/to/comic.cbz
 While viewing, navigate with the arrow keys, scroll wheel, or spacebar,
 and use `Esc` or `q` to close the window.
 
-### Makefile targets
+ ### Makefile targets
 
-- `make venv`: create the uv-managed virtualenv.
-- `make sync`: install dependencies from `uv.lock`.
-- `make lint`: run ruff.
-- `make pytest`: run the test suite.
-- `make run FILE=path/to/comic.cbz`: launch the viewer.
-- `make smoke FILE=path/to/comic.cbz`: print the manual checklist and launch.
+ - `make venv`: create the uv-managed virtualenv.
+ - `make sync`: install dependencies from `uv.lock`.
+ - `make lint`: run ruff.
+ - `make pytest`: run the test suite.
+ - `make run FILE=path/to/comic.cbz`: launch the viewer.
+ - `make smoke FILE=path/to/comic.cbz`: print the manual checklist and launch.
+ - `make profile-cbz FILE=path/to/comic.cbz`: profile CBZ launch performance.
+ - `make profile-cbr FILE=path/to/comic.cbr`: profile CBR launch performance.
 
 ### Development flow
 
