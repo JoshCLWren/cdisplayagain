@@ -119,6 +119,7 @@ To test the hook manually: `make githook` or `bash scripts/lint.sh`
 - Automated tests live in `tests/` and run with `python -m pytest` (or `make pytest`).
 - When adding tests, keep `pytest` naming like `test_load_cbz_sorts_pages`.
 - When using fakes, mirror the real `ComicViewer` interface rather than relaxing production code.
+- Always use the `tk_root` fixture from `conftest.py` for Tkinter testing. Never manually create `tk.Tk()` instances with `root.withdraw()` and `root.update()` in tests as this causes timeouts in headless environments.
 - For manual smoke tests, run `python cdisplayagain.py path/to/sample.cbz`, open both `.cbz` and `.cbr` samples, page through images, toggle fit/zoom, and ensure cleanup of temporary directories. Document any manual checklist you execute inside the pull request.
 
 ## Commit & Pull Request Guidelines
