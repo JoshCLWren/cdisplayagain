@@ -132,7 +132,7 @@ def test_context_menu_load_files_calls_open_dialog():
 
                 app = ComicViewer(root, Path("dummy.cbz"))
 
-                app._open_dialog = Mock(wraps=app._open_dialog)
+                app._open_dialog = Mock()
 
                 index = 0
                 command = app._context_menu.entrycget(index, "command")
