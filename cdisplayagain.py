@@ -464,8 +464,7 @@ class ImageWorker:
                 continue
             except Exception as e:
                 logging.error("Image worker error: %s", e)
-                if priority == 2:
-                    break
+                break
 
 
 def load_comic(path: Path) -> PageSource:
