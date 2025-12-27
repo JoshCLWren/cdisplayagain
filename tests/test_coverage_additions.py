@@ -976,6 +976,40 @@ def test_show_info_overlay_no_source(tk_root, tmp_path):
     assert viewer._info_overlay is None
 
 
+def test_show_info_overlay_already_shown(tk_root, tmp_path):
+    """Test _show_info_overlay returns early when overlay already shown."""
+    _write_image(tmp_path / "page1.png")
+    viewer = cdisplayagain.ComicViewer(tk_root, tmp_path / "page1.png")
+    viewer._info_overlay = tk.Label(tk_root, text="existing")
+    initial_overlay = viewer._info_overlay
+    viewer._show_info_overlay("info.txt")
+    assert viewer._info_overlay is initial_overlay
+
+
+def test_scroll_by_max_offset_zero(tk_root, tmp_path):
+    """Test _scroll_by returns early when max_offset is zero."""
+    _write_image(tmp_path / "page1.png")
+    viewer = cdisplayagain.ComicViewer(tk_root, tmp_path / "page1.png")
+    viewer._scaled_size = (100, 100)
+    viewer.canvas.update()
+    ch = max(1, viewer.canvas.winfo_height())
+    max_offset = max(0, 100 - ch)
+    if max_offset == 0:
+        viewer._scroll_by(10)
+        assert viewer._scroll_offset == 0
+
+
+def test_scroll_by_no_change(tk_root, tmp_path):
+    """Test _scroll_by returns early when offset doesn't change."""
+    _write_image(tmp_path / "page1.png")
+    viewer = cdisplayagain.ComicViewer(tk_root, tmp_path / "page1.png")
+    viewer._scaled_size = (100, 50)
+    viewer.canvas.update()
+    viewer._scroll_offset = 0
+    viewer._scroll_by(0)
+    assert viewer._scroll_offset == 0
+
+
 def test_winfo_children_filters_menus(tk_root, tmp_path):
     """Test winfo_children excludes Menu widgets."""
     _write_image(tmp_path / "page1.png")

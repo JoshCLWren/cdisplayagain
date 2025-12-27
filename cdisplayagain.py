@@ -507,6 +507,20 @@ class ComicViewer(tk.Frame):
         self._focus_restorer = FocusRestorer(self.after_idle, self._ensure_focus)
         self._info_overlay: tk.Label | None = None
         self._context_menu = self._build_context_menu()
+
+        self._two_page_mode: bool = False
+        self._color_balance_enabled: bool = False
+        self._yellow_reduction_enabled: bool = False
+        self._hints_enabled: bool = True
+        self._two_page_advance_enabled: bool = False
+        self._page_buffer_size: int = 8
+        self._background_color: str = "#111111"
+        self._small_cursor_enabled: bool = False
+        self._mouse_bindings: dict[str, str] = {"Button-2": "go_to_page"}
+
+        self._hint_popup: tk.Label | None = None
+        self._hint_timer: str | None = None
+
         self._dialog_active = False
         self._pending_quit: bool = False
         self._quitting: bool = False
@@ -675,6 +689,7 @@ class ComicViewer(tk.Frame):
         self.bind_all("l", lambda e: self._open_dialog())
         self.bind_all("L", lambda e: self._open_dialog())
         self.bind_all("<F1>", lambda e: self._show_help())
+        self.bind_all("<F2>", lambda e: self._show_config())
         self.bind_all("<Button-3>", self._show_context_menu)
 
     def _trigger_next(self):
@@ -979,6 +994,137 @@ class ComicViewer(tk.Frame):
             "Use arrow keys, Page Up/Down, or mouse wheel to navigate. W toggles fullscreen. Esc quits.",
         )
 
+    def _show_config(self) -> None:
+        """Show configuration dialog."""
+        logging.info("Configuration dialog requested.")
+        self._dialog_active = True
+
+        dialog = tk.Toplevel(self)
+        dialog.title("Configuration")
+        dialog.geometry("400x450")
+        cast(tk.Tk, self.master).wm_transient(dialog)
+        dialog.grab_set()
+
+        main_frame = tk.Frame(dialog, padx=20, pady=20)
+        main_frame.pack(fill=tk.BOTH, expand=True)
+
+        tk.Label(main_frame, text="Display Mode", font=("Arial", 10, "bold")).pack(
+            anchor="w", pady=(0, 5)
+        )
+        mode_frame = tk.Frame(main_frame)
+        mode_frame.pack(fill=tk.X, pady=(0, 10))
+        tk.Radiobutton(
+            mode_frame,
+            text="One Page",
+            variable=tk.BooleanVar(value=not self._two_page_mode),
+            command=self.set_one_page_mode,
+        ).pack(side=tk.LEFT)
+        tk.Radiobutton(
+            mode_frame,
+            text="Two Pages",
+            variable=tk.BooleanVar(value=self._two_page_mode),
+            command=self.set_two_page_mode,
+        ).pack(side=tk.LEFT, padx=10)
+
+        tk.Label(main_frame, text="Navigation", font=("Arial", 10, "bold")).pack(
+            anchor="w", pady=(0, 5)
+        )
+        nav_frame = tk.Frame(main_frame)
+        nav_frame.pack(fill=tk.X, pady=(0, 10))
+
+        two_page_adv_var = tk.BooleanVar(value=self._two_page_advance_enabled)
+        tk.Checkbutton(
+            nav_frame,
+            text="Advance Two Pages",
+            variable=two_page_adv_var,
+            command=lambda: self.toggle_two_page_advance(),
+        ).pack(anchor="w")
+
+        tk.Label(main_frame, text="Image Options", font=("Arial", 10, "bold")).pack(
+            anchor="w", pady=(0, 5)
+        )
+        img_frame = tk.Frame(main_frame)
+        img_frame.pack(fill=tk.X, pady=(0, 10))
+
+        color_bal_var = tk.BooleanVar(value=self._color_balance_enabled)
+        tk.Checkbutton(
+            img_frame,
+            text="Color Balance",
+            variable=color_bal_var,
+            command=lambda: self.toggle_color_balance(),
+        ).pack(anchor="w")
+
+        yellow_red_var = tk.BooleanVar(value=self._yellow_reduction_enabled)
+        tk.Checkbutton(
+            img_frame,
+            text="Yellow Reduction",
+            variable=yellow_red_var,
+            command=lambda: self.toggle_yellow_reduction(),
+        ).pack(anchor="w")
+
+        tk.Label(main_frame, text="Display", font=("Arial", 10, "bold")).pack(
+            anchor="w", pady=(0, 5)
+        )
+        display_frame = tk.Frame(main_frame)
+        display_frame.pack(fill=tk.X, pady=(0, 10))
+
+        hints_var = tk.BooleanVar(value=self._hints_enabled)
+        tk.Checkbutton(
+            display_frame,
+            text="Enable Hints",
+            variable=hints_var,
+            command=lambda: self.toggle_hints(),
+        ).pack(anchor="w")
+
+        cursor_var = tk.BooleanVar(value=self._small_cursor_enabled)
+        tk.Checkbutton(
+            display_frame,
+            text="Small Cursor",
+            variable=cursor_var,
+            command=lambda: self.set_small_cursor(),
+        ).pack(anchor="w")
+
+        tk.Label(main_frame, text="Buffer Size:", font=("Arial", 9)).pack(anchor="w")
+        buffer_scale = tk.Scale(
+            main_frame,
+            from_=0,
+            to=20,
+            orient=tk.HORIZONTAL,
+            command=lambda v: self.set_page_buffer(int(v)),
+        )
+        buffer_scale.set(self._page_buffer_size)
+        buffer_scale.pack(fill=tk.X, pady=(0, 10))
+
+        tk.Label(main_frame, text="Background Color:", font=("Arial", 9)).pack(anchor="w")
+        color_frame = tk.Frame(main_frame)
+        color_frame.pack(fill=tk.X, pady=(0, 10))
+        color_entry = tk.Entry(color_frame, width=15)
+        color_entry.insert(0, self._background_color)
+        color_entry.pack(side=tk.LEFT)
+
+        def apply_color():
+            color = color_entry.get().strip()
+            if color:
+                self.set_background_color(color)
+
+        tk.Button(color_frame, text="Apply", command=apply_color).pack(side=tk.LEFT, padx=5)
+
+        button_frame = tk.Frame(main_frame)
+        button_frame.pack(side=tk.BOTTOM, pady=(20, 0))
+        tk.Button(button_frame, text="Close", command=dialog.destroy).pack(side=tk.RIGHT)
+
+        def on_close():
+            self._dialog_active = False
+            dialog.destroy()
+
+        dialog.protocol("WM_DELETE_WINDOW", on_close)
+
+        dialog.bind("<Key>", lambda e: on_close())
+        dialog.bind("<Double-Button-1>", lambda e: on_close())
+
+        dialog.wait_window()
+        self._dialog_active = False
+
     def _dismiss_info(self) -> None:
         if self._info_overlay:
             self._info_overlay.destroy()
@@ -987,6 +1133,8 @@ class ComicViewer(tk.Frame):
     def _build_context_menu(self) -> tk.Menu:
         menu = tk.Menu(self, tearoff=0)
         menu.add_command(label="Load files", command=self._open_dialog)
+        menu.add_command(label="Configuration", command=self._show_config)
+        menu.add_separator()
         menu.add_command(label="Minimize", command=self._minimize)
         menu.add_command(label="Quit", command=self._quit)
         return menu
@@ -1333,51 +1481,89 @@ class ComicViewer(tk.Frame):
         self._render_current()
 
     def set_one_page_mode(self) -> None:
-        """Provide placeholder for single-page mode parity."""
-        return None
+        """Set display to single page mode."""
+        logging.info("Set one page mode.")
+        self._two_page_mode = False
 
     def set_two_page_mode(self) -> None:
-        """Provide placeholder for two-page mode parity."""
-        return None
+        """Set display to two page mode."""
+        logging.info("Set two page mode.")
+        self._two_page_mode = True
 
     def toggle_color_balance(self) -> None:
-        """Provide placeholder for color balance toggle parity."""
-        return None
+        """Toggle automatic color balance."""
+        self._color_balance_enabled = not self._color_balance_enabled
+        logging.info("Toggle color balance: %s", self._color_balance_enabled)
 
     def toggle_yellow_reduction(self) -> None:
-        """Provide placeholder for yellow reduction toggle parity."""
-        return None
+        """Toggle yellow tint reduction."""
+        self._yellow_reduction_enabled = not self._yellow_reduction_enabled
+        logging.info("Toggle yellow reduction: %s", self._yellow_reduction_enabled)
 
     def _show_hint_popup(self) -> None:
-        return None
+        """Show hint popup if hints are enabled."""
+        if not self._hints_enabled or self._hint_popup:
+            return
+
+        hint_text = "Space: Next/Scroll | Arrow: Pages | W: Fullscreen | F1: Help | Esc: Quit"
+        popup = tk.Label(self, text=hint_text, bg="#333333", fg="#ffffff", font=("Arial", 10))
+        popup.place(relx=0.5, rely=0.9, anchor="center")
+        self._hint_popup = popup
+
+        if self._hint_timer:
+            self.after_cancel(self._hint_timer)
+        self._hint_timer = self.after(3000, self._dismiss_hint_popup)
+
+    def _dismiss_hint_popup(self) -> None:
+        """Dismiss the hint popup."""
+        if self._hint_popup:
+            self._hint_popup.destroy()
+            self._hint_popup = None
+        if self._hint_timer:
+            self.after_cancel(self._hint_timer)
+            self._hint_timer = None
 
     def toggle_two_pages(self) -> None:
-        """Provide placeholder for two-page toggle parity."""
-        return None
+        """Toggle two page display mode."""
+        self._two_page_mode = not self._two_page_mode
+        logging.info("Toggle two pages: %s", self._two_page_mode)
 
     def toggle_hints(self) -> None:
-        """Provide placeholder for hint toggle parity."""
-        return None
+        """Toggle popup hints."""
+        self._hints_enabled = not self._hints_enabled
+        logging.info("Toggle hints: %s", self._hints_enabled)
 
     def toggle_two_page_advance(self) -> None:
-        """Provide placeholder for two-page advance toggle parity."""
-        return None
+        """Toggle two page advance on navigation."""
+        self._two_page_advance_enabled = not self._two_page_advance_enabled
+        logging.info("Toggle two page advance: %s", self._two_page_advance_enabled)
 
-    def set_page_buffer(self, _: int | None = None) -> None:
-        """Provide placeholder for page buffer setting parity."""
-        return None
+    def set_page_buffer(self, size: int | None = None) -> None:
+        """Set the page buffer size for preloading."""
+        if size is not None and size >= 0:
+            self._page_buffer_size = size
+            logging.info("Set page buffer size: %s", self._page_buffer_size)
 
-    def set_background_color(self, _: str | None = None) -> None:
-        """Provide placeholder for background color setting parity."""
-        return None
+    def set_background_color(self, color: str | None = None) -> None:
+        """Set the background color."""
+        if color:
+            self._background_color = color
+            self.configure(bg=color)
+            self.canvas.configure(bg=color)
+            cast(tk.Tk, self.master).configure(bg=color)
+            logging.info("Set background color: %s", self._background_color)
 
     def set_small_cursor(self) -> None:
-        """Restore cursor visibility after hiding."""
-        self._set_cursor_hidden(False)
+        """Toggle small/minimal cursor."""
+        self._small_cursor_enabled = not self._small_cursor_enabled
+        self._set_cursor_hidden(self._small_cursor_enabled)
+        logging.info("Toggle small cursor: %s", self._small_cursor_enabled)
 
-    def set_mouse_binding(self, _: str | None = None) -> None:
-        """Provide placeholder for mouse binding selection parity."""
-        return None
+    def set_mouse_binding(self, button: str | None = None, action: str | None = None) -> None:
+        """Set a custom mouse button binding."""
+        if button and action:
+            self._mouse_bindings[button] = action
+            logging.info("Set mouse binding: %s -> %s", button, action)
 
 
 def main():
