@@ -408,11 +408,25 @@ class ImageWorker:
         ch = max(1, self._app.canvas.winfo_height())
         self.request_page(index, cw, ch, preload=True)
 
+    def stop(self):
+        """Signal all worker threads to stop and wait for them to exit."""
+        for _ in self._threads:
+            self._queue.put_nowait((2, None, None, None, None, None))
+        for thread in self._threads:
+            thread.join(timeout=1.0)
+        self._threads.clear()
+
     def _run(self):
         """Process resize requests in background."""
         while True:
+            priority = None
             try:
-                priority, index, width, height, preload, render_generation = self._queue.get()
+                priority, index, width, height, preload, render_generation = self._queue.get(
+                    timeout=0.1
+                )
+
+                if priority == 2:
+                    break
 
                 if preload:
                     logging.info("Worker preloading page %d at %dx%d", index, width, height)
@@ -436,12 +450,22 @@ class ImageWorker:
                 else:
                     logging.info("Worker finished page %d, scheduling callback", index)
 
-                self._app.after_idle(
-                    lambda idx=index, img=resized_pil: self._app._update_from_cache(idx, img)
-                )
+                if self._app and hasattr(self._app, "after_idle"):
+                    try:
+                        self._app.after_idle(
+                            lambda idx=index, img=resized_pil: self._app._update_from_cache(
+                                idx, img
+                            )
+                        )
+                    except Exception:
+                        pass
 
+            except queue.Empty:
+                continue
             except Exception as e:
                 logging.error("Image worker error: %s", e)
+                if priority == 2:
+                    break
 
 
 def load_comic(path: Path) -> PageSource:
@@ -467,6 +491,11 @@ def load_comic(path: Path) -> PageSource:
 
 class ComicViewer(tk.Frame):
     """Tk viewer for comic archives and image folders."""
+
+    def __del__(self):
+        """Cleanup worker threads on garbage collection."""
+        if hasattr(self, "_worker"):
+            self._worker.stop()
 
     def __init__(self, master: tk.Tk, comic_path: Path):
         """Initialize the viewer frame and load the initial comic."""
@@ -976,6 +1005,7 @@ class ComicViewer(tk.Frame):
         try:
             if self.source and self.source.cleanup:
                 self.source.cleanup()
+            self._worker.stop()
         finally:
             logging.info("Destroying app window.")
             self.master.destroy()

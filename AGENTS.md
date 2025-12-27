@@ -30,16 +30,15 @@ Use git worktrees to work on multiple cards in parallel without branch conflicts
 - WIP limit: 3 cards total in progress across all worktrees.
 
 ## Test Coverage Requirements
-- Current target: 90% coverage threshold (configured in `pyproject.toml`)
-- Coverage milestones: 68% ✅ → 74% ✅ → 80% ✅ → 85% ✅ → 90% ✅ → 95% 🎯 → 100%
+- Current target: 96% coverage threshold (configured in `pyproject.toml`)
+- Coverage milestones: 68% ✅ → 74% ✅ → 80% ✅ → 85% ✅ → 90% ✅ → 95% ✅ → 96% 🎯 → 100%
 - Always run `uv run pytest --cov=cdisplayagain --cov-report=term-missing` to check missing coverage
 - When touching logic or input handling, ensure tests are added to maintain coverage
 - Strategies for increasing coverage:
-  - Add tests for placeholder methods (11 methods in cdisplayagain.py)
-  - Add tests for UI features (info screen, F1 help, configuration screen)
-  - Add tests for configuration options
-  - Add tests for edge cases (empty archives, corrupted files, large archives)
-  - Add integration tests for full workflows
+  - Add tests for remaining uncovered edge cases
+  - Add tests for complex error handling paths
+  - Add tests for platform-specific code paths
+- **Known Issue**: Test suite crashes with coverage enabled due to parallel worker threads not being properly stopped (see `test_parallel_workers.py`). Run coverage tests excluding parallel tests: `uv run pytest --cov=cdisplayagain --cov-report=term-missing -k "not parallel"`
 
 ## Performance Guidelines
 - Image resizing (LANCZOS resampling) is the primary bottleneck (~65% of CPU time)

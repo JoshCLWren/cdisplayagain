@@ -17,6 +17,9 @@ uv run --active pytest tests/test_performance.py -v --no-cov
 
 # Run specific test
 uv run --active pytest tests/test_performance.py::test_perf_launch_sample_comics -v -s --no-cov
+
+# Run coverage tests (excluding parallel worker tests which crash with coverage)
+uv run pytest tests/ -k "not parallel" --cov=cdisplayagain --cov-report=term-missing
 ```
 
 ### Manual Testing
