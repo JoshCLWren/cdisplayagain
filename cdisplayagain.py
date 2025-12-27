@@ -1427,6 +1427,9 @@ def main():
         root.destroy()
         sys.exit(1)
 
+    if "cbr" in path.suffix:
+        require_unar()
+        require_pyvips()
     # Set initial full screen state BEFORE creating viewer
     # to ensure first render uses correct canvas dimensions
     root.attributes("-fullscreen", True)
@@ -1439,7 +1442,32 @@ def main():
     root.deiconify()
     root.mainloop()
 
+def require_pyvips():
+    try:
+        import pyvips  # noqa: F401
+        return
+    except ModuleNotFoundError as e:
+        raise SystemExit(
+            "pyvips is not installed.\n\n"
+            "Fix:\n"
+            "  uv pip install 'pyvips[binary]'   # macOS\n"
+            "  # or on Linux:\n"
+            "  sudo apt-get install -y libvips && uv pip install pyvips\n"
+        ) from e
+    except OSError as e:
+        msg = str(e)
+        if "libvips" in msg and ("dylib" in msg or "dlopen" in msg):
+            raise SystemExit(
+                "libvips could not be loaded.\n\n"
+                "Fix options:\n"
+                "  1) Recommended on macOS:\n"
+                "     uv pip install 'pyvips[binary]'\n"
+                "  2) Or use Homebrew vips and export the path before running:\n"
+                "     brew install vips\n"
+                "     export DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib\n"
+            ) from e
+        raise
+
 
 if __name__ == "__main__":
-    require_unar()
     main()
