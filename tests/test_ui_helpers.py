@@ -72,13 +72,14 @@ def test_build_context_menu(tk_root, tmp_path):
     menu = viewer._build_context_menu()  # lines 1005-1010
     assert isinstance(menu, tk.Menu)
 
-    # Check that it has 3 menu items (Load files, Minimize, Quit)
-    assert menu.index("end") == 2  # Index is 0-based, so 2 means 3 items
+    # Check that it has 5 menu items (Load files, Configuration, separator, Minimize, Quit)
+    assert menu.index("end") == 4  # Index is 0-based, so 4 means 5 items
 
     # Test menu items exist
     assert menu.entrycget(0, "label") == "Load files"
-    assert menu.entrycget(1, "label") == "Minimize"
-    assert menu.entrycget(2, "label") == "Quit"
+    assert menu.entrycget(1, "label") == "Configuration"
+    assert menu.entrycget(3, "label") == "Minimize"
+    assert menu.entrycget(4, "label") == "Quit"
 
 
 def test_show_help_dialog(tk_root, tmp_path, monkeypatch):

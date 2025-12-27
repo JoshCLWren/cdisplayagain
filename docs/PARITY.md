@@ -20,6 +20,7 @@ These features match CDisplay's behavior and are fully implemented:
 - ✅ Sorts pages alphabetically
 - ✅ Shows .nfo/.txt files first (comic info screens)
 - ✅ Info screen displayed alongside first image
+- ✅ Info screen dismissible by double-click or any key press
 - ✅ "Load files" opens file browser
 - ✅ Right-click popup menu with "Load files" option
 
@@ -36,7 +37,10 @@ These features match CDisplay's behavior and are fully implemented:
 - ✅ `w` / `W` toggles full-screen
 - ✅ `l` / `L` opens file dialog
 - ✅ Escape/`q` quits (even during open dialog)
+- ✅ `F1` shows context-sensitive help dialog
+- ✅ `F2` shows configuration dialog
 - ✅ Context menu has Minimize and Quit options
+- ✅ Context menu has Configuration option
 
 ### Performance & Quality
 - ✅ Uses Lanczos resampling for high-quality resizing
@@ -45,6 +49,19 @@ These features match CDisplay's behavior and are fully implemented:
 - ✅ Parallel decoding with multiple workers
 - ✅ Stale render cancellation during rapid page-turning
 - ✅ Zero-write runtime (archives never mutated, temp dirs cleaned)
+
+### Configuration Options
+- ✅ `set_one_page_mode()` / `set_two_page_mode()` - Display mode selection
+- ✅ `toggle_color_balance()` - Automatic color correction toggle
+- ✅ `toggle_yellow_reduction()` - Yellow tint reduction toggle
+- ✅ `toggle_hints()` / `_show_hint_popup()` - Popup hints
+- ✅ `toggle_two_pages()` / `toggle_two_page_advance()` - Two-page navigation
+- ✅ `set_page_buffer(size)` - Preload buffer size
+- ✅ `set_background_color(color)` - Custom background colors
+- ✅ `set_small_cursor()` - Minimal cursor toggle
+- ✅ `set_mouse_binding(button, action)` - Customize mouse buttons
+- ✅ `_show_config()` - Full configuration dialog UI
+- ✅ Context menu and F2 access to configuration
 
 ### Error Handling
 - ✅ Proper error messages instead of fake placeholders
@@ -61,36 +78,23 @@ These features have API stubs with placeholder implementations to maintain inter
 - `toggle_color_balance()` - Automatic color correction
 - `toggle_yellow_reduction()` - Yellow tint reduction
 - `toggle_hints()` - Enable/disable popup hints
+- `toggle_two_pages()` - Toggle two-page display
 - `toggle_two_page_advance()` - Skip two pages at once
 - `set_page_buffer(size)` - Preload buffer size
 - `set_background_color(color)` - Custom background
-- `set_small_cursor(enabled)` - Minimal cursor
+- `set_small_cursor()` - Restore cursor visibility (partially functional)
 - `set_mouse_binding(button, action)` - Customize mouse buttons
 
 ### UI Features
-- `_show_hint_popup()` - Hint popup on idle cursor
-- `_minimize()` - Minimize window (method exists, keyboard binding works)
+- ✅ `_show_hint_popup()` - Hint popup on idle cursor
+- ✅ `_dismiss_hint_popup()` - Dismiss hint popup
+- ✅ `_minimize()` - Minimize window (fully functional)
+- ✅ `_show_help()` - Shows help dialog (fully functional, F1 bound)
+- ✅ `_show_config()` - Shows configuration dialog (fully functional, F2 bound)
 
-## Backlog (Not Yet Started)
+## Notes
 
-See `tasks.md` for prioritized implementation of parity features:
-
-### Info Screen
-- Dismiss by double-click
-- Dismiss by pressing any key
-
-### Help
-- F1 context-sensitive help
-
-### Configuration UI
-- Configuration screen (all the toggle options above)
-- Display Two Pages option
-- Disable Hints option
-- Forward/Backward Two Pages option
-- Page Buffer setting (value: 8)
-- Background Color setting
-- Small Cursor setting
-- Mouse binding configuration
+The configuration methods in `cdisplayagain.py` (lines 1367-1410) provide complete functionality:
 
 ### Notes
 

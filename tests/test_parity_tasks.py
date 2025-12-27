@@ -3,6 +3,7 @@
 import io
 import sys
 import tarfile
+import tkinter as tk
 import zipfile
 from pathlib import Path
 from unittest.mock import MagicMock, Mock
@@ -517,10 +518,12 @@ def test_x_terminates_program(viewer):
 def test_context_menu_has_minimize_and_quit(viewer):
     """Ensure the context menu includes minimize and quit."""
     assert hasattr(viewer, "_context_menu")
-    labels = [
-        viewer._context_menu.entrycget(i, "label")
-        for i in range(viewer._context_menu.index("end") + 1)
-    ]
+    labels = []
+    for i in range(viewer._context_menu.index("end") + 1):
+        try:
+            labels.append(viewer._context_menu.entrycget(i, "label"))
+        except tk.TclError:
+            pass
     assert "Minimize" in labels
     assert "Quit" in labels
 

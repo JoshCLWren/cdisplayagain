@@ -52,11 +52,11 @@ WIP limit: 3 cards total in In Progress.
 - Coverage threshold configured in `pyproject.toml`
 
 ### Future Features & Parity Items
-- The info screen can be dismissed by double-click or any key press
+- The info screen can be dismissed by double-click or any key press (✅ implemented).
 - You can drag the page around with the mouse (panning).
 - Mouse wheel is used for navigation/scrolling in some form.
 - Right-click opens a pop-up menu (see file loading).
-- F1 opens context-sensitive help.
+- F1 opens context-sensitive help (✅ implemented).
 - M minimizes the program.
 - X terminates the program.
 - There is also a way to minimize and quit via the pop-up menu.
@@ -128,3 +128,5 @@ WIP limit: 3 cards total in In Progress.
 - Spacebar smart-forward: then advances to the next page
 - Spacebar smart-forward: intended that you can read the entire comic using Space alone
 - Uses high-quality resizing (Lanczos resampling)
+- Info screen can be dismissed by double-click or any key press
+- F1 shows context-sensitive help dialog
