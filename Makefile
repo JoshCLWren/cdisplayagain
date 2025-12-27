@@ -21,17 +21,17 @@ githook: install-githook  ## Run lint checks manually (installs pre-commit hook 
 	bash scripts/lint.sh
 
 pytest:  ## Run tests
-	uv run pytest
+	uv run --active pytest
 
 profile-cbz:  ## Profile CBZ launch performance (Usage: make profile-cbz FILE=path/to/comic.cbz)
 	@if [ -z "$(FILE)" ]; then echo "Usage: make profile-cbz FILE=path/to/comic.cbz"; exit 1; fi
 	@echo "Profiling CBZ launch..."
-	@time uv run python cdisplayagain.py "$(FILE)"
+	@time uv run --active python cdisplayagain.py "$(FILE)"
 
 profile-cbr:  ## Profile CBR launch performance (Usage: make profile-cbr FILE=path/to/comic.cbr)
 	@if [ -z "$(FILE)" ]; then echo "Usage: make profile-cbr FILE=path/to/comic.cbr"; exit 1; fi
 	@echo "Profiling CBR launch..."
-	@time uv run python cdisplayagain.py "$(FILE)"
+	@time uv run --active python cdisplayagain.py "$(FILE)"
 
 sync:  ## Install dependencies
 	uv sync --locked
@@ -41,7 +41,7 @@ venv:  ## Create virtual environment
 
 run:  ## Run the app (Usage: make run FILE=path/to/comic.cbz)
 	@if [ -z "$(FILE)" ]; then echo "Usage: make run FILE=path/to/comic.cbz"; exit 1; fi
-	uv run python cdisplayagain.py "$(FILE)"
+	uv run --active python cdisplayagain.py "$(FILE)"
 
 smoke:  ## Run manual smoke test checklist
 	@if [ -z "$(FILE)" ]; then echo "Usage: make smoke FILE=path/to/comic.cbz"; exit 1; fi
@@ -50,16 +50,16 @@ smoke:  ## Run manual smoke test checklist
 	@echo "- Page through images to confirm ordering"
 	@echo "- Toggle fit-to-screen, fit-to-width, and zoom modes"
 	@echo "- Confirm temp directories are cleaned on exit"
-	uv run python cdisplayagain.py "$(FILE)"
+	uv run --active python cdisplayagain.py "$(FILE)"
 
 clean-build:  ## Clean build artifacts
 	rm -rf build dist *.spec __pycache__ .pytest_cache
 
 build: clean-build  ## Build single-file executable (slower startup)
-	uv run pyinstaller --onefile --name cdisplayagain cdisplayagain.py
+	uv run --active pyinstaller --onefile --name cdisplayagain cdisplayagain.py
 
 build-onedir: clean-build  ## Build directory bundle (faster startup)
-	uv run pyinstaller --onedir --name cdisplayagain cdisplayagain.py
+	uv run --active pyinstaller --onedir --name cdisplayagain cdisplayagain.py
 
 install: install-bin install-desktop  ## Install everything
 
@@ -111,9 +111,9 @@ ci-test-local:  ## Run CI-like tests locally (requires xvfb and libvips)
 	@echo "Running CI-like test locally..."
 	@if ! command -v xvfb-run >/dev/null 2>&1; then \
 		echo "WARNING: xvfb-run not found. Running without virtual display..."; \
-		uv run pytest tests/ -q --tb=short 2>&1 | tee ci-test-output.log; \
+		uv run --active pytest tests/ -q --tb=short 2>&1 | tee ci-test-output.log; \
 	else \
-		xvfb-run -a uv run pytest tests/ -q --tb=short 2>&1 | tee ci-test-output.log; \
+		xvfb-run -a uv run --active pytest tests/ -q --tb=short 2>&1 | tee ci-test-output.log; \
 	fi
 	@if [ -f ci-test-output.log ]; then \
 		echo ""; \

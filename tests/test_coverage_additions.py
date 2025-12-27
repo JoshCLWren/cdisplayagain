@@ -6,7 +6,6 @@ import _tkinter
 import io
 import logging
 import shutil
-import sys
 import tarfile
 import tempfile
 import tkinter as tk
@@ -249,20 +248,6 @@ def test_natural_key_various_formats():
         assert cdisplayagain.natural_key(first) < cdisplayagain.natural_key(second), (
             f"{first} should be before {second}"
         )
-
-
-def test_require_unar_missing_unar(monkeypatch):
-    """Raise SystemExit when unrar2-cffi is not available."""
-    mock_util = MagicMock()
-    mock_util.find_spec = lambda _: None
-    monkeypatch.setattr(cdisplayagain.importlib, "util", mock_util)
-    with pytest.raises(SystemExit, match="CBR support requires"):
-        cdisplayagain.require_unar()
-
-
-def test_require_unar_available():
-    """Return early when unrar2-cffi is available."""
-    cdisplayagain.require_unar()
 
 
 def test_render_current_with_no_source_clears_canvas(tk_root, tmp_path):
@@ -590,11 +575,6 @@ def test_load_cbr_cleans_up_on_error(tmp_path, monkeypatch):
     assert not Path(temp_dirs_created[0]).exists()
 
 
-def test_require_unar_success_when_cffi_available():
-    """Return early when unrar2-cffi is available."""
-    cdisplayagain.require_unar()
-
-
 def test_lru_cache_keyerror():
     """Test LRU cache raises KeyError when key doesn't exist."""
     cache = cdisplayagain.LRUCache(maxsize=2)
@@ -720,22 +700,6 @@ def test_load_cbr_no_valid_files_raises_error(tmp_path):
     with patch("unrar.cffi.rarfile.RarFile", return_value=mock_rar):
         with pytest.raises(RuntimeError, match="No images or info files found"):
             cdisplayagain.load_cbr(cbr_path)
-
-    """Test platform-specific install hints."""
-
-    for platform, expected_hint in [
-        ("linux", "uv pip install unrar2-cffi"),
-        ("darwin", "uv pip install unrar2-cffi"),
-        ("win32", "pip install unrar2-cffi"),
-    ]:
-        with patch("sys.platform", platform):
-            mock_util = MagicMock()
-            mock_util.find_spec = lambda _: None
-            with patch("cdisplayagain.importlib.util", mock_util):
-                with patch("cdisplayagain.sys", sys):
-                    with pytest.raises(SystemExit) as exc_info:
-                        cdisplayagain.require_unar()
-                    assert expected_hint in str(exc_info.value)
 
 
 def test_natural_key_with_leading_zeros():

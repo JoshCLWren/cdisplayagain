@@ -17,37 +17,6 @@ def _write_image(path: Path) -> None:
     img.save(path)
 
 
-def test_require_unar_with_unavailable_module(monkeypatch):
-    """Test require_unar raises SystemExit when module is unavailable."""
-    # Mock importlib.util.find_spec to return None (module not found)
-    monkeypatch.setattr("importlib.util.find_spec", lambda name: None)
-
-    # Test on Linux
-    monkeypatch.setattr("sys.platform", "linux")
-    with pytest.raises(SystemExit, match="CBR support requires 'unrar2-cffi'"):
-        cdisplayagain.require_unar()
-
-    # Test on macOS
-    monkeypatch.setattr("sys.platform", "darwin")
-    with pytest.raises(SystemExit, match="CBR support requires 'unrar2-cffi'"):
-        cdisplayagain.require_unar()
-
-    # Test on other platforms
-    monkeypatch.setattr("sys.platform", "win32")
-    with pytest.raises(SystemExit, match="CBR support requires 'unrar2-cffi'"):
-        cdisplayagain.require_unar()
-
-
-def test_require_unar_with_available_module(monkeypatch):
-    """Test require_unar succeeds when module is available."""
-    # Mock importlib.util.find_spec to return a fake spec
-    fake_spec = MagicMock()
-    monkeypatch.setattr("importlib.util.find_spec", lambda name: fake_spec)
-
-    # Should not raise any exception
-    cdisplayagain.require_unar()
-
-
 def test_main_function_with_file_argument(monkeypatch, tmp_path):
     """Test main function with command line file argument."""
     _write_image(tmp_path / "test.png")
@@ -153,3 +122,63 @@ def test_main_function_with_file_dialog_selection(monkeypatch, tmp_path):
         mock_viewer.assert_called_once()
         args, kwargs = mock_viewer.call_args
         assert args[1] == tmp_path / "selected.png"
+
+
+def test_require_pyvips_with_module_not_found(monkeypatch):
+    """Test require_pyvips raises SystemExit when pyvips module is not found."""
+
+    # Mock __import__ to raise ModuleNotFoundError for pyvips
+    def mock_import(name, *args, **kwargs):
+        if name == "pyvips":
+            raise ModuleNotFoundError("No module named 'pyvips'")
+        return __import__(name, *args, **kwargs)
+
+    monkeypatch.setattr("builtins.__import__", mock_import)
+
+    with pytest.raises(SystemExit, match="pyvips is not installed"):
+        cdisplayagain.require_pyvips()
+
+
+def test_require_pyvips_with_oserror(monkeypatch):
+    """Test require_pyvips raises SystemExit when libvips runtime is missing."""
+
+    # Mock __import__ to raise OSError with libvips message
+    def mock_import(name, *args, **kwargs):
+        if name == "pyvips":
+            raise OSError("dlopen: libvips.so.42: cannot open shared object file")
+        return __import__(name, *args, **kwargs)
+
+    monkeypatch.setattr("builtins.__import__", mock_import)
+
+    with pytest.raises(SystemExit, match="libvips could not be loaded"):
+        cdisplayagain.require_pyvips()
+
+
+def test_require_pyvips_success(monkeypatch):
+    """Test require_pyvips succeeds when pyvips is available."""
+
+    # Mock __import__ to return a fake module for pyvips
+    def mock_import(name, *args, **kwargs):
+        if name == "pyvips":
+            return MagicMock()
+        return __import__(name, *args, **kwargs)
+
+    monkeypatch.setattr("builtins.__import__", mock_import)
+
+    # Should not raise any exception
+    cdisplayagain.require_pyvips()
+
+
+def test_require_pyvips_with_oserror_no_libvips(monkeypatch):
+    """Test require_pyvips raises OSError when it's not a libvips issue."""
+
+    # Mock __import__ to raise OSError without libvips message
+    def mock_import(name, *args, **kwargs):
+        if name == "pyvips":
+            raise OSError("Some other OSError")
+        return __import__(name, *args, **kwargs)
+
+    monkeypatch.setattr("builtins.__import__", mock_import)
+
+    with pytest.raises(OSError, match="Some other OSError"):
+        cdisplayagain.require_pyvips()

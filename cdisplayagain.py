@@ -35,24 +35,6 @@ def _as_wm(obj: tk.Misc) -> tk.Wm:
     return cast(tk.Wm, obj)
 
 
-def require_unar() -> None:
-    """Ensure that unrar2-cffi is available on system for CBR support."""
-    import importlib.util
-
-    spec = importlib.util.find_spec("unrar.cffi")
-    if spec is not None:
-        return
-
-    if sys.platform.startswith("linux"):
-        hint = "uv pip install unrar2-cffi"
-    elif sys.platform == "darwin":
-        hint = "uv pip install unrar2-cffi"
-    else:
-        hint = "pip install unrar2-cffi"
-
-    raise SystemExit(f"CBR support requires 'unrar2-cffi'.\n\nInstall it with:\n  {hint}\n")
-
-
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tif", ".tiff"}
 IMAGE_FILETYPE_PATTERN = " ".join(f"*{ext}" for ext in sorted(IMAGE_EXTS))
 FILE_DIALOG_TYPES = [
@@ -1427,6 +1409,8 @@ def main():
         root.destroy()
         sys.exit(1)
 
+    if "cbr" in path.suffix:
+        require_pyvips()
     # Set initial full screen state BEFORE creating viewer
     # to ensure first render uses correct canvas dimensions
     root.attributes("-fullscreen", True)
@@ -1440,6 +1424,35 @@ def main():
     root.mainloop()
 
 
+def require_pyvips():
+    """Raise SystemExit if pyvips or libvips runtime dependencies are missing."""
+    try:
+        import pyvips
+
+        if pyvips:
+            return
+    except ModuleNotFoundError as e:
+        raise SystemExit(
+            "pyvips is not installed.\n\n"
+            "Fix:\n"
+            "  uv pip install 'pyvips[binary]'   # macOS\n"
+            "  # or on Linux:\n"
+            "  sudo apt-get install -y libvips && uv pip install pyvips\n"
+        ) from e
+    except OSError as e:
+        msg = str(e)
+        if "libvips" in msg and ("dylib" in msg or "dlopen" in msg):
+            raise SystemExit(
+                "libvips could not be loaded.\n\n"
+                "Fix options:\n"
+                "  1) Recommended on macOS:\n"
+                "     uv pip install 'pyvips[binary]'\n"
+                "  2) Or use Homebrew vips and export the path before running:\n"
+                "     brew install vips\n"
+                "     export DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib\n"
+            ) from e
+        raise
+
+
 if __name__ == "__main__":
-    require_unar()
     main()

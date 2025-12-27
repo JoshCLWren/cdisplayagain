@@ -11,12 +11,12 @@ echo "Running code quality checks..."
 # Compile check for all Python files
 echo ""
 echo "Checking Python syntax by compiling..."
-uv run python -m compileall . -q
+uv run --active python -m compileall . -q
 
 # Run linting
 echo ""
 echo "Running ruff linting..."
-if ! uv run ruff check .; then
+if ! uv run --active ruff check .; then
     echo ""
     echo "${RED}ERROR: Linting failed.${NC}"
     echo "${RED}Please fix the linting errors and check CONTRIBUTING.md for guidelines.${NC}"
@@ -36,7 +36,7 @@ fi
 # Run type checking
 echo ""
 echo "Running pyright type checking..."
-if ! uv run pyright .; then
+if ! uv run --active pyright .; then
     echo ""
     echo "${RED}ERROR: Type checking failed.${NC}"
     echo "${RED}Please fix the type errors and check CONTRIBUTING.md for guidelines.${NC}"
