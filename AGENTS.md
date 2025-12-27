@@ -30,8 +30,8 @@ Use git worktrees to work on multiple cards in parallel without branch conflicts
 - WIP limit: 3 cards total in progress across all worktrees.
 
 ## Test Coverage Requirements
-- Current target: 85% coverage threshold (configured in `pyproject.toml`)
-- Coverage milestones: 68% ✅ → 74% ✅ → 80% ✅ → 85% ✅ → 90% 🎯 → 95% 🎯 → 100%
+- Current target: 90% coverage threshold (configured in `pyproject.toml`)
+- Coverage milestones: 68% ✅ → 74% ✅ → 80% ✅ → 85% ✅ → 90% ✅ → 95% 🎯 → 100%
 - Always run `uv run pytest --cov=cdisplayagain --cov-report=term-missing` to check missing coverage
 - When touching logic or input handling, ensure tests are added to maintain coverage
 - Strategies for increasing coverage:
