@@ -96,22 +96,25 @@ def test_image_worker_basic(tk_root, tmp_path):
     app.update()
     worker = ImageWorker(app)
 
-    results = []
+    try:
+        results = []
 
-    def capture_update(index, img):
-        assert isinstance(img, Image.Image)
-        results.append((index, img.size))
-        if len(results) >= 1:
-            tk_root.quit()
+        def capture_update(index, img):
+            assert isinstance(img, Image.Image)
+            results.append((index, img.size))
+            if len(results) >= 1:
+                tk_root.quit()
 
-    app._update_from_cache = capture_update
+        app._update_from_cache = capture_update
 
-    worker.request_page(0, 100, 200)
+        worker.request_page(0, 100, 200)
 
-    tk_root.after(2000, tk_root.quit)
-    tk_root.mainloop()
+        tk_root.after(2000, tk_root.quit)
+        tk_root.mainloop()
 
-    assert len(results) > 0, "Worker should process page"
+        assert len(results) > 0, "Worker should process page"
+    finally:
+        worker.stop()
 
 
 def test_image_worker_queue_full(tk_root, tmp_path):
@@ -122,23 +125,26 @@ def test_image_worker_queue_full(tk_root, tmp_path):
     app = cdisplayagain.ComicViewer(tk_root, cbz_path)
     worker = ImageWorker(app)
 
-    results = []
+    try:
+        results = []
 
-    def capture_update(index, img):
-        assert isinstance(img, Image.Image)
-        results.append((index, img.size))
-        if len(results) >= 4:
-            tk_root.quit()
+        def capture_update(index, img):
+            assert isinstance(img, Image.Image)
+            results.append((index, img.size))
+            if len(results) >= 4:
+                tk_root.quit()
 
-    app._update_from_cache = capture_update
+        app._update_from_cache = capture_update
 
-    for i in range(10):
-        worker.request_page(i, 100, 200)
+        for i in range(10):
+            worker.request_page(i, 100, 200)
 
-    tk_root.after(2000, tk_root.quit)
-    tk_root.mainloop()
+        tk_root.after(2000, tk_root.quit)
+        tk_root.mainloop()
 
-    assert len(results) <= 4, "Worker should only process max queue size"
+        assert len(results) <= 4, "Worker should only process max queue size"
+    finally:
+        worker.stop()
 
 
 def test_image_worker_daemon(tk_root, tmp_path):
@@ -149,8 +155,11 @@ def test_image_worker_daemon(tk_root, tmp_path):
     app = cdisplayagain.ComicViewer(tk_root, cbz_path)
     worker = ImageWorker(app)
 
-    assert len(worker._threads) > 0, "Worker should have threads"
-    assert all(t.daemon for t in worker._threads), "All worker threads should be daemon"
+    try:
+        assert len(worker._threads) > 0, "Worker should have threads"
+        assert all(t.daemon for t in worker._threads), "All worker threads should be daemon"
+    finally:
+        worker.stop()
 
 
 def test_debouncer_with_action(tk_root):
@@ -384,21 +393,24 @@ def test_worker_preload_method(tk_root, tmp_path):
 
     worker = ImageWorker(app)
 
-    queue_items = []
+    try:
+        queue_items = []
 
-    def capture_request(index, width, height, preload=False, render_generation=0):
-        queue_items.append((index, width, height, preload, render_generation))
+        def capture_request(index, width, height, preload=False, render_generation=0):
+            queue_items.append((index, width, height, preload, render_generation))
 
-    worker.request_page = capture_request
+        worker.request_page = capture_request
 
-    worker.preload(1)
+        worker.preload(1)
 
-    assert len(queue_items) == 1
-    index, width, height, preload, render_generation = queue_items[0]
-    assert index == 1
-    assert width > 0
-    assert height > 0
-    assert preload is True
+        assert len(queue_items) == 1
+        index, width, height, preload, render_generation = queue_items[0]
+        assert index == 1
+        assert width > 0
+        assert height > 0
+        assert preload is True
+    finally:
+        worker.stop()
 
 
 def test_stale_render_cancellation(tk_root, tmp_path):
