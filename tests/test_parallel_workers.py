@@ -272,3 +272,32 @@ def test_single_worker_backward_compat(tk_root, tmp_path):
         tk_root.mainloop()
 
         assert len(results) == 3, "Single worker should process all pages"
+
+
+def test_worker_handles_none_source_gracefully(tk_root, tmp_path):
+    """Test that worker handles None source gracefully during shutdown."""
+    cbz_path = tmp_path / "test.cbz"
+    create_test_cbz(cbz_path, page_count=5)
+
+    app = cdisplayagain.ComicViewer(tk_root, cbz_path)
+    with ImageWorker(app, num_workers=2) as worker:
+        results = []
+
+        def capture_update(index, img):
+            assert isinstance(img, Image.Image)
+            results.append((index, img.size))
+
+        app._update_from_cache = capture_update
+
+        worker.request_page(0, 100, 200, render_generation=0)
+
+        time.sleep(0.01)
+        app.source = None
+
+        for i in range(1, 3):
+            worker.request_page(i, 100, 200, render_generation=0)
+
+        tk_root.after(1000, tk_root.quit)
+        tk_root.mainloop()
+
+        assert len(results) >= 1, "Should process at least the first page before source is None"
