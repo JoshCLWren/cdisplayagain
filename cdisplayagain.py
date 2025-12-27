@@ -35,24 +35,6 @@ def _as_wm(obj: tk.Misc) -> tk.Wm:
     return cast(tk.Wm, obj)
 
 
-def require_unar() -> None:
-    """Ensure that unrar2-cffi is available on system for CBR support."""
-    import importlib.util
-
-    spec = importlib.util.find_spec("unrar.cffi")
-    if spec is not None:
-        return
-
-    if sys.platform.startswith("linux"):
-        hint = "uv pip install unrar2-cffi"
-    elif sys.platform == "darwin":
-        hint = "uv pip install unrar2-cffi"
-    else:
-        hint = "pip install unrar2-cffi"
-
-    raise SystemExit(f"CBR support requires 'unrar2-cffi'.\n\nInstall it with:\n  {hint}\n")
-
-
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tif", ".tiff"}
 IMAGE_FILETYPE_PATTERN = " ".join(f"*{ext}" for ext in sorted(IMAGE_EXTS))
 FILE_DIALOG_TYPES = [
@@ -1428,7 +1410,6 @@ def main():
         sys.exit(1)
 
     if "cbr" in path.suffix:
-        require_unar()
         require_pyvips()
     # Set initial full screen state BEFORE creating viewer
     # to ensure first render uses correct canvas dimensions
@@ -1442,10 +1423,14 @@ def main():
     root.deiconify()
     root.mainloop()
 
+
 def require_pyvips():
+    """Raise SystemExit if pyvips or libvips runtime dependencies are missing."""
     try:
-        import pyvips  # noqa: F401
-        return
+        import pyvips
+
+        if pyvips:
+            return
     except ModuleNotFoundError as e:
         raise SystemExit(
             "pyvips is not installed.\n\n"
