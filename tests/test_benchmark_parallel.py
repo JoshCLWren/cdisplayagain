@@ -45,8 +45,7 @@ def test_single_worker_vs_parallel_performance(tk_root, tmp_path):
 
     app._update_from_cache = capture_update
 
-    worker_single = ImageWorker(app, num_workers=1)
-    try:
+    with ImageWorker(app, num_workers=1) as worker_single:
         results.clear()
 
         start_single = time.time()
@@ -58,11 +57,8 @@ def test_single_worker_vs_parallel_performance(tk_root, tmp_path):
         time_single = time.time() - start_single
 
         results.clear()
-    finally:
-        worker_single.stop()
 
-    worker_parallel = ImageWorker(app, num_workers=4)
-    try:
+    with ImageWorker(app, num_workers=4) as worker_parallel:
         start_parallel = time.time()
         for i in range(4):
             worker_parallel.request_page(i, 800, 600)
@@ -76,8 +72,6 @@ def test_single_worker_vs_parallel_performance(tk_root, tmp_path):
         print(f"Speedup: {time_single / time_parallel:.2f}x")
 
         assert len(results) >= 1, "Should process at least one page"
-    finally:
-        worker_parallel.stop()
 
 
 def test_throughput_with_multiple_workers(tk_root, tmp_path):
@@ -94,9 +88,7 @@ def test_throughput_with_multiple_workers(tk_root, tmp_path):
 
     app._update_from_cache = capture_update
 
-    worker = ImageWorker(app, num_workers=4)
-
-    try:
+    with ImageWorker(app, num_workers=4) as worker:
         start_time = time.time()
         for i in range(4):
             worker.request_page(i, 800, 600)
@@ -109,5 +101,3 @@ def test_throughput_with_multiple_workers(tk_root, tmp_path):
         print(f"Throughput: {len(results) / elapsed:.2f} pages/second")
 
         assert len(results) > 0, "Should process pages"
-    finally:
-        worker.stop()

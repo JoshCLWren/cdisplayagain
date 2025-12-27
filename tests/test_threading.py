@@ -94,9 +94,7 @@ def test_image_worker_basic(tk_root, tmp_path):
 
     app = cdisplayagain.ComicViewer(tk_root, cbz_path)
     app.update()
-    worker = ImageWorker(app)
-
-    try:
+    with ImageWorker(app) as worker:
         results = []
 
         def capture_update(index, img):
@@ -113,8 +111,6 @@ def test_image_worker_basic(tk_root, tmp_path):
         tk_root.mainloop()
 
         assert len(results) > 0, "Worker should process page"
-    finally:
-        worker.stop()
 
 
 def test_image_worker_queue_full(tk_root, tmp_path):
@@ -123,9 +119,7 @@ def test_image_worker_queue_full(tk_root, tmp_path):
     create_test_cbz(cbz_path)
 
     app = cdisplayagain.ComicViewer(tk_root, cbz_path)
-    worker = ImageWorker(app)
-
-    try:
+    with ImageWorker(app) as worker:
         results = []
 
         def capture_update(index, img):
@@ -143,8 +137,6 @@ def test_image_worker_queue_full(tk_root, tmp_path):
         tk_root.mainloop()
 
         assert len(results) <= 4, "Worker should only process max queue size"
-    finally:
-        worker.stop()
 
 
 def test_image_worker_daemon(tk_root, tmp_path):
@@ -153,13 +145,9 @@ def test_image_worker_daemon(tk_root, tmp_path):
     create_test_cbz(cbz_path)
 
     app = cdisplayagain.ComicViewer(tk_root, cbz_path)
-    worker = ImageWorker(app)
-
-    try:
+    with ImageWorker(app) as worker:
         assert len(worker._threads) > 0, "Worker should have threads"
         assert all(t.daemon for t in worker._threads), "All worker threads should be daemon"
-    finally:
-        worker.stop()
 
 
 def test_debouncer_with_action(tk_root):
@@ -391,9 +379,7 @@ def test_worker_preload_method(tk_root, tmp_path):
     app = cdisplayagain.ComicViewer(tk_root, cbz_path)
     app.update()
 
-    worker = ImageWorker(app)
-
-    try:
+    with ImageWorker(app) as worker:
         queue_items = []
 
         def capture_request(index, width, height, preload=False, render_generation=0):
@@ -409,8 +395,6 @@ def test_worker_preload_method(tk_root, tmp_path):
         assert width > 0
         assert height > 0
         assert preload is True
-    finally:
-        worker.stop()
 
 
 def test_stale_render_cancellation(tk_root, tmp_path):

@@ -37,14 +37,10 @@ def test_multiple_workers_created(tk_root, tmp_path):
     create_test_cbz(cbz_path)
 
     app = cdisplayagain.ComicViewer(tk_root, cbz_path)
-    worker = ImageWorker(app)
-
-    try:
+    with ImageWorker(app) as worker:
         assert len(worker._threads) == 4, "Should create 4 worker threads by default"
         assert all(t.daemon for t in worker._threads), "All worker threads should be daemon"
         assert all(t.is_alive() for t in worker._threads), "All worker threads should be alive"
-    finally:
-        worker.stop()
 
 
 def test_custom_worker_count(tk_root, tmp_path):
@@ -53,13 +49,9 @@ def test_custom_worker_count(tk_root, tmp_path):
     create_test_cbz(cbz_path)
 
     app = cdisplayagain.ComicViewer(tk_root, cbz_path)
-    worker = ImageWorker(app, num_workers=2)
-
-    try:
+    with ImageWorker(app, num_workers=2) as worker:
         assert len(worker._threads) == 2, "Should create 2 worker threads when specified"
         assert all(t.is_alive() for t in worker._threads), "All worker threads should be alive"
-    finally:
-        worker.stop()
 
 
 def test_parallel_processing_multiple_pages(tk_root, tmp_path):
@@ -68,9 +60,7 @@ def test_parallel_processing_multiple_pages(tk_root, tmp_path):
     create_test_cbz(cbz_path, page_count=8)
 
     app = cdisplayagain.ComicViewer(tk_root, cbz_path)
-    worker = ImageWorker(app, num_workers=4)
-
-    try:
+    with ImageWorker(app, num_workers=4) as worker:
         results = []
 
         def capture_update(index, img):
@@ -91,8 +81,6 @@ def test_parallel_processing_multiple_pages(tk_root, tmp_path):
 
         assert len(results) == 4, f"Should process all 4 pages in queue, got {len(results)}"
         assert elapsed < 2.0, f"Parallel processing should be fast, took {elapsed:.2f}s"
-    finally:
-        worker.stop()
 
 
 def test_workers_share_queue(tk_root, tmp_path):
@@ -101,9 +89,7 @@ def test_workers_share_queue(tk_root, tmp_path):
     create_test_cbz(cbz_path, page_count=6)
 
     app = cdisplayagain.ComicViewer(tk_root, cbz_path)
-    worker = ImageWorker(app, num_workers=3)
-
-    try:
+    with ImageWorker(app, num_workers=3) as worker:
         results = []
 
         def capture_update(index, img):
@@ -123,8 +109,6 @@ def test_workers_share_queue(tk_root, tmp_path):
         assert len(results) == 4, "All workers should process items from shared queue"
         processed_indices = [r[0] for r in results]
         assert len(set(processed_indices)) == 4, "All pages should be processed exactly once"
-    finally:
-        worker.stop()
 
 
 def test_thread_safety_cache_operations(tk_root, tmp_path):
@@ -133,9 +117,7 @@ def test_thread_safety_cache_operations(tk_root, tmp_path):
     create_test_cbz(cbz_path, page_count=5)
 
     app = cdisplayagain.ComicViewer(tk_root, cbz_path)
-    worker = ImageWorker(app, num_workers=4)
-
-    try:
+    with ImageWorker(app, num_workers=4) as worker:
         results = []
 
         def capture_update(index, img):
@@ -155,8 +137,6 @@ def test_thread_safety_cache_operations(tk_root, tmp_path):
         tk_root.mainloop()
 
         assert len(results) == 4, "All cache operations should complete successfully"
-    finally:
-        worker.stop()
 
 
 def test_preload_with_parallel_workers(tk_root, tmp_path):
@@ -165,9 +145,7 @@ def test_preload_with_parallel_workers(tk_root, tmp_path):
     create_test_cbz(cbz_path, page_count=5)
 
     app = cdisplayagain.ComicViewer(tk_root, cbz_path)
-    worker = ImageWorker(app, num_workers=4)
-
-    try:
+    with ImageWorker(app, num_workers=4) as worker:
         preload_requests = []
 
         def capture_request(index, width, height, preload=False, render_generation=0):
@@ -180,8 +158,6 @@ def test_preload_with_parallel_workers(tk_root, tmp_path):
         worker.preload(2)
 
         assert len(preload_requests) == 2, "Should process preload requests with parallel workers"
-    finally:
-        worker.stop()
 
 
 def test_parallel_processing_priority_order(tk_root, tmp_path):
@@ -190,9 +166,7 @@ def test_parallel_processing_priority_order(tk_root, tmp_path):
     create_test_cbz(cbz_path, page_count=6)
 
     app = cdisplayagain.ComicViewer(tk_root, cbz_path)
-    worker = ImageWorker(app, num_workers=2)
-
-    try:
+    with ImageWorker(app, num_workers=2) as worker:
         results = []
 
         def capture_update(index, img):
@@ -214,8 +188,6 @@ def test_parallel_processing_priority_order(tk_root, tmp_path):
         assert len(results) == 4
         non_preload = [r[0] for r in results if r[0] in {0, 2}]
         assert len(non_preload) >= 1, "At least one non-preload request should be processed"
-    finally:
-        worker.stop()
 
 
 def test_rapid_page_turning_with_parallel_workers(tk_root, tmp_path):
@@ -224,9 +196,7 @@ def test_rapid_page_turning_with_parallel_workers(tk_root, tmp_path):
     create_test_cbz(cbz_path, page_count=10)
 
     app = cdisplayagain.ComicViewer(tk_root, cbz_path)
-    worker = ImageWorker(app, num_workers=4)
-
-    try:
+    with ImageWorker(app, num_workers=4) as worker:
         results = []
 
         def capture_update(index, img):
@@ -248,8 +218,6 @@ def test_rapid_page_turning_with_parallel_workers(tk_root, tmp_path):
         assert elapsed < 1.5, (
             f"Parallel workers should handle rapid requests quickly, took {elapsed:.2f}s"
         )
-    finally:
-        worker.stop()
 
 
 def test_workers_handle_queue_full_gracefully(tk_root, tmp_path):
@@ -258,9 +226,7 @@ def test_workers_handle_queue_full_gracefully(tk_root, tmp_path):
     create_test_cbz(cbz_path, page_count=20)
 
     app = cdisplayagain.ComicViewer(tk_root, cbz_path)
-    worker = ImageWorker(app, num_workers=4)
-
-    try:
+    with ImageWorker(app, num_workers=4) as worker:
         results = []
 
         def capture_update(index, img):
@@ -278,8 +244,6 @@ def test_workers_handle_queue_full_gracefully(tk_root, tmp_path):
         tk_root.mainloop()
 
         assert len(results) <= 4, "Should only process max queue size items"
-    finally:
-        worker.stop()
 
 
 def test_single_worker_backward_compat(tk_root, tmp_path):
@@ -288,9 +252,7 @@ def test_single_worker_backward_compat(tk_root, tmp_path):
     create_test_cbz(cbz_path, page_count=5)
 
     app = cdisplayagain.ComicViewer(tk_root, cbz_path)
-    worker = ImageWorker(app, num_workers=1)
-
-    try:
+    with ImageWorker(app, num_workers=1) as worker:
         assert len(worker._threads) == 1, "Should support single worker mode"
 
         results = []
@@ -310,5 +272,3 @@ def test_single_worker_backward_compat(tk_root, tmp_path):
         tk_root.mainloop()
 
         assert len(results) == 3, "Single worker should process all pages"
-    finally:
-        worker.stop()

@@ -416,6 +416,15 @@ class ImageWorker:
             thread.join(timeout=1.0)
         self._threads.clear()
 
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit - stop workers."""
+        self.stop()
+        return False
+
     def _run(self):
         """Process resize requests in background."""
         while True:
