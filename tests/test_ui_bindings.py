@@ -33,6 +33,8 @@ def test_l_key_triggers_open_dialog():
         with (
             patch("tkinter.messagebox.showerror"),
             patch("tkinter.messagebox.showinfo"),
+            patch("tkinter.filedialog.askopenfilename"),
+            patch("tkinter.filedialog.askopenfilenames"),
         ):
             with patch("PIL.Image.open") as mock_img_open:
                 # Mock the Image object

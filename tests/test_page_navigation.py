@@ -37,7 +37,13 @@ def setup_viewer():
     with patch("cdisplayagain.load_comic") as mock_load:
         mock_load.return_value = mock_source
 
-        with patch("PIL.Image.open") as mock_img_open:
+        with (
+            patch("PIL.Image.open") as mock_img_open,
+            patch("tkinter.messagebox.showerror"),
+            patch("tkinter.messagebox.showinfo"),
+            patch("tkinter.filedialog.askopenfilename"),
+            patch("tkinter.filedialog.askopenfilenames"),
+        ):
             mock_img_open.return_value = mock_img
 
             root.overrideredirect(True)

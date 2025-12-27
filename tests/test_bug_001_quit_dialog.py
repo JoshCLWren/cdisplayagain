@@ -29,7 +29,13 @@ def test_quit_reentrancy_guard():
         mock_source.get_bytes.return_value = valid_image_bytes
         mock_load.return_value = mock_source
 
-        with patch("PIL.Image.open") as mock_img_open:
+        with (
+            patch("PIL.Image.open") as mock_img_open,
+            patch("tkinter.messagebox.showerror"),
+            patch("tkinter.messagebox.showinfo"),
+            patch("tkinter.filedialog.askopenfilename"),
+            patch("tkinter.filedialog.askopenfilenames"),
+        ):
             mock_img = Mock()
             mock_img.mode = "RGB"
             mock_img.size = (100, 100)
