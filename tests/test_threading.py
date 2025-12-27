@@ -93,6 +93,7 @@ def test_image_worker_basic(tk_root, tmp_path):
     create_test_cbz(cbz_path)
 
     app = cdisplayagain.ComicViewer(tk_root, cbz_path)
+    app.update()
     worker = ImageWorker(app)
 
     results = []
@@ -107,7 +108,7 @@ def test_image_worker_basic(tk_root, tmp_path):
 
     worker.request_page(0, 100, 200)
 
-    tk_root.after(500, tk_root.quit)
+    tk_root.after(2000, tk_root.quit)
     tk_root.mainloop()
 
     assert len(results) > 0, "Worker should process page"

@@ -17,7 +17,12 @@ def _write_image(path: Path) -> None:
 
 def _create_viewer(tk_root, comic_path):
     """Create a ComicViewer with mocked dependencies."""
-    with patch("tkinter.messagebox.showerror"):
+    with (
+        patch("tkinter.messagebox.showerror"),
+        patch("tkinter.messagebox.showinfo"),
+        patch("tkinter.filedialog.askopenfilename"),
+        patch("tkinter.filedialog.askopenfilenames"),
+    ):
         return ComicViewer(tk_root, comic_path)
 
 
