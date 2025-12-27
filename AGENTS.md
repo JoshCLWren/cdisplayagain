@@ -38,7 +38,6 @@ Use git worktrees to work on multiple cards in parallel without branch conflicts
   - Add tests for remaining uncovered edge cases
   - Add tests for complex error handling paths
   - Add tests for platform-specific code paths
-- **Known Issue**: Test suite crashes with coverage enabled due to parallel worker threads not being properly stopped (see `test_parallel_workers.py`). Run coverage tests excluding parallel tests: `uv run pytest --cov=cdisplayagain --cov-report=term-missing -k "not parallel"`
 
 ## Performance Guidelines
 - Image resizing (LANCZOS resampling) is the primary bottleneck (~65% of CPU time)

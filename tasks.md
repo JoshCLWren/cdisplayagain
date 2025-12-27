@@ -45,14 +45,6 @@ WIP limit: 3 cards total in In Progress.
 - Add tests for complex error handling paths
 - Add tests for platform-specific code paths
 
-**Test Coverage Reports:**
-- Run with coverage (excluding parallel tests): `uv run pytest --cov=cdisplayagain --cov-report=term -q -k "not parallel"`
-- Check missing lines: `uv run pytest --cov=cdisplayagain --cov-report=term-missing -k "not parallel"`
-- Coverage threshold configured in `pyproject.toml`
-
-**Known Issues:**
-- Test suite crashes with full coverage run due to parallel worker threads in `test_parallel_workers.py` and `test_benchmark_parallel.py` not being properly stopped. These tests create infinite-loop threads that survive test teardown and cause coverage collection to crash. Fix requires adding proper thread cleanup to `ImageWorker`.
-
 ### Future Features & Parity Items
 - The info screen can be dismissed by double-click or any key press (✅ implemented).
 - You can drag the page around with the mouse (panning).
