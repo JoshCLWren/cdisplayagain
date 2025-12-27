@@ -167,3 +167,18 @@ def test_require_pyvips_success(monkeypatch):
 
     # Should not raise any exception
     cdisplayagain.require_pyvips()
+
+
+def test_require_pyvips_with_oserror_no_libvips(monkeypatch):
+    """Test require_pyvips raises OSError when it's not a libvips issue."""
+
+    # Mock __import__ to raise OSError without libvips message
+    def mock_import(name, *args, **kwargs):
+        if name == "pyvips":
+            raise OSError("Some other OSError")
+        return __import__(name, *args, **kwargs)
+
+    monkeypatch.setattr("builtins.__import__", mock_import)
+
+    with pytest.raises(OSError, match="Some other OSError"):
+        cdisplayagain.require_pyvips()
