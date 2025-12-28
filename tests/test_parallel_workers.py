@@ -286,18 +286,25 @@ def test_worker_handles_none_source_gracefully(tk_root, tmp_path):
         def capture_update(index, img):
             assert isinstance(img, Image.Image)
             results.append((index, img.size))
+            if len(results) >= 2:
+                tk_root.quit()
 
         app._update_from_cache = capture_update
 
         worker.request_page(0, 100, 200, render_generation=0)
 
-        time.sleep(0.01)
+        tk_root.update()
+        time.sleep(0.1)
+        tk_root.update()
+
         app.source = None
 
-        for i in range(1, 3):
+        for i in range(1, 4):
             worker.request_page(i, 100, 200, render_generation=0)
 
-        tk_root.after(1000, tk_root.quit)
+        tk_root.after(2000, tk_root.quit)
         tk_root.mainloop()
 
-        assert len(results) >= 1, "Should process at least the first page before source is None"
+        assert len(results) >= 1, (
+            f"Should process at least one page before source is None, got {len(results)}"
+        )
