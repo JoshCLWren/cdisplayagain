@@ -593,15 +593,29 @@ def test_worker_stops_mid_processing(tk_root, tmp_path):
 
     worker = cdisplayagain.ImageWorker(app, num_workers=1)
 
-    worker.request_page(0, 100, 200, render_generation=0)
+    results = []
 
-    time.sleep(0.1)
+    def capture_update(index, img):
+        results.append(index)
 
-    worker.stop()
+    app._update_from_cache = capture_update
 
-    time.sleep(0.1)
+    def slow_resize(raw, width, height):
+        time.sleep(0.05)
+        from PIL import Image
 
-    assert worker._stopped is True
+        return Image.new("RGB", (width, height))
+
+    with mock.patch("cdisplayagain.get_resized_pil", side_effect=slow_resize):
+        worker.request_page(0, 100, 200, render_generation=0)
+
+        time.sleep(0.1)
+
+        worker.stop()
+
+        time.sleep(0.2)
+
+        assert worker._stopped is True
 
 
 def test_worker_stop_handles_queue_full(tk_root, tmp_path):
