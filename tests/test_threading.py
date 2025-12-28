@@ -1,8 +1,10 @@
 """Tests for threading architecture (Phase 3)."""
 
 import io
+import queue
 import time
 import tkinter as tk
+import unittest.mock as mock
 import zipfile
 
 import pytest
@@ -451,3 +453,81 @@ def test_multiple_rapid_page_turns(tk_root, tmp_path):
 
     app.last_page()
     assert app._render_generation == initial_generation + 6
+
+
+def test_worker_request_page_after_stop(tk_root, tmp_path):
+    """Test that request_page returns early when worker is stopped."""
+    cbz_path = tmp_path / "test.cbz"
+    create_test_cbz(cbz_path, page_count=3)
+
+    app = cdisplayagain.ComicViewer(tk_root, cbz_path)
+    worker = cdisplayagain.ImageWorker(app, num_workers=1)
+
+    worker._stopped = True
+    worker.request_page(0, 100, 200, render_generation=0)
+
+    time.sleep(0.05)
+
+    worker.stop()
+
+
+def test_worker_request_page_without_app(tk_root, tmp_path):
+    """Test that request_page returns early when _app is None."""
+    cbz_path = tmp_path / "test.cbz"
+    create_test_cbz(cbz_path, page_count=3)
+
+    app = cdisplayagain.ComicViewer(tk_root, cbz_path)
+    worker = cdisplayagain.ImageWorker(app, num_workers=1)
+
+    worker._app = None
+    worker.request_page(0, 100, 200, render_generation=0)
+
+    time.sleep(0.05)
+
+    worker.stop()
+
+
+def test_worker_request_page_queue_full(tk_root, tmp_path):
+    """Test that request_page handles queue.Full gracefully."""
+    cbz_path = tmp_path / "test.cbz"
+    create_test_cbz(cbz_path, page_count=3)
+
+    app = cdisplayagain.ComicViewer(tk_root, cbz_path)
+    worker = cdisplayagain.ImageWorker(app, num_workers=1)
+
+    with mock.patch.object(worker._queue, "put_nowait", side_effect=queue.Full()):
+        worker.request_page(0, 100, 200, render_generation=0)
+
+    time.sleep(0.05)
+
+    worker.stop()
+
+
+def test_worker_context_manager(tk_root, tmp_path):
+    """Test that context manager properly stops workers."""
+    cbz_path = tmp_path / "test.cbz"
+    create_test_cbz(cbz_path, page_count=3)
+
+    app = cdisplayagain.ComicViewer(tk_root, cbz_path)
+
+    with cdisplayagain.ImageWorker(app, num_workers=1) as worker:
+        assert worker._stopped is False
+        assert len(worker._threads) == 1
+
+    assert worker._stopped is True
+    assert len(worker._threads) == 0
+
+
+def test_worker_cleanup_called_on_del(tk_root, tmp_path):
+    """Test that cleanup is called when ComicViewer is garbage collected."""
+    cbz_path = tmp_path / "test.cbz"
+    create_test_cbz(cbz_path, page_count=3)
+
+    app = cdisplayagain.ComicViewer(tk_root, cbz_path)
+
+    worker = app._worker
+    assert worker is not None
+
+    app.cleanup()
+
+    assert worker._stopped is True
