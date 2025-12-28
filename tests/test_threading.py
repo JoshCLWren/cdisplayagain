@@ -531,3 +531,105 @@ def test_worker_cleanup_called_on_del(tk_root, tmp_path):
     app.cleanup()
 
     assert worker._stopped is True
+
+
+def test_del_calls_cleanup(tk_root, tmp_path):
+    """Test that __del__ method calls cleanup."""
+    cbz_path = tmp_path / "test.cbz"
+    create_test_cbz(cbz_path, page_count=3)
+
+    app = cdisplayagain.ComicViewer(tk_root, cbz_path)
+
+    worker = app._worker
+    assert worker is not None
+
+    app.__del__()
+
+    assert worker._stopped is True
+
+
+def test_worker_handles_after_idle_exception(tk_root, tmp_path, caplog):
+    """Test that worker handles after_idle exception gracefully."""
+    cbz_path = tmp_path / "test.cbz"
+    create_test_cbz(cbz_path, page_count=3)
+
+    app = cdisplayagain.ComicViewer(tk_root, cbz_path)
+
+    with mock.patch.object(app, "after_idle", side_effect=RuntimeError("Test error")):
+        worker = cdisplayagain.ImageWorker(app, num_workers=1)
+
+        worker.request_page(0, 100, 200, render_generation=0)
+
+        time.sleep(0.2)
+
+        worker.stop()
+
+
+def test_worker_handles_general_exception(tk_root, tmp_path, caplog):
+    """Test that worker handles general exception in _run gracefully."""
+    cbz_path = tmp_path / "test.cbz"
+    create_test_cbz(cbz_path, page_count=3)
+
+    app = cdisplayagain.ComicViewer(tk_root, cbz_path)
+
+    with mock.patch("cdisplayagain.get_resized_pil", side_effect=RuntimeError("Test error")):
+        worker = cdisplayagain.ImageWorker(app, num_workers=1)
+
+        worker.request_page(0, 100, 200, render_generation=0)
+
+        time.sleep(0.2)
+
+        worker.stop()
+
+        assert len([r for r in caplog.records if "Image worker error" in r.message]) > 0
+
+
+def test_worker_stops_mid_processing(tk_root, tmp_path):
+    """Test that worker respects _stopped flag mid-processing."""
+    cbz_path = tmp_path / "test.cbz"
+    create_test_cbz(cbz_path, page_count=10)
+
+    app = cdisplayagain.ComicViewer(tk_root, cbz_path)
+
+    worker = cdisplayagain.ImageWorker(app, num_workers=1)
+
+    worker.request_page(0, 100, 200, render_generation=0)
+
+    time.sleep(0.1)
+
+    worker.stop()
+
+    time.sleep(0.1)
+
+    assert worker._stopped is True
+
+
+def test_worker_stop_handles_queue_full(tk_root, tmp_path):
+    """Test that stop() handles queue.Full exception."""
+    cbz_path = tmp_path / "test.cbz"
+    create_test_cbz(cbz_path, page_count=3)
+
+    app = cdisplayagain.ComicViewer(tk_root, cbz_path)
+
+    worker = cdisplayagain.ImageWorker(app, num_workers=1)
+
+    with mock.patch.object(worker._queue, "put_nowait", side_effect=queue.Full()):
+        worker.stop()
+
+    assert worker._stopped is True
+
+
+def test_worker_stop_handles_join_exception(tk_root, tmp_path):
+    """Test that stop() handles thread.join exception."""
+    cbz_path = tmp_path / "test.cbz"
+    create_test_cbz(cbz_path, page_count=3)
+
+    app = cdisplayagain.ComicViewer(tk_root, cbz_path)
+
+    worker = cdisplayagain.ImageWorker(app, num_workers=1)
+
+    with mock.patch.object(worker._threads[0], "join", side_effect=RuntimeError("Test error")):
+        worker.stop()
+
+    assert worker._stopped is True
+    assert len(worker._threads) == 0
