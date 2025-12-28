@@ -1,8 +1,10 @@
 """Tests for threading architecture (Phase 3)."""
 
 import io
+import queue
 import time
 import tkinter as tk
+import unittest.mock as mock
 import zipfile
 
 import pytest
@@ -94,24 +96,23 @@ def test_image_worker_basic(tk_root, tmp_path):
 
     app = cdisplayagain.ComicViewer(tk_root, cbz_path)
     app.update()
-    worker = ImageWorker(app)
+    with ImageWorker(app) as worker:
+        results = []
 
-    results = []
+        def capture_update(index, img):
+            assert isinstance(img, Image.Image)
+            results.append((index, img.size))
+            if len(results) >= 1:
+                tk_root.quit()
 
-    def capture_update(index, img):
-        assert isinstance(img, Image.Image)
-        results.append((index, img.size))
-        if len(results) >= 1:
-            tk_root.quit()
+        app._update_from_cache = capture_update
 
-    app._update_from_cache = capture_update
+        worker.request_page(0, 100, 200)
 
-    worker.request_page(0, 100, 200)
+        tk_root.after(2000, tk_root.quit)
+        tk_root.mainloop()
 
-    tk_root.after(2000, tk_root.quit)
-    tk_root.mainloop()
-
-    assert len(results) > 0, "Worker should process page"
+        assert len(results) > 0, "Worker should process page"
 
 
 def test_image_worker_queue_full(tk_root, tmp_path):
@@ -120,25 +121,24 @@ def test_image_worker_queue_full(tk_root, tmp_path):
     create_test_cbz(cbz_path)
 
     app = cdisplayagain.ComicViewer(tk_root, cbz_path)
-    worker = ImageWorker(app)
+    with ImageWorker(app) as worker:
+        results = []
 
-    results = []
+        def capture_update(index, img):
+            assert isinstance(img, Image.Image)
+            results.append((index, img.size))
+            if len(results) >= 4:
+                tk_root.quit()
 
-    def capture_update(index, img):
-        assert isinstance(img, Image.Image)
-        results.append((index, img.size))
-        if len(results) >= 4:
-            tk_root.quit()
+        app._update_from_cache = capture_update
 
-    app._update_from_cache = capture_update
+        for i in range(10):
+            worker.request_page(i, 100, 200)
 
-    for i in range(10):
-        worker.request_page(i, 100, 200)
+        tk_root.after(2000, tk_root.quit)
+        tk_root.mainloop()
 
-    tk_root.after(2000, tk_root.quit)
-    tk_root.mainloop()
-
-    assert len(results) <= 4, "Worker should only process max queue size"
+        assert len(results) <= 4, "Worker should only process max queue size"
 
 
 def test_image_worker_daemon(tk_root, tmp_path):
@@ -147,10 +147,9 @@ def test_image_worker_daemon(tk_root, tmp_path):
     create_test_cbz(cbz_path)
 
     app = cdisplayagain.ComicViewer(tk_root, cbz_path)
-    worker = ImageWorker(app)
-
-    assert len(worker._threads) > 0, "Worker should have threads"
-    assert all(t.daemon for t in worker._threads), "All worker threads should be daemon"
+    with ImageWorker(app) as worker:
+        assert len(worker._threads) > 0, "Worker should have threads"
+        assert all(t.daemon for t in worker._threads), "All worker threads should be daemon"
 
 
 def test_debouncer_with_action(tk_root):
@@ -382,23 +381,22 @@ def test_worker_preload_method(tk_root, tmp_path):
     app = cdisplayagain.ComicViewer(tk_root, cbz_path)
     app.update()
 
-    worker = ImageWorker(app)
+    with ImageWorker(app) as worker:
+        queue_items = []
 
-    queue_items = []
+        def capture_request(index, width, height, preload=False, render_generation=0):
+            queue_items.append((index, width, height, preload, render_generation))
 
-    def capture_request(index, width, height, preload=False, render_generation=0):
-        queue_items.append((index, width, height, preload, render_generation))
+        worker.request_page = capture_request
 
-    worker.request_page = capture_request
+        worker.preload(1)
 
-    worker.preload(1)
-
-    assert len(queue_items) == 1
-    index, width, height, preload, render_generation = queue_items[0]
-    assert index == 1
-    assert width > 0
-    assert height > 0
-    assert preload is True
+        assert len(queue_items) == 1
+        index, width, height, preload, render_generation = queue_items[0]
+        assert index == 1
+        assert width > 0
+        assert height > 0
+        assert preload is True
 
 
 def test_stale_render_cancellation(tk_root, tmp_path):
@@ -455,3 +453,311 @@ def test_multiple_rapid_page_turns(tk_root, tmp_path):
 
     app.last_page()
     assert app._render_generation == initial_generation + 6
+
+
+def test_worker_request_page_after_stop(tk_root, tmp_path):
+    """Test that request_page returns early when worker is stopped."""
+    cbz_path = tmp_path / "test.cbz"
+    create_test_cbz(cbz_path, page_count=3)
+
+    app = cdisplayagain.ComicViewer(tk_root, cbz_path)
+    worker = cdisplayagain.ImageWorker(app, num_workers=1)
+
+    worker._stopped = True
+    worker.request_page(0, 100, 200, render_generation=0)
+
+    time.sleep(0.05)
+
+    worker.stop()
+
+
+def test_worker_request_page_without_app(tk_root, tmp_path):
+    """Test that request_page returns early when _app is None."""
+    cbz_path = tmp_path / "test.cbz"
+    create_test_cbz(cbz_path, page_count=3)
+
+    app = cdisplayagain.ComicViewer(tk_root, cbz_path)
+    worker = cdisplayagain.ImageWorker(app, num_workers=1)
+
+    worker._app = None
+    worker.request_page(0, 100, 200, render_generation=0)
+
+    time.sleep(0.05)
+
+    worker.stop()
+
+
+def test_worker_request_page_queue_full(tk_root, tmp_path):
+    """Test that request_page handles queue.Full gracefully."""
+    cbz_path = tmp_path / "test.cbz"
+    create_test_cbz(cbz_path, page_count=3)
+
+    app = cdisplayagain.ComicViewer(tk_root, cbz_path)
+    worker = cdisplayagain.ImageWorker(app, num_workers=1)
+
+    with mock.patch.object(worker._queue, "put_nowait", side_effect=queue.Full()):
+        worker.request_page(0, 100, 200, render_generation=0)
+
+    time.sleep(0.05)
+
+    worker.stop()
+
+
+def test_worker_context_manager(tk_root, tmp_path):
+    """Test that context manager properly stops workers."""
+    cbz_path = tmp_path / "test.cbz"
+    create_test_cbz(cbz_path, page_count=3)
+
+    app = cdisplayagain.ComicViewer(tk_root, cbz_path)
+
+    with cdisplayagain.ImageWorker(app, num_workers=1) as worker:
+        assert worker._stopped is False
+        assert len(worker._threads) == 1
+
+    assert worker._stopped is True
+    assert len(worker._threads) == 0
+
+
+def test_worker_cleanup_called_on_del(tk_root, tmp_path):
+    """Test that cleanup is called when ComicViewer is garbage collected."""
+    cbz_path = tmp_path / "test.cbz"
+    create_test_cbz(cbz_path, page_count=3)
+
+    app = cdisplayagain.ComicViewer(tk_root, cbz_path)
+
+    worker = app._worker
+    assert worker is not None
+
+    app.cleanup()
+
+    assert worker._stopped is True
+
+
+def test_del_calls_cleanup(tk_root, tmp_path):
+    """Test that __del__ method calls cleanup."""
+    cbz_path = tmp_path / "test.cbz"
+    create_test_cbz(cbz_path, page_count=3)
+
+    app = cdisplayagain.ComicViewer(tk_root, cbz_path)
+
+    worker = app._worker
+    assert worker is not None
+
+    app.__del__()
+
+    assert worker._stopped is True
+
+
+def test_worker_handles_after_idle_exception(tk_root, tmp_path, caplog):
+    """Test that worker handles after_idle exception gracefully."""
+    cbz_path = tmp_path / "test.cbz"
+    create_test_cbz(cbz_path, page_count=3)
+
+    app = cdisplayagain.ComicViewer(tk_root, cbz_path)
+
+    with mock.patch.object(app, "after_idle", side_effect=RuntimeError("Test error")):
+        worker = cdisplayagain.ImageWorker(app, num_workers=1)
+
+        worker.request_page(0, 100, 200, render_generation=0)
+
+        time.sleep(0.2)
+
+        worker.stop()
+
+
+def test_worker_handles_general_exception(tk_root, tmp_path, caplog):
+    """Test that worker handles general exception in _run gracefully."""
+    cbz_path = tmp_path / "test.cbz"
+    create_test_cbz(cbz_path, page_count=3)
+
+    app = cdisplayagain.ComicViewer(tk_root, cbz_path)
+
+    with mock.patch("cdisplayagain.get_resized_pil", side_effect=RuntimeError("Test error")):
+        worker = cdisplayagain.ImageWorker(app, num_workers=1)
+
+        worker.request_page(0, 100, 200, render_generation=0)
+
+        time.sleep(0.2)
+
+        worker.stop()
+
+        assert len([r for r in caplog.records if "Image worker error" in r.message]) > 0
+
+
+def test_worker_stops_mid_processing(tk_root, tmp_path):
+    """Test that worker respects _stopped flag mid-processing."""
+    cbz_path = tmp_path / "test.cbz"
+    create_test_cbz(cbz_path, page_count=10)
+
+    app = cdisplayagain.ComicViewer(tk_root, cbz_path)
+
+    worker = cdisplayagain.ImageWorker(app, num_workers=1)
+
+    results = []
+
+    def capture_update(index, img):
+        results.append(index)
+
+    app._update_from_cache = capture_update
+
+    def slow_resize(raw, width, height):
+        time.sleep(0.05)
+        from PIL import Image
+
+        return Image.new("RGB", (width, height))
+
+    with mock.patch("cdisplayagain.get_resized_pil", side_effect=slow_resize):
+        worker.request_page(0, 100, 200, render_generation=0)
+
+        time.sleep(0.1)
+
+        worker.stop()
+
+        time.sleep(0.2)
+
+        assert worker._stopped is True
+
+
+def test_worker_stop_handles_queue_full(tk_root, tmp_path):
+    """Test that stop() handles queue.Full exception."""
+    cbz_path = tmp_path / "test.cbz"
+    create_test_cbz(cbz_path, page_count=3)
+
+    app = cdisplayagain.ComicViewer(tk_root, cbz_path)
+
+    worker = cdisplayagain.ImageWorker(app, num_workers=1)
+
+    with mock.patch.object(worker._queue, "put_nowait", side_effect=queue.Full()):
+        worker.stop()
+
+    assert worker._stopped is True
+
+
+def test_worker_stop_handles_join_exception(tk_root, tmp_path):
+    """Test that stop() handles thread.join exception."""
+    cbz_path = tmp_path / "test.cbz"
+    create_test_cbz(cbz_path, page_count=3)
+
+    app = cdisplayagain.ComicViewer(tk_root, cbz_path)
+
+    worker = cdisplayagain.ImageWorker(app, num_workers=1)
+
+    with mock.patch.object(worker._threads[0], "join", side_effect=RuntimeError("Test error")):
+        worker.stop()
+
+    assert worker._stopped is True
+    assert len(worker._threads) == 0
+
+
+def test_worker_should_stop_before_processing(tk_root, tmp_path):
+    """Test that _should_stop() breaks loop before processing begins."""
+    cbz_path = tmp_path / "test.cbz"
+    create_test_cbz(cbz_path, page_count=3)
+
+    tk_root.withdraw()
+    tk_root.update()
+
+    app = cdisplayagain.ComicViewer(tk_root, cbz_path)
+
+    worker = cdisplayagain.ImageWorker(app, num_workers=1)
+
+    worker.request_page(0, 100, 200, render_generation=0)
+    worker._stopped = True
+
+    time.sleep(0.2)
+
+    worker.stop()
+
+
+def test_worker_should_stop_during_processing(tk_root, tmp_path):
+    """Test that _should_stop() breaks loop during image processing."""
+    cbz_path = tmp_path / "test.cbz"
+    create_test_cbz(cbz_path, page_count=3)
+
+    tk_root.withdraw()
+    tk_root.update()
+
+    app = cdisplayagain.ComicViewer(tk_root, cbz_path)
+
+    worker = cdisplayagain.ImageWorker(app, num_workers=1)
+
+    def slow_resize(raw, width, height):
+        time.sleep(0.05)
+        from PIL import Image
+
+        return Image.new("RGB", (width, height))
+
+    with mock.patch("cdisplayagain.get_resized_pil", side_effect=slow_resize):
+        worker.request_page(0, 100, 200, render_generation=0)
+        time.sleep(0.02)
+        worker._stopped = True
+        time.sleep(0.2)
+
+    worker.stop()
+
+
+def test_worker_should_stop_before_callback(tk_root, tmp_path):
+    """Test that _should_stop() breaks loop before scheduling callback."""
+    cbz_path = tmp_path / "test.cbz"
+    create_test_cbz(cbz_path, page_count=3)
+
+    tk_root.withdraw()
+    tk_root.update()
+
+    app = cdisplayagain.ComicViewer(tk_root, cbz_path)
+
+    worker = cdisplayagain.ImageWorker(app, num_workers=1)
+
+    def slow_resize(raw, width, height):
+        time.sleep(0.02)
+        from PIL import Image
+
+        return Image.new("RGB", (width, height))
+
+    with mock.patch("cdisplayagain.get_resized_pil", side_effect=slow_resize):
+        worker.request_page(0, 100, 200, render_generation=0)
+        time.sleep(0.03)
+        worker._stopped = True
+        time.sleep(0.2)
+
+    worker.stop()
+
+
+def test_worker_should_stop_with_no_app(tk_root, tmp_path):
+    """Test that worker stops when app becomes None."""
+    cbz_path = tmp_path / "test.cbz"
+    create_test_cbz(cbz_path, page_count=3)
+
+    tk_root.withdraw()
+    tk_root.update()
+
+    app = cdisplayagain.ComicViewer(tk_root, cbz_path)
+
+    worker = cdisplayagain.ImageWorker(app, num_workers=1)
+
+    worker.request_page(0, 100, 200, render_generation=0)
+    worker._app = None
+
+    time.sleep(0.2)
+
+    worker.stop()
+
+
+def test_worker_should_stop_with_no_source(tk_root, tmp_path):
+    """Test that worker stops when source becomes None."""
+    cbz_path = tmp_path / "test.cbz"
+    create_test_cbz(cbz_path, page_count=3)
+
+    tk_root.withdraw()
+    tk_root.update()
+
+    app = cdisplayagain.ComicViewer(tk_root, cbz_path)
+
+    worker = cdisplayagain.ImageWorker(app, num_workers=1)
+
+    worker.request_page(0, 100, 200, render_generation=0)
+    app.source = None
+
+    time.sleep(0.2)
+
+    worker.stop()

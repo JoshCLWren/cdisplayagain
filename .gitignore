@@ -10,7 +10,8 @@ wheels/
 .venv
 .idea/
 
-.coverage
+.coverage*
+coverage.xml
 logs/
 .envrc
 cdisplayagain.egg-info

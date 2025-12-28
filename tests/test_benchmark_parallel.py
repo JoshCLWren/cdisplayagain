@@ -45,33 +45,33 @@ def test_single_worker_vs_parallel_performance(tk_root, tmp_path):
 
     app._update_from_cache = capture_update
 
-    worker_single = ImageWorker(app, num_workers=1)
-    results.clear()
+    with ImageWorker(app, num_workers=1) as worker_single:
+        results.clear()
 
-    start_single = time.time()
-    for i in range(4):
-        worker_single.request_page(i, 800, 600)
+        start_single = time.time()
+        for i in range(4):
+            worker_single.request_page(i, 800, 600)
 
-    tk_root.after(3000, tk_root.quit)
-    tk_root.mainloop()
-    time_single = time.time() - start_single
+        tk_root.after(3000, tk_root.quit)
+        tk_root.mainloop()
+        time_single = time.time() - start_single
 
-    results.clear()
-    worker_parallel = ImageWorker(app, num_workers=4)
+        results.clear()
 
-    start_parallel = time.time()
-    for i in range(4):
-        worker_parallel.request_page(i, 800, 600)
+    with ImageWorker(app, num_workers=4) as worker_parallel:
+        start_parallel = time.time()
+        for i in range(4):
+            worker_parallel.request_page(i, 800, 600)
 
-    tk_root.after(3000, tk_root.quit)
-    tk_root.mainloop()
-    time_parallel = time.time() - start_parallel
+        tk_root.after(3000, tk_root.quit)
+        tk_root.mainloop()
+        time_parallel = time.time() - start_parallel
 
-    print(f"\nSingle worker time: {time_single:.3f}s")
-    print(f"Parallel workers time: {time_parallel:.3f}s")
-    print(f"Speedup: {time_single / time_parallel:.2f}x")
+        print(f"\nSingle worker time: {time_single:.3f}s")
+        print(f"Parallel workers time: {time_parallel:.3f}s")
+        print(f"Speedup: {time_single / time_parallel:.2f}x")
 
-    assert len(results) >= 1, "Should process at least one page"
+        assert len(results) >= 1, "Should process at least one page"
 
 
 def test_throughput_with_multiple_workers(tk_root, tmp_path):
@@ -88,17 +88,16 @@ def test_throughput_with_multiple_workers(tk_root, tmp_path):
 
     app._update_from_cache = capture_update
 
-    worker = ImageWorker(app, num_workers=4)
+    with ImageWorker(app, num_workers=4) as worker:
+        start_time = time.time()
+        for i in range(4):
+            worker.request_page(i, 800, 600)
 
-    start_time = time.time()
-    for i in range(4):
-        worker.request_page(i, 800, 600)
+        tk_root.after(3000, tk_root.quit)
+        tk_root.mainloop()
+        elapsed = time.time() - start_time
 
-    tk_root.after(3000, tk_root.quit)
-    tk_root.mainloop()
-    elapsed = time.time() - start_time
+        print(f"\nProcessed {len(results)} pages in {elapsed:.3f}s")
+        print(f"Throughput: {len(results) / elapsed:.2f} pages/second")
 
-    print(f"\nProcessed {len(results)} pages in {elapsed:.3f}s")
-    print(f"Throughput: {len(results) / elapsed:.2f} pages/second")
-
-    assert len(results) > 0, "Should process pages"
+        assert len(results) > 0, "Should process pages"

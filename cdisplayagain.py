@@ -380,11 +380,14 @@ def load_image_file(path: Path) -> PageSource:
 class ImageWorker:
     """Background thread pool for image processing."""
 
+    _app: ComicViewer | None = None
+
     def __init__(self, app, num_workers: int = 4):
         """Initialize worker pool with app reference and start daemon threads."""
         self._app = app
         self._queue = queue.PriorityQueue(maxsize=4)
         self._threads: list[threading.Thread] = []
+        self._stopped: bool = False
         for i in range(num_workers):
             thread = threading.Thread(target=self._run, daemon=True, name=f"ImageWorker-{i}")
             thread.start()
@@ -394,6 +397,8 @@ class ImageWorker:
         self, index: int, width: int, height: int, preload: bool = False, render_generation: int = 0
     ):
         """Request a page be processed in background."""
+        if self._stopped or not self._app:
+            return
         try:
             priority = 1 if preload else 0
             self._queue.put_nowait((priority, index, width, height, preload, render_generation))
@@ -408,40 +413,104 @@ class ImageWorker:
         ch = max(1, self._app.canvas.winfo_height())
         self.request_page(index, cw, ch, preload=True)
 
+    def stop(self):
+        """Signal all worker threads to stop and wait for them to exit."""
+        self._stopped = True
+
+        self._app = None
+
+        for _ in self._threads:
+            try:
+                self._queue.put_nowait((2, None, None, None, None, None))
+            except queue.Full:
+                break
+
+        for thread in self._threads:
+            try:
+                thread.join(timeout=1.0)
+            except Exception:
+                pass
+        self._threads.clear()
+
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit - stop workers."""
+        self.stop()
+        return False
+
+    def _should_stop(self) -> bool:
+        """Check if worker should stop processing."""
+        return self._stopped
+
     def _run(self):
         """Process resize requests in background."""
-        while True:
+        while not self._stopped:
+            priority = None
             try:
-                priority, index, width, height, preload, render_generation = self._queue.get()
+                priority, index, width, height, preload, render_generation = self._queue.get(
+                    timeout=0.1
+                )
+
+                if priority == 2:
+                    break
+
+                if self._should_stop() or not self._app:
+                    break
+
+                app = self._app
+                if not app:
+                    break
+                assert app is not None
 
                 if preload:
                     logging.info("Worker preloading page %d at %dx%d", index, width, height)
                 else:
                     logging.info("Worker processing page %d at %dx%d", index, width, height)
 
-                if not preload and render_generation != self._app._render_generation:
+                if not preload and render_generation != app._render_generation:
                     logging.info(
                         "Worker cancelling stale render for page %d (gen %d != %d)",
                         index,
                         render_generation,
-                        self._app._render_generation,
+                        app._render_generation,
                     )
                     continue
 
-                raw = self._app.source.get_bytes(self._app.source.pages[index])
+                if self._should_stop():
+                    break
+
+                source = app.source
+                if source is None:
+                    break
+                raw = source.get_bytes(source.pages[index])
                 resized_pil = get_resized_pil(raw, width, height)
+
+                if self._should_stop():
+                    break
 
                 if preload:
                     logging.info("Worker finished preloading page %d", index)
                 else:
                     logging.info("Worker finished page %d, scheduling callback", index)
 
-                self._app.after_idle(
-                    lambda idx=index, img=resized_pil: self._app._update_from_cache(idx, img)
-                )
+                if app and hasattr(app, "after_idle"):
+                    try:
+                        app.after_idle(
+                            lambda idx=index, img=resized_pil, app=app: app._update_from_cache(
+                                idx, img
+                            )
+                        )
+                    except Exception:
+                        pass
 
+            except queue.Empty:
+                continue
             except Exception as e:
                 logging.error("Image worker error: %s", e)
+                break
 
 
 def load_comic(path: Path) -> PageSource:
@@ -467,6 +536,15 @@ def load_comic(path: Path) -> PageSource:
 
 class ComicViewer(tk.Frame):
     """Tk viewer for comic archives and image folders."""
+
+    def __del__(self):
+        """Cleanup worker threads on garbage collection."""
+        self.cleanup()
+
+    def cleanup(self):
+        """Stop worker threads to prevent threading crashes during shutdown."""
+        if hasattr(self, "_worker") and self._worker:
+            self._worker.stop()
 
     def __init__(self, master: tk.Tk, comic_path: Path):
         """Initialize the viewer frame and load the initial comic."""
@@ -976,6 +1054,7 @@ class ComicViewer(tk.Frame):
         try:
             if self.source and self.source.cleanup:
                 self.source.cleanup()
+            self._worker.stop()
         finally:
             logging.info("Destroying app window.")
             self.master.destroy()
