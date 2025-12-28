@@ -441,6 +441,10 @@ class ImageWorker:
         self.stop()
         return False
 
+    def _should_stop(self) -> bool:
+        """Check if worker should stop processing."""
+        return self._stopped
+
     def _run(self):
         """Process resize requests in background."""
         while not self._stopped:
@@ -453,7 +457,7 @@ class ImageWorker:
                 if priority == 2:
                     break
 
-                if self._stopped or not self._app:
+                if self._should_stop() or not self._app:
                     break
 
                 app = self._app
@@ -475,7 +479,7 @@ class ImageWorker:
                     )
                     continue
 
-                if self._stopped:
+                if self._should_stop():
                     break
 
                 source = app.source
@@ -484,7 +488,7 @@ class ImageWorker:
                 raw = source.get_bytes(source.pages[index])
                 resized_pil = get_resized_pil(raw, width, height)
 
-                if self._stopped:
+                if self._should_stop():
                     break
 
                 if preload:

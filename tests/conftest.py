@@ -12,5 +12,8 @@ def tk_root():
     root.withdraw()
     root.geometry("800x600")
     root.update()
-    yield root
-    root.destroy()
+    try:
+        yield root
+    finally:
+        root.withdraw()
+        root.destroy()
