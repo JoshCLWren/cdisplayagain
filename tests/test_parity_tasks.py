@@ -453,12 +453,13 @@ def test_spacebar_scrolls_then_advances(viewer, tmp_path):
     viewer._open_comic(tmp_path)
     viewer.update()
 
-    viewer.master.deiconify()
     viewer.master.geometry("200x200")
     viewer.update()
 
-    cw = max(1, viewer.canvas.winfo_width())
-    ch = max(1, viewer.canvas.winfo_height())
+    cw = 200
+    ch = 200
+    viewer.canvas.winfo_width = lambda: cw
+    viewer.canvas.winfo_height = lambda: ch
     from image_backend import get_resized_pil
 
     for idx in range(len(viewer.source.pages)):

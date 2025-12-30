@@ -1,6 +1,6 @@
 ## cdisplayagain
 
-![Python](https://img.shields.io/badge/python-3.12+-blue.svg)
+![Python](https://img.shields.io/badge/python-3.13+-blue.svg)
 ![codecov](https://codecov.io/gh/JoshCLWren/cdisplayagain/graph/badge.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
@@ -56,16 +56,13 @@ Or, via the official installer:
 curl -Ls https://astral.sh/uv/install.sh | sh
 ```
 
- CBR support uses `unrar2-cffi` for in-process extraction. The external
- `unar` binary is used as a fallback if needed. Install it via your
- package manager (`brew install unar`, `apt install unar`, etc.) for
- maximum compatibility.
+ CBR support uses `unrar2-cffi` for in-process extraction.
 
  The project requires `pyvips` for fast image processing. Install the
  libvips library via your package manager:
- - Linux: `sudo apt install libvips`
- - macOS: `brew install vips`
- - Windows: Download from libvips.org or `conda install -c conda-forge pyvips`
+  - Linux: `sudo apt install libvips xvfb`
+  - macOS: `brew install vips`
+  - Windows: Download from libvips.org or `conda install -c conda-forge pyvips`
 
 ### Usage
 

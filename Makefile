@@ -20,8 +20,13 @@ install-githook:  ## Install pre-commit hook for new developers
 githook: install-githook  ## Run lint checks manually (installs pre-commit hook if missing)
 	bash scripts/lint.sh
 
-pytest:  ## Run tests
-	uv run --active pytest
+pytest:  ## Run tests (requires xvfb to prevent GUI windows)
+	@if ! command -v xvfb-run >/dev/null 2>&1; then \
+		echo "ERROR: xvfb-run is required to run tests."; \
+		echo "Install xvfb: sudo apt-get install xvfb"; \
+		exit 1; \
+	fi
+	xvfb-run -a -s "-screen 0 1280x1024x24" uv run --active pytest
 
 profile-cbz:  ## Profile CBZ launch performance (Usage: make profile-cbz FILE=path/to/comic.cbz)
 	@if [ -z "$(FILE)" ]; then echo "Usage: make profile-cbz FILE=path/to/comic.cbz"; exit 1; fi
