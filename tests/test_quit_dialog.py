@@ -41,12 +41,12 @@ def test_dialog_has_quit_bindings():
             mock_img.save = lambda buf, **kwargs: buf.write(valid_image_bytes)
             mock_img_open.return_value = mock_img
 
+            root.withdraw()
             root.overrideredirect(True)
             root.geometry("1x1+0+0")
 
             app = ComicViewer(root, Path("dummy.cbz"))
             app.focus_set()
-            root.update()
 
             assert not app._dialog_active
 

@@ -40,12 +40,12 @@ Use git worktrees to work on multiple cards in parallel without branch conflicts
   - Add tests for platform-specific code paths
 
 ## Performance Guidelines
-- Image resizing (LANCZOS resampling) is the primary bottleneck (~65% of CPU time)
-- Archive extraction overhead is minimal: ~0.01s for ZIP, ~0.5s for RAR via unar
-- When optimizing, prioritize: 1) Adaptive resampling during scroll, 2) Async loading pipeline
+- Image resizing is no longer a bottleneck (~0.0001s - 0.00035s with pyvips + LRU caching)
+- Archive extraction overhead is minimal: ~0.006s for ZIP, ~0.034s for RAR via unrar2-cffi
+- Page turns are essentially instant (< 1ms) due to aggressive caching
 - Use `PerfTimer` context manager for timing operations: `with PerfTimer("operation_name"):`
 - Use `perf_log()` to log performance metrics when `CDISPLAYAGAIN_PERF=1` is set
-- Consider switching to BILINEAR/NEAREST during rapid scrolling, apply LANCZOS only when image settles
+- Current performance is already excellent with sub-millisecond page turns on cache hits
 
 ## Parity Implementation Pattern
 When implementing features from docs/PARITY.md:
@@ -62,7 +62,7 @@ Follow standard PEP 8 spacing (4 spaces, 100-character soft wrap) and favor des
 
 Ruff configuration (from `pyproject.toml`):
 - Line length: 100 characters
-- Python version: 3.12
+- Python version: 3.13
 - Enabled rules: E, F, I, N, UP, B, C4, D, ANN401
 - Ignored: D203, D213, E501
 - Code comments are discouraged - prefer clear code and commit messages
@@ -118,6 +118,7 @@ To test the hook manually: `make githook` or `bash scripts/lint.sh`
 - When adding tests, keep `pytest` naming like `test_load_cbz_sorts_pages`.
 - When using fakes, mirror the real `ComicViewer` interface rather than relaxing production code.
 - Always use the `tk_root` fixture from `conftest.py` for Tkinter testing. Never manually create `tk.Tk()` instances with `root.withdraw()` and `root.update()` in tests as this causes timeouts in headless environments.
+- **Note**: The current test architecture uses the full `ComicViewer` class which creates Tkinter widgets. To prevent GUI windows from appearing during tests, `make pytest` uses xvfb if available. For local development, install xvfb (`sudo apt-get install xvfb` on Debian/Ubuntu).
 - For manual smoke tests, run `python cdisplayagain.py path/to/sample.cbz`, open both `.cbz` and `.cbr` samples, page through images, toggle fit/zoom, and ensure cleanup of temporary directories. Document any manual checklist you execute inside the pull request.
 
 ## Commit & Pull Request Guidelines
@@ -128,4 +129,4 @@ To test the hook manually: `make githook` or `bash scripts/lint.sh`
 - Pull requests should summarize user impact, list testing performed (commands and archive types opened), note any new dependencies (system packages like `unar`), and attach screenshots when UI is affected.
 
 ## Security & Configuration Tips
-CBR support requires the external `unar` binary; verify contributors mention its installation path in reviews. Never check in sample comics or proprietary content—use small public-domain archives stored locally. When touching subprocess calls (`unar`, `rarfile`), sanitize user paths via `Path` helpers and prefer Python APIs over shell redirection.
+CBR support uses the `unrar2-cffi` Python package for in-process RAR extraction. Never check in sample comics or proprietary content—use small public-domain archives stored locally. When touching subprocess calls, sanitize user paths via `Path` helpers and prefer Python APIs over shell redirection.

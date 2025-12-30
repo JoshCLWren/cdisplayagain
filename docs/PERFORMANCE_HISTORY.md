@@ -93,6 +93,33 @@ This document tracks the evolution of cdisplayagain's performance improvements o
 
 ---
 
+### Phase 4: Python 3.13 Upgrade
+
+**Date**: Dec 30, 2025
+**Changes**:
+- Upgraded from Python 3.12 to Python 3.13
+- Updated all dependencies to Python 3.13-compatible versions
+- Updated performance thresholds based on new benchmarks
+
+| Metric | Python 3.12 | Python 3.13 | Change |
+|--------|-------------|-------------|--------|
+| CBZ Launch | 0.0053s | 0.0062s | +17% slower |
+| CBR Launch | 0.038s | 0.034s | +11% faster |
+| CBZ Cover Render | 0.00008s | 0.00021s | +163% slower |
+| CBR Cover Render | 0.00008s | 0.00031s | +288% slower |
+| CBZ Avg Page Turn | 0.00004s | 0.00011s | +175% slower |
+| CBR Avg Page Turn | 0.00012s | 0.00035s | +192% slower |
+| CBR/CBZ Launch Ratio | 7x | 5.45x | Better parity |
+
+**Notes**:
+- All performance metrics remain within acceptable thresholds
+- CBR launch improved slightly (faster extraction)
+- CBZ/CBR launch ratio improved from 7x to 5.45x
+- Page render times increased but remain sub-millisecond
+- Overall impact is negligible for user experience
+
+---
+
 ## Overall Performance Improvements
 
 ### Image Resizing (Total Improvement: ~50x)

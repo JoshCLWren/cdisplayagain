@@ -66,7 +66,7 @@ These features match CDisplay's behavior and are fully implemented:
 ### Error Handling
 - ✅ Proper error messages instead of fake placeholders
 - ✅ Cleanup error logging for resource leaks
-- ✅ Friendly CBR error messages with `unar` install hints
+- ✅ Friendly CBR error messages with troubleshooting hints
 
 ## API-Only Placeholders (Not Yet Implemented)
 
@@ -85,18 +85,7 @@ These features have API stubs with placeholder implementations to maintain inter
 - `set_small_cursor()` - Restore cursor visibility (partially functional)
 - `set_mouse_binding(button, action)` - Customize mouse buttons
 
-### UI Features
-- ✅ `_show_hint_popup()` - Hint popup on idle cursor
-- ✅ `_dismiss_hint_popup()` - Dismiss hint popup
-- ✅ `_minimize()` - Minimize window (fully functional)
-- ✅ `_show_help()` - Shows help dialog (fully functional, F1 bound)
-- ✅ `_show_config()` - Shows configuration dialog (fully functional, F2 bound)
-
 ## Notes
-
-The configuration methods in `cdisplayagain.py` (lines 1367-1410) provide complete functionality:
-
-### Notes
 
 The placeholder methods in `cdisplayagain.py` (lines 928-1006) serve as API contracts. They:
 1. Document the intended interface for future features

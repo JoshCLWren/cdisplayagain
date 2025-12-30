@@ -1,6 +1,8 @@
 # Performance Baselines (Dec 2025)
 
-Profiling was conducted on two representative archives to establish performance baselines for the current implementation (Python 3.12 + Tkinter + Pillow + pyvips + unrar2-cffi).
+Profiling was conducted on two representative archives to establish performance baselines for the current implementation (Python 3.13 + Tkinter + Pillow + pyvips + unrar2-cffi).
+
+**Note**: Performance tests create Tkinter windows. Locally, use `xvfb-run -a uv run pytest` if you want to prevent any window flashing.
 
 ## Test Candidates
 1. **test_cbz.cbz**: Standard ZIP-based archive.
@@ -13,18 +15,18 @@ Profiling was conducted on two representative archives to establish performance 
 ## Key Findings
 
 ### 1. Image Resizing is No Longer the Primary Bottleneck
-- **Impact**: ~0.00004s - 0.00012s per page load (with pyvips + LRU caching).
+- **Impact**: ~0.0001s - 0.00035s per page load (with pyvips + LRU caching).
 - **Cause**: Use of `pyvips` for image processing and aggressive caching.
 - **Note**: Page turns are now essentially instant (< 0.1ms).
 
 ### 2. Archive Extraction Overhead
-- **Zip (Internal)**: ~0.005s for launch (negligible).
-- **Rar (unrar2-cffi)**: ~0.038s for launch (in-process).
-- **Conclusion**: CBR launch is ~7x slower than CBZ, but page turn performance is identical.
+- **Zip (Internal)**: ~0.006s for launch (negligible).
+- **Rar (unrar2-cffi)**: ~0.034s for launch (in-process).
+- **Conclusion**: CBR launch is ~5.5x slower than CBZ, but page turn performance is identical.
 
 ### 3. Rendering Pipeline Costs
-- **Decoding + Resizing + Caching**: ~0.00004s - 0.00012s per page (cached).
-- **Tkinter Transfer**: ~0.00008s (marshalling pixels to Tcl/Tk).
+- **Decoding + Resizing + Caching**: ~0.0001s - 0.00035s per page (cached).
+- **Tkinter Transfer**: ~0.0002s - 0.0003s (marshalling pixels to Tcl/Tk).
 
 ## Benchmark Results
 
@@ -32,27 +34,27 @@ Profiling was conducted on two representative archives to establish performance 
 
 | Metric | Time | Threshold |
 |--------|-------|-----------|
-| Launch | 0.0053s | 0.02s |
-| Cover Render | 0.00008s | 0.01s |
-| Avg Page Turn | 0.00004s | 0.01s |
+| Launch | 0.0062s | 0.02s |
+| Cover Render | 0.00021s | 0.01s |
+| Avg Page Turn | 0.00011s | 0.01s |
 
 ### CBR Performance (test_cbr.cbr - 29 pages)
 
 | Metric | Time | Threshold |
 |--------|-------|-----------|
-| Launch | 0.038s | 0.06s |
-| Cover Render | 0.00008s | 0.01s |
-| Avg Page Turn | 0.00012s | 0.01s |
+| Launch | 0.034s | 0.06s |
+| Cover Render | 0.00031s | 0.01s |
+| Avg Page Turn | 0.00035s | 0.01s |
 
 ### CBR Extraction Methods Comparison
 
 | Method | Avg Time | vs unar |
 |--------|----------:----------|
 | unar (subprocess) | 0.234s | baseline |
-| **unrar2-cffi** | **0.038s** | **6.2x faster** |
+| **unrar2-cffi** | **0.034s** | **6.9x faster** |
 | libarchive-c | 0.259s | 0.90x |
 
-Note: The `unrar2-cffi` integration provides significant performance improvement over subprocess-based `unar` extraction (6.2x faster in current benchmarks).
+Note: The `unrar2-cffi` integration provides significant performance improvement over subprocess-based `unar` extraction (6.9x faster in current benchmarks).
 
 ## Recommendations
 1. **CBR Performance**: The current `unrar2-cffi` approach provides excellent performance with in-process extraction.
