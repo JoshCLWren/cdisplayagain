@@ -30,7 +30,7 @@ except ImportError as e:
         f"Check which Python you're using: {sys.executable}\n\n"
         "To fix this:\n"
         "  • macOS (Homebrew):  brew install python-tk\n"
-        '  • macOS (pyenv):     PYTHON_CONFIGURE_OPTS="--with-tcltk" pyenv install\n'
+        '  • macOS (pyenv):     PYTHON_CONFIGURE_OPTS="--with-tcltk" pyenv install <version>\n'
         "  • Ubuntu/Debian:     sudo apt-get install python3-tk\n"
         "  • Fedora:            sudo dnf install python3-tkinter\n"
         "  • Windows:           Reinstall Python and check 'tcl/tk and IDLE'\n\n"
