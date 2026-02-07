@@ -1672,7 +1672,7 @@ def main():
     try:
         root = tk.Tk()
         root.withdraw()
-    except Exception as e:
+    except tk.TclError as e:
         print(
             f"Error: tkinter cannot initialize the display.\n\n"
             f"This usually means:\n"
