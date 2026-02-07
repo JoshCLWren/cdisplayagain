@@ -56,13 +56,25 @@ Or, via the official installer:
 curl -Ls https://astral.sh/uv/install.sh | sh
 ```
 
- CBR support uses `unrar2-cffi` for in-process extraction.
+  CBR support uses `unrar2-cffi` for in-process extraction.
 
- The project requires `pyvips` for fast image processing. Install the
- libvips library via your package manager:
-  - Linux: `sudo apt install libvips xvfb`
-  - macOS: `brew install vips`
-  - Windows: Download from libvips.org or `conda install -c conda-forge pyvips`
+  The project uses `pyvips[binary]` which includes precompiled libvips binaries
+  for all platforms (Linux, macOS, Windows). No external libvips installation required.
+
+### macOS Setup
+
+**Note:** Recent Python versions on macOS no longer include tkinter by default.
+You must install it separately:
+
+```bash
+brew install python-tk
+```
+
+If you encounter issues with the UI not responding or appearing, try:
+```bash
+export TK_SILENCE_DEPRECATION=1
+python cdisplayagain.py path/to/comic.cbz
+```
 
 ### Usage
 

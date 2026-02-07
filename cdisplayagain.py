@@ -15,13 +15,29 @@ import sys
 import tempfile
 import threading
 import time
-import tkinter as tk
 from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from tkinter import filedialog, messagebox
 from typing import cast
+
+try:
+    import tkinter as tk
+    from tkinter import filedialog, messagebox
+except ImportError as e:
+    print(
+        "Error: tkinter is not installed or not working.\n\n"
+        f"Check which Python you're using: {sys.executable}\n\n"
+        "To fix this:\n"
+        "  • macOS (Homebrew):  brew install python-tk\n"
+        '  • macOS (pyenv):     PYTHON_CONFIGURE_OPTS="--with-tcltk" pyenv install\n'
+        "  • Ubuntu/Debian:     sudo apt-get install python3-tk\n"
+        "  • Fedora:            sudo dnf install python3-tkinter\n"
+        "  • Windows:           Reinstall Python and check 'tcl/tk and IDLE'\n\n"
+        f"Details: {e}",
+        file=sys.stderr,
+    )
+    sys.exit(1)
 
 from PIL import Image, ImageTk
 
@@ -1653,8 +1669,21 @@ def main():
     args = parser.parse_args()
 
     # Create Tk root once
-    root = tk.Tk()
-    root.withdraw()
+    try:
+        root = tk.Tk()
+        root.withdraw()
+    except Exception as e:
+        print(
+            f"Error: tkinter cannot initialize the display.\n\n"
+            f"This usually means:\n"
+            f"  • No display is available (running in a headless environment?)\n"
+            f"  • On macOS: You may need to install python-tk: brew install python-tk\n"
+            f"  • On macOS: Try running with the Quartz window system enabled\n"
+            f"  • On Linux: Make sure X11 is running or use xvfb-run\n\n"
+            f"Details: {e}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     path: Path | None = None
     if args.comic:
@@ -1698,23 +1727,16 @@ def require_pyvips():
             return
     except ModuleNotFoundError as e:
         raise SystemExit(
-            "pyvips is not installed.\n\n"
-            "Fix:\n"
-            "  uv pip install 'pyvips[binary]'   # macOS\n"
-            "  # or on Linux:\n"
-            "  sudo apt-get install -y libvips && uv pip install pyvips\n"
+            "pyvips is not installed.\n\nFix:\n  uv pip install 'pyvips[binary]'\n"
         ) from e
     except OSError as e:
         msg = str(e)
-        if "libvips" in msg and ("dylib" in msg or "dlopen" in msg):
+        if "libvips" in msg and ("dylib" in msg or "dlopen" in msg or "so" in msg):
             raise SystemExit(
                 "libvips could not be loaded.\n\n"
-                "Fix options:\n"
-                "  1) Recommended on macOS:\n"
-                "     uv pip install 'pyvips[binary]'\n"
-                "  2) Or use Homebrew vips and export the path before running:\n"
-                "     brew install vips\n"
-                "     export DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib\n"
+                "Fix:\n"
+                "  uv pip install 'pyvips[binary]'\n"
+                f"\nDetails: {e}"
             ) from e
         raise
 
