@@ -184,14 +184,67 @@ def test_require_pyvips_with_oserror_no_libvips(monkeypatch):
         cdisplayagain.require_pyvips()
 
 
+def test_tkinter_import_error_subprocess(tmp_path):
+    """Test that cdisplayagain.py exits with helpful error when tkinter is not available."""
+    import os
+    import subprocess
+
+    # Create a test script that simulates missing tkinter
+    test_script = tmp_path / "test_import.py"
+    test_script.write_text("""
+import sys
+import os
+
+# Add current directory to path so we can import cdisplayagain
+sys.path.insert(0, os.getcwd())
+
+# Mock tkinter to raise ImportError
+import builtins
+original_import = builtins.__import__
+
+def mock_import(name, *args, **kwargs):
+    if name == "tkinter":
+        raise ImportError("No module named 'tkinter'")
+    if name == "tkinter.filedialog":
+        raise ImportError("No module named 'tkinter.filedialog'")
+    return original_import(name, *args, **kwargs)
+
+builtins.__import__ = mock_import
+
+# Now try to import cdisplayagain
+try:
+    import cdisplayagain
+    sys.exit(1)  # Should have exited
+except SystemExit as e:
+    if e.code == 1:
+        sys.exit(0)  # Expected exit
+    else:
+        sys.exit(2)  # Wrong exit code
+""")
+
+    result = subprocess.run(
+        [sys.executable, str(test_script)],
+        capture_output=True,
+        text=True,
+        cwd=os.getcwd(),
+        env={**os.environ, "PYTHONPATH": os.getcwd()},
+    )
+
+    assert result.returncode == 0, f"Script failed with stderr: {result.stderr}"
+
+
 def test_main_function_tkinter_initialization_failure(monkeypatch, tmp_path):
     """Test main function exits gracefully when tkinter.Tk() fails to initialize."""
+    import tkinter as tk_module
+
     with (
         patch("tkinter.Tk") as mock_tk,
         patch("builtins.print") as mock_print,
     ):
-        # Make Tk() raise an exception (common when display is unavailable)
-        mock_tk.side_effect = Exception("no display name and no $DISPLAY environment variable")
+        # Make Tk() raise TclError (common when display is unavailable)
+        mock_tk.side_effect = tk_module.TclError(
+            "no display name and no $DISPLAY environment variable"
+        )
 
         test_args = ["cdisplayagain.py", str(tmp_path / "test.png")]
         with patch("sys.argv", test_args):
