@@ -27,10 +27,9 @@ try:
 except ImportError as e:
     print(
         "Error: tkinter is not installed or not working.\n\n"
-        f"Check which Python you're using: {sys.executable}\n\n"
-        "To fix this:\n"
-        "  • macOS (Homebrew):  brew install python-tk\n"
-        '  • macOS (pyenv):     PYTHON_CONFIGURE_OPTS="--with-tcltk" pyenv install <version>\n'
+        "Check which Python you're using: "
+        f"  • macOS (Homebrew):  brew install python-tk\n"
+        '  • macOS (pyenv):     PYTHON_CONFIGURE_OPTS="--with-tcltk" pyenv install\n'
         "  • Ubuntu/Debian:     sudo apt-get install python3-tk\n"
         "  • Fedora:            sudo dnf install python3-tkinter\n"
         "  • Windows:           Reinstall Python and check 'tcl/tk and IDLE'\n\n"

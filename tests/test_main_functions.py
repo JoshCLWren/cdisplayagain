@@ -182,3 +182,34 @@ def test_require_pyvips_with_oserror_no_libvips(monkeypatch):
 
     with pytest.raises(OSError, match="Some other OSError"):
         cdisplayagain.require_pyvips()
+
+
+def test_main_function_tkinter_initialization_failure(monkeypatch, tmp_path):
+    """Test main function exits gracefully when tkinter.Tk() fails to initialize."""
+    with (
+        patch("tkinter.Tk") as mock_tk,
+        patch("builtins.print") as mock_print,
+    ):
+        # Make Tk() raise an exception (common when display is unavailable)
+        mock_tk.side_effect = Exception("no display name and no $DISPLAY environment variable")
+
+        test_args = ["cdisplayagain.py", str(tmp_path / "test.png")]
+        with patch("sys.argv", test_args):
+            with pytest.raises(SystemExit) as exc_info:
+                cdisplayagain.main()
+
+        # Verify exit code is 1
+        assert exc_info.value.code == 1
+
+        # Verify error message was printed to stderr
+        assert mock_print.called
+        print_call_args = mock_print.call_args
+        printed_message = print_call_args[0][0]  # First positional argument
+
+        # Check that key parts of the error message are present
+        assert "tkinter cannot initialize the display" in printed_message
+        assert "headless environment" in printed_message
+        assert "python-tk" in printed_message or "X11" in printed_message
+
+        # Verify it was printed to stderr
+        assert print_call_args.kwargs.get("file") == sys.stderr
