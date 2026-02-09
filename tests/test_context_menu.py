@@ -54,6 +54,8 @@ def test_context_menu_exists_and_has_load_files():
                 label = app._context_menu.entrycget(entry_index, "label")
                 assert label == "Load files"
 
+                app.cleanup()
+
     root.destroy()
 
 
@@ -94,6 +96,8 @@ def test_right_click_binding_exists():
                 bindings = app.bind_all("<Button-3>")
                 assert bindings is not None
                 assert len(bindings) > 0
+
+                app.cleanup()
 
     root.destroy()
 
@@ -137,6 +141,8 @@ def test_context_menu_load_files_calls_open_dialog():
                 index = 0
                 command = app._context_menu.entrycget(index, "command")
                 assert "_open_dialog" in command
+
+                app.cleanup()
 
     root.destroy()
 
@@ -184,5 +190,7 @@ def test_right_click_shows_context_menu():
                 app._show_context_menu(event)
 
                 app._show_context_menu.assert_called_once()
+
+                app.cleanup()
 
     root.destroy()
