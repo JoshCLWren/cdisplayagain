@@ -63,8 +63,15 @@ clean-build:  ## Clean build artifacts
 build: clean-build  ## Build single-file executable (slower startup)
 	uv run --active pyinstaller --onefile --name cdisplayagain cdisplayagain.py
 
-build-onedir: clean-build  ## Build directory bundle (faster startup)
-	uv run --active pyinstaller --onedir --name cdisplayagain cdisplayagain.py
+build-onedir:
+	uv run --active pyinstaller \
+		--onedir \
+		--icon=cdisplayagain.png \
+		--name cdisplayagain \
+		cdisplayagain.py
+	rm -rf ~/.local/bin/cdisplayagain
+	cp -r dist/cdisplayagain ~/.local/bin/
+
 
 install: install-bin install-desktop  ## Install everything
 
