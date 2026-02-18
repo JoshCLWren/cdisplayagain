@@ -58,7 +58,6 @@ from archives import natural_key as natural_key
 from image_backend import get_resized_pil
 
 TkPhotoImage = tk.PhotoImage | ImageTk.PhotoImage
-_RESIZE_LOCK = threading.Lock()
 
 
 def _as_wm(obj: tk.Misc) -> tk.Wm:
@@ -211,6 +210,8 @@ class ImageWorker:
         try:
             priority = 1 if preload else 0
             self._queue.put_nowait((priority, index, width, height, preload, render_generation))
+            if self._app and hasattr(self._app, "_ensure_worker_drain_running"):
+                self._app._ensure_worker_drain_running()
         except queue.Full:
             pass
 
@@ -295,8 +296,7 @@ class ImageWorker:
                 if source is None:
                     break
                 raw = source.get_bytes(source.pages[index])
-                with _RESIZE_LOCK:
-                    resized_pil = get_resized_pil(raw, width, height)
+                resized_pil = get_resized_pil(raw, width, height)
 
                 if self._should_stop():
                     break
@@ -416,7 +416,6 @@ class ComicViewer(tk.Frame):
 
         # Redraw on resize
         self.canvas.bind("<Configure>", self._on_canvas_configure)
-        self._schedule_worker_drain()
 
         # Load file - let Configure event trigger first render
         self._open_comic(comic_path)
@@ -431,22 +430,35 @@ class ComicViewer(tk.Frame):
 
     def _schedule_worker_drain(self) -> None:
         """Drain worker results in the Tk main loop."""
-        self._drain_worker_results()
-        if self._quitting:
+        had_items = self._drain_worker_results()
+        if self._quitting or not had_items:
+            self._worker_drain_job = None
             return
         try:
-            self._worker_drain_job = self.after(16, self._schedule_worker_drain)
+            self._worker_drain_job = self.after(1, self._schedule_worker_drain)
         except tk.TclError:
             self._worker_drain_job = None
 
-    def _drain_worker_results(self) -> None:
+    def _ensure_worker_drain_running(self) -> None:
+        """Start worker drain loop if not already scheduled."""
+        if self._worker_drain_job is not None:
+            return
+        try:
+            self._worker_drain_job = self.after(1, self._schedule_worker_drain)
+        except tk.TclError:
+            self._worker_drain_job = None
+
+    def _drain_worker_results(self) -> bool:
         """Apply completed worker results on the UI thread."""
+        had_items = False
         while True:
             try:
                 index, img = self._worker_results.get_nowait()
             except queue.Empty:
                 break
+            had_items = True
             self._update_from_cache(index, img)
+        return had_items
 
     def _request_focus(self) -> None:
         self._focus_restorer.schedule()

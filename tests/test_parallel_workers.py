@@ -4,6 +4,7 @@ import io
 import time
 import tkinter as tk
 import zipfile
+from unittest.mock import patch
 
 import pytest
 from PIL import Image
@@ -19,6 +20,13 @@ def tk_root():
     root.withdraw()
     yield root
     root.destroy()
+
+
+@pytest.fixture(autouse=True)
+def mock_resizer():
+    """Stabilize thread-behavior tests by avoiding native decoder races."""
+    with patch("cdisplayagain.get_resized_pil", return_value=Image.new("RGB", (100, 200))):
+        yield
 
 
 def create_test_cbz(path, page_count=10, image_size=(100, 200)):
