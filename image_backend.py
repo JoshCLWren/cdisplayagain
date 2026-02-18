@@ -1,9 +1,14 @@
 """Image processing backend using pyvips for fast operations."""
 
 import functools
+import io
 
 import pyvips
 from PIL import Image
+from PIL import JpegImagePlugin as _JpegImagePlugin
+from PIL import TiffImagePlugin as _TiffImagePlugin
+
+_PIL_PLUGINS = (_JpegImagePlugin, _TiffImagePlugin)
 
 
 @functools.lru_cache(maxsize=32)
@@ -16,4 +21,6 @@ def get_resized_pil(raw_bytes: bytes, target_width: int, target_height: int) -> 
 
     resized: pyvips.Image = img.resize(scale, kernel="lanczos3")
     jpeg_bytes = resized.write_to_buffer(".jpg[Q=75]")
-    return Image.open(functools.__builtins__["__import__"]("io").BytesIO(jpeg_bytes))
+    pil_img = Image.open(io.BytesIO(jpeg_bytes))
+    pil_img.load()
+    return pil_img

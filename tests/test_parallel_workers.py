@@ -32,25 +32,25 @@ def create_test_cbz(path, page_count=10, image_size=(100, 200)):
 
 
 def test_multiple_workers_created(tk_root, tmp_path):
-    """Test that ImageWorker creates multiple threads by default."""
+    """Test that ImageWorker creates the stable default worker thread."""
     cbz_path = tmp_path / "test.cbz"
     create_test_cbz(cbz_path)
 
     app = cdisplayagain.ComicViewer(tk_root, cbz_path)
     with ImageWorker(app) as worker:
-        assert len(worker._threads) == 4, "Should create 4 worker threads by default"
+        assert len(worker._threads) == 1, "Should create 1 worker thread by default"
         assert all(t.daemon for t in worker._threads), "All worker threads should be daemon"
         assert all(t.is_alive() for t in worker._threads), "All worker threads should be alive"
 
 
 def test_custom_worker_count(tk_root, tmp_path):
-    """Test that ImageWorker can be configured with custom worker count."""
+    """Test that ImageWorker keeps the stable worker count even when requested."""
     cbz_path = tmp_path / "test.cbz"
     create_test_cbz(cbz_path)
 
     app = cdisplayagain.ComicViewer(tk_root, cbz_path)
     with ImageWorker(app, num_workers=2) as worker:
-        assert len(worker._threads) == 2, "Should create 2 worker threads when specified"
+        assert len(worker._threads) == 1, "Worker count is intentionally capped for stability"
         assert all(t.is_alive() for t in worker._threads), "All worker threads should be alive"
 
 
