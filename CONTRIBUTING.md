@@ -37,6 +37,14 @@ To test the hook manually: `make githook` or `bash scripts/lint.sh`
 - Do not narrate your code with comments; prefer clear code and commit messages.
 - Do not use `pytest.skip` in test files; all tests must run in CI.
 
+## Benchmark integrity
+
+- Benchmark tests must measure real runtime behavior. Do not mock decode/resize/archive I/O in:
+  - `tests/test_benchmark_parallel.py`
+  - `tests/test_performance.py`
+- If a performance test fails, treat it as a regression signal. Do not lower assertions or alter semantics just to pass.
+- Any intentional performance tradeoff must include before/after benchmark numbers and a user-impact note in the PR.
+
 ## Style guidelines
 
 - Keep helpers explicit and descriptive (snake_case), and annotate public

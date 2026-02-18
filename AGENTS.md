@@ -47,6 +47,12 @@ Use git worktrees to work on multiple cards in parallel without branch conflicts
 - Use `perf_log()` to log performance metrics when `CDISPLAYAGAIN_PERF=1` is set
 - Current performance is already excellent with sub-millisecond page turns on cache hits
 
+### Benchmark Integrity (Required)
+- Do not mock, stub, or monkeypatch decode/resize/archive I/O in benchmark tests (`tests/test_benchmark_parallel.py`, `tests/test_performance.py`) unless the test is explicitly marked as synthetic and renamed accordingly.
+- Do not weaken benchmark assertions to make regressions pass. If performance regresses, fix implementation or explicitly document and approve the tradeoff in the PR.
+- Do not change worker concurrency defaults/caps to satisfy stability without benchmark evidence and explicit note in PR user impact.
+- If benchmark behavior changes, include before/after numbers from the same benchmark command in the PR description.
+
 ## Parity Implementation Pattern
 When implementing features from docs/PARITY.md:
 - Many features have API-only placeholder methods in cdisplayagain.py (lines 928-1006)

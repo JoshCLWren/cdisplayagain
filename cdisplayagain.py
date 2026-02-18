@@ -197,8 +197,7 @@ class ImageWorker:
         self._queue = queue.PriorityQueue(maxsize=4)
         self._threads: list[threading.Thread] = []
         self._stopped: bool = False
-        worker_count = 1
-        for i in range(worker_count):
+        for i in range(num_workers):
             thread = threading.Thread(target=self._run, daemon=True, name=f"ImageWorker-{i}")
             thread.start()
             self._threads.append(thread)
