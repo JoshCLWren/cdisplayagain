@@ -5,17 +5,24 @@
 ## Status
 
 - [x] Plan doc created
-- [ ] Step 1: `_get_sibling_comics()` helper + `ARCHIVE_EXTS` constant
-- [ ] Step 2: Wire into `__init__` and `_open_comic()` to track siblings
-- [ ] Step 3: `next_comic()` / `prev_comic()` methods
-- [ ] Step 4: Auto-advance in `next_page()` / `prev_page()` at boundaries
-- [ ] Step 5: Keybindings (`n`/`N`, `p`/`P`) and context menu entries
-- [ ] Step 6: `_update_title()` shows position (e.g., "[2/5] comic.cbz")
-- [ ] Step 7: Tests — full coverage of all paths
-- [ ] Step 8: Lint + type check passes
-- [ ] Step 9: Update PARITY.md to mark sequential reading as ✅
-- [ ] Step 10: Refactor cdisplayagain.py into smaller modules
-- [ ] Step 11: Coverage back to 96%+
+- [x] Step 1: `_get_sibling_comics()` helper + `ARCHIVE_EXTS` constant
+- [x] Step 2: Wire into `__init__` and `_open_comic()` to track siblings
+- [x] Step 3: `next_comic()` / `prev_comic()` methods
+- [x] Step 4: Auto-advance in `next_page()` / `prev_page()` at boundaries
+- [x] Step 5: Keybindings (`n`/`N`, `p`/`P`) and context menu entries
+- [x] Step 6: `_update_title()` shows position (e.g., "[2/5] comic.cbz")
+- [x] Step 7: Tests — full coverage of all paths
+- [x] Step 8: Lint + type check passes
+- [x] Step 9: Update PARITY.md to mark sequential reading as ✅
+- [x] Step 10: Refactor cdisplayagain.py into smaller modules
+- [x] Step 11: Coverage back to 96%+
+
+## Completion Notes
+
+- Implemented sequential archive navigation and boundary auto-advance.
+- Added sibling-aware title formatting and key/menu bindings.
+- Added archive-loading module extraction (`archives.py`) and tests.
+- Restored project coverage target (>=96%).
 
 ## Design
 

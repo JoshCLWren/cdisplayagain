@@ -28,6 +28,7 @@ These features match CDisplay's behavior and are fully implemented:
 - ✅ Arrow keys (Left/Right) turn pages forward/back
 - ✅ Page Down/Up keys turn pages
 - ✅ Spacebar smart-forward (scrolls until fully shown, then advances)
+- ✅ Sequential reading across comics in same directory (next/previous comic)
 - ✅ Mouse wheel scrolls/navigates (Windows/Mac/Linux X11 bindings)
 - ✅ Mouse drag to pan page
 
@@ -73,8 +74,8 @@ These features match CDisplay's behavior and are fully implemented:
 These features existed in the original CDisplay 1.8 but are not yet present in cdisplayagain.
 
 ### Sequential Reading
-- ❌ Read issues sequentially (auto-advance to next comic in directory)
-- ❌ Go to previous comic in directory
+- ✅ Read issues sequentially (auto-advance to next comic in directory)
+- ✅ Go to previous comic in directory
 
 ### Navigation
 - ❌ Go To Page (jump to a specific page number by entering it)
