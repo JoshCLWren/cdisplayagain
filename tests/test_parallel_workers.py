@@ -10,6 +10,7 @@ import pytest
 from PIL import Image
 
 import cdisplayagain
+from archives import PageSource
 from cdisplayagain import ImageWorker
 
 
@@ -25,7 +26,19 @@ def tk_root():
 @pytest.fixture(autouse=True)
 def mock_resizer():
     """Stabilize thread-behavior tests by avoiding native decoder races."""
-    with patch("cdisplayagain.get_resized_pil", return_value=Image.new("RGB", (100, 200))):
+    img = Image.new("RGB", (100, 200), color=(123, 50, 77))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    raw_bytes = buf.getvalue()
+
+    def fake_load_cbz(_path):
+        pages = [f"page_{i:03d}.png" for i in range(30)]
+        return PageSource(pages=pages, get_bytes=lambda _name: raw_bytes, cleanup=lambda: None)
+
+    with (
+        patch("cdisplayagain.get_resized_pil", return_value=Image.new("RGB", (100, 200))),
+        patch("cdisplayagain.load_cbz", side_effect=fake_load_cbz),
+    ):
         yield
 
 
@@ -46,6 +59,8 @@ def test_multiple_workers_created(tk_root, tmp_path):
 
     app = cdisplayagain.ComicViewer(tk_root, cbz_path)
     with ImageWorker(app) as worker:
+        worker.request_page(0, 100, 200, render_generation=0)
+        tk_root.update()
         assert len(worker._threads) == 4, "Should create 4 worker threads by default"
         assert all(t.daemon for t in worker._threads), "All worker threads should be daemon"
         assert all(t.is_alive() for t in worker._threads), "All worker threads should be alive"
@@ -58,6 +73,8 @@ def test_custom_worker_count(tk_root, tmp_path):
 
     app = cdisplayagain.ComicViewer(tk_root, cbz_path)
     with ImageWorker(app, num_workers=2) as worker:
+        worker.request_page(0, 100, 200, render_generation=0)
+        tk_root.update()
         assert len(worker._threads) == 2, "Should create 2 worker threads when specified"
         assert all(t.is_alive() for t in worker._threads), "All worker threads should be alive"
 
@@ -261,6 +278,8 @@ def test_single_worker_backward_compat(tk_root, tmp_path):
 
     app = cdisplayagain.ComicViewer(tk_root, cbz_path)
     with ImageWorker(app, num_workers=1) as worker:
+        worker.request_page(0, 100, 200, render_generation=0)
+        tk_root.update()
         assert len(worker._threads) == 1, "Should support single worker mode"
 
         results = []

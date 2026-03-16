@@ -12,6 +12,7 @@ import queue
 import sys
 import threading
 import time
+import weakref
 from collections import OrderedDict
 from collections.abc import Callable
 from pathlib import Path
@@ -189,17 +190,46 @@ class ImageWorker:
     """Background thread pool for image processing."""
 
     _app: ComicViewer | None = None
+    _instances: weakref.WeakSet[ImageWorker] = weakref.WeakSet()
+    _instances_lock = threading.Lock()
 
-    def __init__(self, app, num_workers: int = 4):
-        """Initialize worker pool with app reference and start daemon threads."""
+    def __init__(self, app, num_workers: int = 4, autostart: bool = False):
+        """Initialize worker pool with app reference."""
         self._app = app
+        self._num_workers = num_workers
         self._queue = queue.PriorityQueue(maxsize=4)
         self._threads: list[threading.Thread] = []
         self._stopped: bool = False
-        for i in range(num_workers):
-            thread = threading.Thread(target=self._run, daemon=True, name=f"ImageWorker-{i}")
-            thread.start()
-            self._threads.append(thread)
+        self._threads_started: bool = False
+        self._start_lock = threading.Lock()
+        with self._instances_lock:
+            self._instances.add(self)
+        if autostart:
+            self._ensure_threads_started()
+
+    @classmethod
+    def stop_all(cls) -> None:
+        """Stop any leaked workers still alive in process."""
+        with cls._instances_lock:
+            workers = list(cls._instances)
+        for worker in workers:
+            try:
+                worker.stop()
+            except Exception:
+                continue
+
+    def _ensure_threads_started(self) -> None:
+        """Start worker threads once, on first real request."""
+        if self._threads_started or self._stopped:
+            return
+        with self._start_lock:
+            if self._threads_started or self._stopped:
+                return
+            for i in range(self._num_workers):
+                thread = threading.Thread(target=self._run, daemon=True, name=f"ImageWorker-{i}")
+                thread.start()
+                self._threads.append(thread)
+            self._threads_started = True
 
     def request_page(
         self, index: int, width: int, height: int, preload: bool = False, render_generation: int = 0
@@ -207,6 +237,7 @@ class ImageWorker:
         """Request a page be processed in background."""
         if self._stopped or not self._app:
             return
+        self._ensure_threads_started()
         try:
             priority = 1 if preload else 0
             self._queue.put_nowait((priority, index, width, height, preload, render_generation))
@@ -231,9 +262,9 @@ class ImageWorker:
 
         for _ in self._threads:
             try:
-                self._queue.put_nowait((2, None, None, None, None, None))
+                self._queue.put((2, None, None, None, None, None), timeout=0.1)
             except queue.Full:
-                break
+                continue
 
         for thread in self._threads:
             try:
@@ -241,6 +272,7 @@ class ImageWorker:
             except Exception:
                 pass
         self._threads.clear()
+        self._threads_started = False
 
     def __enter__(self):
         """Context manager entry."""
@@ -275,18 +307,7 @@ class ImageWorker:
                     break
                 assert app is not None
 
-                if preload:
-                    logging.info("Worker preloading page %d at %dx%d", index, width, height)
-                else:
-                    logging.info("Worker processing page %d at %dx%d", index, width, height)
-
                 if not preload and render_generation != app._render_generation:
-                    logging.info(
-                        "Worker cancelling stale render for page %d (gen %d != %d)",
-                        index,
-                        render_generation,
-                        app._render_generation,
-                    )
                     continue
 
                 if self._should_stop():
@@ -300,11 +321,6 @@ class ImageWorker:
 
                 if self._should_stop():
                     break
-
-                if preload:
-                    logging.info("Worker finished preloading page %d", index)
-                else:
-                    logging.info("Worker finished page %d, scheduling callback", index)
 
                 if app and hasattr(app, "_worker_results"):
                     app._worker_results.put((index, resized_pil))
@@ -321,8 +337,14 @@ class ComicViewer(tk.Frame):
     """Tk viewer for comic archives and image folders."""
 
     def __del__(self):
-        """Cleanup worker threads on garbage collection."""
-        self.cleanup()
+        """Best-effort worker cleanup during garbage collection."""
+        worker = getattr(self, "_worker", None)
+        if worker is None:
+            return
+        try:
+            worker.stop()
+        except Exception:
+            pass
 
     def cleanup(self):
         """Stop worker threads to prevent threading crashes during shutdown."""
@@ -337,6 +359,7 @@ class ComicViewer(tk.Frame):
 
     def __init__(self, master: tk.Tk, comic_path: Path):
         """Initialize the viewer frame and load the initial comic."""
+        ImageWorker.stop_all()
         init_start = time.perf_counter()
         perf_log("app_init_start", 0, f"path={comic_path.name}")
         super().__init__(master)
@@ -395,8 +418,7 @@ class ComicViewer(tk.Frame):
         self._pending_quit: bool = False
         self._quitting: bool = False
         self._canvas_properly_sized: bool = False
-
-        self._worker = ImageWorker(self)
+        self._worker = ImageWorker(self, autostart=False)
         self._worker_results: queue.Queue[tuple[int, Image.Image]] = queue.Queue()
         self._worker_drain_job: str | None = None
         self._pending_index: int | None = None
@@ -459,6 +481,10 @@ class ComicViewer(tk.Frame):
             had_items = True
             self._update_from_cache(index, img)
         return had_items
+
+    def _get_worker(self) -> ImageWorker:
+        """Return the app worker, creating it lazily."""
+        return self._worker
 
     def _request_focus(self) -> None:
         self._focus_restorer.schedule()
@@ -1175,7 +1201,7 @@ class ComicViewer(tk.Frame):
             self._update_title()
         else:
             logging.info("Cache miss for page %d, requesting worker", index)
-            self._worker.request_page(
+            self._get_worker().request_page(
                 index, cw, ch, preload=False, render_generation=self._render_generation
             )
             self._update_title()
@@ -1183,7 +1209,7 @@ class ComicViewer(tk.Frame):
         next_idx = self._find_next_image_index(index)
         if next_idx is not None:
             logging.info("Preloading next image page %d", next_idx)
-            self._worker.preload(next_idx)
+            self._get_worker().preload(next_idx)
 
     def _render_current_sync(self):
         if not self.source:
@@ -1216,7 +1242,7 @@ class ComicViewer(tk.Frame):
 
         if not self._first_proper_render_completed:
             logging.info("First proper render, skipping preview, requesting high-quality resize")
-            self._worker.request_page(
+            self._get_worker().request_page(
                 index, cw, ch, preload=False, render_generation=self._render_generation
             )
             self._update_title()
@@ -1238,7 +1264,7 @@ class ComicViewer(tk.Frame):
         perf_log("display_preview", time.perf_counter() - display_start)
 
         logging.info("Requesting high-quality resize for page %d", index)
-        self._worker.request_page(
+        self._get_worker().request_page(
             index, cw, ch, preload=False, render_generation=self._render_generation
         )
         self._update_title()
@@ -1266,7 +1292,7 @@ class ComicViewer(tk.Frame):
             self._show_info_overlay(name)
             return
 
-        self._worker.request_page(
+        self._get_worker().request_page(
             image_index, cw, ch, preload=False, render_generation=self._render_generation
         )
         self._show_info_overlay(name)

@@ -116,35 +116,17 @@ def load_cbz(path: Path) -> PageSource:
         zf.close()
         raise RuntimeError("No images or info files found inside CBZ.")
 
-    local_readers = threading.local()
-    readers_lock = threading.Lock()
-    readers: list[zipfile.ZipFile] = [zf]
-    local_readers.zf = zf
-    owner_thread = threading.get_ident()
-
-    def _reader() -> zipfile.ZipFile:
-        reader = getattr(local_readers, "zf", None)
-        if reader is None:
-            reader = zipfile.ZipFile(path, "r")
-            local_readers.zf = reader
-            with readers_lock:
-                readers.append(reader)
-        return reader
+    read_lock = threading.Lock()
 
     def get_bytes(name: str) -> bytes:
-        if threading.get_ident() == owner_thread:
+        with read_lock:
             return zf.read(name)
-        return _reader().read(name)
 
     def cleanup():
-        with readers_lock:
-            to_close = list(readers)
-            readers.clear()
-        for reader in to_close:
-            try:
-                reader.close()
-            except Exception as e:
-                logging.warning("Cleanup failed: %s", e)
+        try:
+            zf.close()
+        except Exception as e:
+            logging.warning("Cleanup failed: %s", e)
 
     return PageSource(pages=pages, get_bytes=get_bytes, cleanup=cleanup)
 
