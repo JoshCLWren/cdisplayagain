@@ -194,7 +194,21 @@ class ImageWorker:
     _instances_lock = threading.Lock()
 
     def __init__(self, app, num_workers: int = 4, autostart: bool = False):
-        """Initialize worker pool with app reference."""
+        """Initialize worker pool with app reference.
+
+        Args:
+            app: ComicViewer instance that owns this worker pool.
+            num_workers: Number of worker threads to create for parallel processing.
+            autostart: If True, start worker threads immediately. If False (default),
+                threads are created lazily on first call to request_page() for
+                faster application startup.
+
+        Note:
+            When autostart=False, threads are only created when the first page is
+            requested, which improves startup time but may cause a slight delay for
+            the first page turn.
+
+        """
         self._app = app
         self._num_workers = num_workers
         self._queue = queue.PriorityQueue(maxsize=4)
@@ -258,19 +272,19 @@ class ImageWorker:
         """Signal all worker threads to stop and wait for them to exit."""
         self._stopped = True
 
-        self._app = None
-
         for _ in self._threads:
             try:
-                self._queue.put((2, None, None, None, None, None), timeout=0.1)
+                self._queue.put((2, None, None, None, None, None))
             except queue.Full:
-                continue
+                break
 
         for thread in self._threads:
             try:
-                thread.join(timeout=1.0)
+                thread.join(timeout=2.0)
             except Exception:
                 pass
+
+        self._app = None
         self._threads.clear()
         self._threads_started = False
 

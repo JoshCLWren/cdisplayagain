@@ -154,7 +154,7 @@ def test_image_worker_daemon(tk_root, tmp_path):
     create_test_cbz(cbz_path)
 
     app = cdisplayagain.ComicViewer(tk_root, cbz_path)
-    with ImageWorker(app) as worker:
+    with ImageWorker(app, autostart=True) as worker:
         assert len(worker._threads) > 0, "Worker should have threads"
         assert all(t.daemon for t in worker._threads), "All worker threads should be daemon"
 
@@ -517,7 +517,7 @@ def test_worker_context_manager(tk_root, tmp_path):
 
     app = cdisplayagain.ComicViewer(tk_root, cbz_path)
 
-    with cdisplayagain.ImageWorker(app, num_workers=1) as worker:
+    with cdisplayagain.ImageWorker(app, num_workers=1, autostart=True) as worker:
         assert worker._stopped is False
         assert len(worker._threads) == 1
 
@@ -647,7 +647,7 @@ def test_worker_stop_handles_join_exception(tk_root, tmp_path):
 
     app = cdisplayagain.ComicViewer(tk_root, cbz_path)
 
-    worker = cdisplayagain.ImageWorker(app, num_workers=1)
+    worker = cdisplayagain.ImageWorker(app, num_workers=1, autostart=True)
 
     with mock.patch.object(worker._threads[0], "join", side_effect=RuntimeError("Test error")):
         worker.stop()
