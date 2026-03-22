@@ -1,23 +1,29 @@
-# Performance Baselines (Dec 2025)
+# Performance Baselines (Dec 2025 - Updated Mar 2026)
 
-Profiling was conducted on two representative archives to establish performance baselines for the current implementation (Python 3.13 + Tkinter + Pillow + pyvips + unrar2-cffi).
+Profiling was conducted on representative archives to establish performance baselines for the current implementation (Python 3.13 + Tkinter + Pillow + pyvips + unrar2-cffi).
 
 **Note**: Performance tests create Tkinter windows. Locally, use `xvfb-run -a uv run pytest` if you want to prevent any window flashing.
 
 ## Test Candidates
+
 1. **test_cbz.cbz**: Standard ZIP-based archive.
    - **Resolution**: 25 pages, 1934x2952 images
    - **Format**: `.cbz` (internally Zip).
+
 2. **test_cbr.cbr**: RAR-based archive using `unrar2-cffi`.
    - **Resolution**: 29 pages, 1074x1650 images
    - **Format**: `.cbr` (internally Rar).
+
+3. **Benchmark CBZ**: Synthetic benchmark archive.
+   - **Resolution**: 3 pages, 1920x1080 images
+   - **Format**: `.cbz` (internally Zip).
 
 ## Key Findings
 
 ### 1. Image Resizing is No Longer the Primary Bottleneck
 - **Impact**: ~0.0001s - 0.00035s per page load (with pyvips + LRU caching).
 - **Cause**: Use of `pyvips` for image processing and aggressive caching.
-- **Note**: Page turns are now essentially instant (< 0.1ms).
+- **Note**: Page turns are now essentially instant (< 0.25ms cached).
 
 ### 2. Archive Extraction Overhead
 - **Zip (Internal)**: ~0.006s for launch (negligible).
@@ -27,6 +33,7 @@ Profiling was conducted on two representative archives to establish performance 
 ### 3. Rendering Pipeline Costs
 - **Decoding + Resizing + Caching**: ~0.0001s - 0.00035s per page (cached).
 - **Tkinter Transfer**: ~0.0002s - 0.0003s (marshalling pixels to Tcl/Tk).
+- **Worker Drain Loop**: < 0.01ms overhead (runs every 10ms when idle).
 
 ## Benchmark Results
 
@@ -45,6 +52,22 @@ Profiling was conducted on two representative archives to establish performance 
 | Launch | 0.034s | 0.06s |
 | Cover Render | 0.00031s | 0.01s |
 | Avg Page Turn | 0.00035s | 0.01s |
+
+### Synthetic Benchmark (3 pages, 1920x1080)
+
+| Metric | Time | Threshold |
+|--------|-------|-----------|
+| First Paint | 0.00177s | 0.01s |
+| Page Turn (cached) | 0.00024s | 0.100s |
+| 4K→1080p Resize | 0.194s | 0.500s |
+| Load CBZ (1000 pages) | 0.044s | 0.100s |
+| Natural Sort (5000 files) | 0.038s | 0.100s |
+
+**Notes:**
+- Page turn performance is exceptional at 0.24ms (416x faster than 100ms threshold)
+- First paint includes full render pipeline: archive extraction, JPEG decode, VIPS resize, LRU cache, and Tkinter display
+- Worker thread drain loop runs every 10ms when idle, adding negligible overhead
+- All benchmarks run on cached data after initial load
 
 ### CBR Extraction Methods Comparison
 
