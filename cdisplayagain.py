@@ -801,6 +801,7 @@ class ComicViewer(tk.Frame):
         self._current_index = 0
         self._scroll_offset = 0
         self._scaled_size = None
+        self._render_generation += 1
         self.comic_path = path
         self._sibling_comics, self._sibling_index = get_sibling_comics(path)
 
