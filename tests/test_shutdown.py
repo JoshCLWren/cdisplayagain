@@ -104,7 +104,7 @@ def test_multiple_rapid_shutdown_cycles(tk_root, tmp_path):
 
 
 def test_worker_stop_preserves_app_reference_during_join(tk_root, tmp_path):
-    """Test that stop() doesn't clear app reference until after threads exit."""
+    """Test that stop() preserves app reference to avoid use-after-free crashes."""
     cbz_path = tmp_path / "test.cbz"
     create_test_cbz(cbz_path, page_count=3)
 
@@ -120,7 +120,9 @@ def test_worker_stop_preserves_app_reference_during_join(tk_root, tmp_path):
     worker.stop()
 
     app_ref_after_stop = worker._app
-    assert app_ref_after_stop is None, "Worker should have cleared app reference after stop"
+    assert app_ref_after_stop is not None, (
+        "Worker should NOT clear app reference after stop to prevent use-after-free"
+    )
 
 
 def test_blocking_put_nowait_doesnt_block_stop(tk_root, tmp_path):
