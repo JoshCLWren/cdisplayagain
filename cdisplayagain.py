@@ -280,7 +280,7 @@ class ImageWorker:
 
         for thread in self._threads:
             try:
-                thread.join(timeout=2.0)
+                thread.join(timeout=0.5)
             except Exception:
                 pass
 

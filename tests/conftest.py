@@ -30,16 +30,16 @@ def cleanup_workers():
             [t.name for t in worker_threads],
         )
 
-    for _ in range(20):
+    for _ in range(10):
         worker_threads = get_worker_threads()
         if not worker_threads:
             break
-        time.sleep(0.1)
+        time.sleep(0.05)
 
     worker_threads = get_worker_threads()
     if worker_threads:
         logging.error(
-            "Worker threads failed to exit after 2 seconds: %s",
+            "Worker threads failed to exit after 0.5s: %s",
             [t.name for t in worker_threads],
         )
 
