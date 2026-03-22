@@ -12,8 +12,11 @@ import cdisplayagain
 
 @pytest.fixture(autouse=True)
 def cleanup_workers():
-    """Clean up any leaked worker threads after each test."""
+    """Clean up any leaked worker threads before and after each test."""
+    # Clean up before test to ensure no leftover threads from previous tests
+    cdisplayagain.ImageWorker.stop_all()
     yield
+    # Clean up after test
     cdisplayagain.ImageWorker.stop_all()
 
     def get_worker_threads():
