@@ -51,4 +51,5 @@ def tk_root():
     root.geometry("800x600")
     root.update()
     yield root
+    cdisplayagain.ImageWorker.stop_all()
     root.destroy()

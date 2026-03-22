@@ -284,7 +284,6 @@ class ImageWorker:
             except Exception:
                 pass
 
-        self._app = None
         self._threads.clear()
         self._threads_started = False
 
