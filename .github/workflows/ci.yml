@@ -38,7 +38,7 @@ jobs:
         shell: bash
         env:
           PILLOW_NO_SIMD: 1
-        run: xvfb-run -a uv run pytest
+        run: xvfb-run -a uv run pytest -p no:cov
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
