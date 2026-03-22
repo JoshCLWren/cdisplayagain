@@ -465,13 +465,21 @@ class ComicViewer(tk.Frame):
 
     def _schedule_worker_drain(self) -> None:
         """Drain worker results in the Tk main loop."""
-        had_items = self._drain_worker_results()
-        if self._quitting or not had_items:
+        if self._quitting:
             self._worker_drain_job = None
             return
-        try:
-            self._worker_drain_job = self.after(1, self._schedule_worker_drain)
-        except tk.TclError:
+        had_items = self._drain_worker_results()
+        if had_items:
+            try:
+                self._worker_drain_job = self.after(1, self._schedule_worker_drain)
+            except tk.TclError:
+                self._worker_drain_job = None
+        elif hasattr(self, "_worker") and self._worker and not self._worker._stopped:
+            try:
+                self._worker_drain_job = self.after(10, self._schedule_worker_drain)
+            except tk.TclError:
+                self._worker_drain_job = None
+        else:
             self._worker_drain_job = None
 
     def _ensure_worker_drain_running(self) -> None:
