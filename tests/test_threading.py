@@ -96,13 +96,14 @@ def create_test_cbz(path, page_count=3):
             zf.writestr(f"page_{i:03d}.png", buf.getvalue())
 
 
-def test_image_worker_basic(tk_root, tmp_path):
+def test_image_worker_basic(tk_root, tmp_path, mock_resizer):
     """Test ImageWorker processes pages in background."""
     cbz_path = tmp_path / "test.cbz"
     create_test_cbz(cbz_path)
 
     app = cdisplayagain.ComicViewer(tk_root, cbz_path)
     app.update()
+
     with ImageWorker(app) as worker:
         results = []
 
@@ -114,15 +115,15 @@ def test_image_worker_basic(tk_root, tmp_path):
 
         app._update_from_cache = capture_update
 
-        worker.request_page(0, 100, 200)
+        worker.request_page(0, 100, 200, render_generation=app._render_generation)
 
         tk_root.after(2000, tk_root.quit)
         tk_root.mainloop()
 
-        assert len(results) > 0, "Worker should process page"
+    assert len(results) > 0, "Worker should process page"
 
 
-def test_image_worker_queue_full(tk_root, tmp_path):
+def test_image_worker_queue_full(tk_root, tmp_path, mock_resizer):
     """Test ImageWorker handles full queue gracefully."""
     cbz_path = tmp_path / "test.cbz"
     create_test_cbz(cbz_path)
@@ -140,12 +141,12 @@ def test_image_worker_queue_full(tk_root, tmp_path):
         app._update_from_cache = capture_update
 
         for i in range(10):
-            worker.request_page(i, 100, 200)
+            worker.request_page(i, 100, 200, render_generation=app._render_generation)
 
         tk_root.after(2000, tk_root.quit)
         tk_root.mainloop()
 
-        assert len(results) <= 4, "Worker should only process max queue size"
+    assert len(results) <= 4, "Worker should only process max queue size"
 
 
 def test_image_worker_daemon(tk_root, tmp_path):

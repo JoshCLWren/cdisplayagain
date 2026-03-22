@@ -50,7 +50,7 @@ def test_single_worker_vs_parallel_performance(tk_root, tmp_path):
 
         start_single = time.time()
         for i in range(4):
-            worker_single.request_page(i, 800, 600)
+            worker_single.request_page(i, 800, 600, render_generation=app._render_generation)
 
         tk_root.after(3000, tk_root.quit)
         tk_root.mainloop()
@@ -62,7 +62,7 @@ def test_single_worker_vs_parallel_performance(tk_root, tmp_path):
     with ImageWorker(app, num_workers=4) as worker_parallel:
         start_parallel = time.time()
         for i in range(4):
-            worker_parallel.request_page(i, 800, 600)
+            worker_parallel.request_page(i, 800, 600, render_generation=app._render_generation)
 
         tk_root.after(3000, tk_root.quit)
         tk_root.mainloop()
@@ -93,7 +93,7 @@ def test_throughput_with_multiple_workers(tk_root, tmp_path):
     with ImageWorker(app, num_workers=4) as worker:
         start_time = time.time()
         for i in range(4):
-            worker.request_page(i, 800, 600)
+            worker.request_page(i, 800, 600, render_generation=app._render_generation)
 
         tk_root.after(3000, tk_root.quit)
         tk_root.mainloop()
