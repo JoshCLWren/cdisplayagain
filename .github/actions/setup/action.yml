@@ -1,5 +1,5 @@
 name: 'Setup Environment'
-description: 'Install system dependencies, set up uv, Python 3.12, and sync project dependencies'
+description: 'Install system dependencies, set up uv, Python 3.13, and sync project dependencies'
 
 runs:
   using: 'composite'
@@ -13,9 +13,9 @@ runs:
     - name: Set up uv
       uses: astral-sh/setup-uv@v5
 
-    - name: Install Python 3.12 and create venv
+    - name: Install Python 3.13 and create venv
       shell: bash
-      run: uv python install 3.12 && uv venv
+      run: uv python install 3.13 && uv venv
 
     - name: Sync dependencies
       shell: bash
