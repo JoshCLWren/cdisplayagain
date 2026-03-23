@@ -21,6 +21,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-apt-
 
+      - name: Cache pip builds
+        uses: actions/cache@v4
+        with:
+          path: /tmp/pip-cache
+          key: ${{ runner.os }}-pip-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
       - name: Cache uv cache
         uses: actions/cache@v4
         with:
@@ -47,7 +55,7 @@ jobs:
   tests:
     runs-on: ubuntu-latest
     container: debian:13
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -59,6 +67,14 @@ jobs:
           key: ${{ runner.os }}-apt-${{ hashFiles('**/lockfiles') }}
           restore-keys: |
             ${{ runner.os }}-apt-
+
+      - name: Cache pip builds
+        uses: actions/cache@v4
+        with:
+          path: /tmp/pip-cache
+          key: ${{ runner.os }}-pip-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
 
       - name: Cache uv cache
         uses: actions/cache@v4
