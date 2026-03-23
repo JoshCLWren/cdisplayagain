@@ -96,6 +96,7 @@ jobs:
         env:
           PILLOW_NO_SIMD: 1
           VIPS_NO_DEPRECATED: 1
+          ORC_CODE: backup
         run: xvfb-run -a uv run pytest -p no:cov -o addopts=""
 
       - name: Upload coverage to Codecov
