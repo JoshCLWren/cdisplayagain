@@ -274,9 +274,9 @@ class ImageWorker:
 
         for _ in self._threads:
             try:
-                self._queue.put((2, None, None, None, None, None))
+                self._queue.put_nowait((2, None, None, None, None, None))
             except queue.Full:
-                break
+                pass  # workers will exit via _stopped flag within 0.1s
 
         for thread in self._threads:
             try:
