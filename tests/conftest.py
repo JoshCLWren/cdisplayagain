@@ -30,16 +30,16 @@ def cleanup_workers():
             [t.name for t in worker_threads],
         )
 
-    for _ in range(10):
+    for _ in range(50):
         worker_threads = get_worker_threads()
         if not worker_threads:
             break
-        time.sleep(0.05)
+        time.sleep(0.1)
 
     worker_threads = get_worker_threads()
     if worker_threads:
         logging.error(
-            "Worker threads failed to exit after 0.5s: %s",
+            "Worker threads failed to exit after 5s: %s",
             [t.name for t in worker_threads],
         )
 
@@ -53,4 +53,5 @@ def tk_root():
     root.update()
     yield root
     cdisplayagain.ImageWorker.stop_all()
+    root.update()
     root.destroy()

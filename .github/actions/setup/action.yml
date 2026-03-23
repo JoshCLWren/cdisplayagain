@@ -19,4 +19,13 @@ runs:
 
     - name: Sync dependencies
       shell: bash
-      run: uv sync --locked
+      env:
+        PILLOW_NO_SIMD: 1
+      run: |
+        # Build libvips from source to avoid SIMD issues in containers
+        apt-get install -y -qq libglib2.0-0 libglib2.0-dev libexpat1-dev
+        # Sync all dependencies
+        uv sync --locked
+        # Replace pyvips-binary with source build
+        uv pip uninstall pyvips-binary
+        uv pip install pyvips --no-binary pyvips --no-build-isolation

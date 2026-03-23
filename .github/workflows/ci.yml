@@ -23,6 +23,7 @@ jobs:
   tests:
     runs-on: ubuntu-latest
     container: debian:13
+    timeout-minutes: 30
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -38,6 +39,7 @@ jobs:
         shell: bash
         env:
           PILLOW_NO_SIMD: 1
+          VIPS_NO_DEPRECATED: 1
         run: xvfb-run -a uv run pytest -p no:cov -o addopts=""
 
       - name: Upload coverage to Codecov
