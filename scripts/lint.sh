@@ -11,7 +11,7 @@ echo "Running code quality checks..."
 # Compile check for all Python files
 echo ""
 echo "Checking Python syntax by compiling..."
-uv run --active python -m compileall . -q
+uv run --active python -m compileall . -q -x '.venv'
 
 # Run linting
 echo ""

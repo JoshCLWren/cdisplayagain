@@ -42,6 +42,8 @@ def test_single_worker_vs_parallel_performance(tk_root, tmp_path):
 
     def capture_update(index, img):
         results.append((index, img.size))
+        if len(results) >= 4:
+            tk_root.quit()
 
     app._update_from_cache = capture_update
 
@@ -87,6 +89,8 @@ def test_throughput_with_multiple_workers(tk_root, tmp_path):
 
     def capture_update(index, img):
         results.append((index, img.size))
+        if len(results) >= 4:
+            tk_root.quit()
 
     app._update_from_cache = capture_update
 

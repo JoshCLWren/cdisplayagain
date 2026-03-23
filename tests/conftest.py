@@ -30,7 +30,7 @@ def cleanup_workers():
             [t.name for t in worker_threads],
         )
 
-    for _ in range(50):
+    for _ in range(20):
         worker_threads = get_worker_threads()
         if not worker_threads:
             break

@@ -12,29 +12,19 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Install system dependencies
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq xvfb unar
-
       - name: Cache apt packages
         uses: actions/cache@v4
         with:
           path: /var/cache/apt/archives
-          key: ${{ runner.os }}-apt-${{ hashFiles('**/lockfiles') }}
-          restore-keys: |
-            ${{ runner.os }}-apt-
+          key: ${{ runner.os }}-apt-xvfb-unar-v1
 
-      - name: Cache pip builds
-        uses: actions/cache@v4
-        with:
-          path: /tmp/pip-cache
-          key: ${{ runner.os }}-pip-${{ hashFiles('uv.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
+      - name: Install system dependencies
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq xvfb unar
 
       - name: Cache uv cache
         uses: actions/cache@v4
         with:
-          path: /root/.cache/uv
+          path: ~/.cache/uv
           key: ${{ runner.os }}-uv-${{ hashFiles('uv.lock') }}
           restore-keys: |
             ${{ runner.os }}-uv-
@@ -56,34 +46,24 @@ jobs:
 
   tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-
-      - name: Install system dependencies
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq xvfb unar
 
       - name: Cache apt packages
         uses: actions/cache@v4
         with:
           path: /var/cache/apt/archives
-          key: ${{ runner.os }}-apt-${{ hashFiles('**/lockfiles') }}
-          restore-keys: |
-            ${{ runner.os }}-apt-
+          key: ${{ runner.os }}-apt-xvfb-unar-v1
 
-      - name: Cache pip builds
-        uses: actions/cache@v4
-        with:
-          path: /tmp/pip-cache
-          key: ${{ runner.os }}-pip-${{ hashFiles('uv.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
+      - name: Install system dependencies
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq xvfb unar
 
       - name: Cache uv cache
         uses: actions/cache@v4
         with:
-          path: /root/.cache/uv
+          path: ~/.cache/uv
           key: ${{ runner.os }}-uv-${{ hashFiles('uv.lock') }}
           restore-keys: |
             ${{ runner.os }}-uv-
