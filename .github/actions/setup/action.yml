@@ -30,14 +30,14 @@ runs:
       env:
         PILLOW_NO_SIMD: 1
       run: |
-        # Only install build deps if using container
-        if [ -f /etc/debian_version ]; then
+        # Only install build deps if using container (running as root)
+        if [ "$(id -u)" = "0" ]; then
           apt-get install -y -qq libglib2.0-0 libglib2.0-dev libexpat1-dev
         fi
         # Sync all dependencies
         uv sync --locked
         # Build pyvips from source only on debian container (SIMD issues)
-        if [ -f /etc/debian_version ]; then
+        if [ "$(id -u)" = "0" ]; then
           uv pip uninstall -y pyvips-binary || true
           uv pip install pyvips --no-binary pyvips --no-build-isolation --cache-dir /tmp/pip-cache
         fi
