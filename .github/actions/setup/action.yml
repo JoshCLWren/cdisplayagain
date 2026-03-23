@@ -7,8 +7,8 @@ runs:
     - name: Install system dependencies
       shell: bash
       run: |
-        # Only install packages if in container (ubuntu-latest handles this in workflow)
-        if [ -f /etc/debian_version ]; then
+        # Only install packages if running as root (in container)
+        if [ "$(id -u)" = "0" ]; then
           apt-get update -qq
           apt-get install -y -qq ca-certificates curl git libvips python3 python3-tk python3-venv xvfb unar libatomic1 gnupg libglib2.0-0 libglib2.0-dev libexpat1-dev
         fi
