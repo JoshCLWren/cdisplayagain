@@ -15,7 +15,12 @@ runs:
 
     - name: Install Python 3.13 and create venv
       shell: bash
-      run: uv python install 3.13 && uv venv
+      run: |
+        uv python install 3.13
+        # Only create venv if it doesn't exist (may be cached)
+        if [ ! -d .venv ]; then
+          uv venv
+        fi
 
     - name: Sync dependencies
       shell: bash
