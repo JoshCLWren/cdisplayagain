@@ -16,7 +16,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /var/cache/apt/archives
-          key: ${{ runner.os }}-apt-xvfb-unar-v1
+          key: ${{ runner.os }}-apt-xvfb-unar-libvips-v1
 
       - name: Install system dependencies
         run: sudo apt-get update -qq && sudo apt-get install -y -qq xvfb unar
@@ -55,10 +55,18 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /var/cache/apt/archives
-          key: ${{ runner.os }}-apt-xvfb-unar-v1
+          key: ${{ runner.os }}-apt-xvfb-unar-libvips-v1
 
       - name: Install system dependencies
         run: sudo apt-get update -qq && sudo apt-get install -y -qq xvfb unar
+
+      - name: Cache pip builds
+        uses: actions/cache@v4
+        with:
+          path: /tmp/pip-cache
+          key: ${{ runner.os }}-pip-pyvips-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-pyvips-
 
       - name: Cache uv cache
         uses: actions/cache@v4
@@ -72,7 +80,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .venv
-          key: ${{ runner.os }}-venv-${{ hashFiles('uv.lock') }}-v2
+          key: ${{ runner.os }}-venv-${{ hashFiles('uv.lock') }}-v3
           restore-keys: |
             ${{ runner.os }}-venv-
 
