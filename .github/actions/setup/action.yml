@@ -31,6 +31,6 @@ runs:
         apt-get install -y -qq libglib2.0-0 libglib2.0-dev libexpat1-dev
         # Sync all dependencies
         uv sync --locked
-        # Replace pyvips-binary with source build and cache the wheel
-        uv pip uninstall pyvips-binary
+        # Always uninstall pyvips-binary (even if venv was cached) and build from source
+        uv pip uninstall -y pyvips-binary || true
         uv pip install pyvips --no-binary pyvips --no-build-isolation --cache-dir /tmp/pip-cache
