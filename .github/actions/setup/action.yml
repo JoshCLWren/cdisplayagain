@@ -43,6 +43,6 @@ runs:
         # Build pyvips from source to avoid SIMD incompatibility with pyvips-binary
         # (affects both Docker containers and GitHub Actions runners)
         if [ "$(id -u)" = "0" ] || [ "${GITHUB_ACTIONS}" = "true" ]; then
-          uv pip uninstall -y pyvips-binary || true
+          uv pip uninstall pyvips-binary || true
           uv pip install pyvips --no-binary pyvips --no-build-isolation --cache-dir /tmp/pip-cache
         fi
