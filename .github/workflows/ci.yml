@@ -13,6 +13,30 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Cache apt packages
+        uses: actions/cache@v4
+        with:
+          path: /var/cache/apt/archives
+          key: ${{ runner.os }}-apt-${{ hashFiles('**/lockfiles') }}
+          restore-keys: |
+            ${{ runner.os }}-apt-
+
+      - name: Cache uv cache
+        uses: actions/cache@v4
+        with:
+          path: /root/.cache/uv
+          key: ${{ runner.os }}-uv-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-
+
+      - name: Cache Python venv
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: ${{ runner.os }}-venv-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-venv-
+
       - name: Setup environment
         uses: ./.github/actions/setup
 
@@ -27,6 +51,30 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Cache apt packages
+        uses: actions/cache@v4
+        with:
+          path: /var/cache/apt/archives
+          key: ${{ runner.os }}-apt-${{ hashFiles('**/lockfiles') }}
+          restore-keys: |
+            ${{ runner.os }}-apt-
+
+      - name: Cache uv cache
+        uses: actions/cache@v4
+        with:
+          path: /root/.cache/uv
+          key: ${{ runner.os }}-uv-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-
+
+      - name: Cache Python venv
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: ${{ runner.os }}-venv-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-venv-
 
       - name: Setup environment
         uses: ./.github/actions/setup
