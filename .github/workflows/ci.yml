@@ -8,7 +8,6 @@ on:
 jobs:
   lint:
     runs-on: ubuntu-latest
-    container: debian:13
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -54,8 +53,7 @@ jobs:
 
   tests:
     runs-on: ubuntu-latest
-    container: debian:13
-    timeout-minutes: 90
+    timeout-minutes: 30
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
