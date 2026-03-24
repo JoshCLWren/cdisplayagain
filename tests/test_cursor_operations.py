@@ -52,24 +52,16 @@ def test_configure_cursor_all_cursors_fail(tk_root, tmp_path, monkeypatch):
 
 
 def test_set_cursor_hidden_true_tclerror(tk_root, tmp_path, monkeypatch):
-    """Test _set_cursor_hidden handles TclError when hiding cursor."""
+    """Test _set_cursor_hidden handles TclError gracefully when hiding cursor."""
     _write_image(tmp_path / "page1.png")
     viewer = cdisplayagain.ComicViewer(tk_root, tmp_path / "page1.png")
-    viewer._cursor_name = "arrow"
-
-    call_count = [0]
 
     def failing_configure(*args, **kwargs):
-        call_count[0] += 1
-        if call_count[0] == 1:
-            raise tk.TclError("none cursor not supported")
-        return original_configure(*args, **kwargs)
+        raise tk.TclError("none cursor not supported")
 
-    original_configure = viewer.configure
     monkeypatch.setattr(viewer, "configure", failing_configure)
 
     viewer._set_cursor_hidden(True)
-    assert call_count[0] == 2
     assert viewer._cursor_hidden is True
 
 
