@@ -541,20 +541,6 @@ def test_worker_cleanup_called_on_del(tk_root, tmp_path):
     assert worker._stopped is True
 
 
-def test_del_calls_cleanup(tk_root, tmp_path):
-    """Test that __del__ method calls cleanup."""
-    cbz_path = tmp_path / "test.cbz"
-    create_test_cbz(cbz_path, page_count=3)
-
-    app = cdisplayagain.ComicViewer(tk_root, cbz_path)
-
-    worker = app._worker
-    assert worker is not None
-
-    app.__del__()
-
-    assert worker._stopped is True
-
 
 def test_worker_handles_after_idle_exception(tk_root, tmp_path, caplog):
     """Test that worker handles after_idle exception gracefully."""

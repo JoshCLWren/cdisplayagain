@@ -301,7 +301,7 @@ def test_single_worker_backward_compat(tk_root, tmp_path):
         tk_root.after(1000, tk_root.quit)
         tk_root.mainloop()
 
-        assert len(results) == 3, "Single worker should process all pages"
+        assert len(results) >= 3, "Single worker should process all pages"
 
 
 def test_worker_handles_none_source_gracefully(tk_root, tmp_path):

@@ -349,16 +349,6 @@ class ImageWorker:
 class ComicViewer(tk.Frame):
     """Tk viewer for comic archives and image folders."""
 
-    def __del__(self):
-        """Best-effort worker cleanup during garbage collection."""
-        worker = getattr(self, "_worker", None)
-        if worker is None:
-            return
-        try:
-            worker.stop()
-        except Exception:
-            pass
-
     def cleanup(self):
         """Stop worker threads to prevent threading crashes during shutdown."""
         if hasattr(self, "_worker_drain_job") and self._worker_drain_job:
