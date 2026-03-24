@@ -63,14 +63,12 @@ clean-build:  ## Clean build artifacts
 build: clean-build  ## Build single-file executable (slower startup)
 	uv run --active pyinstaller --onefile --name cdisplayagain cdisplayagain.py
 
-build-onedir:
+build-onedir:  ## Build onedir bundle (faster startup than onefile)
 	uv run --active pyinstaller \
 		--onedir \
 		--icon=cdisplayagain.png \
 		--name cdisplayagain \
 		cdisplayagain.py
-	rm -rf ~/.local/bin/cdisplayagain
-	cp -r dist/cdisplayagain ~/.local/bin/
 
 
 install: install-bin install-desktop  ## Install everything
@@ -86,6 +84,7 @@ install-bin:  ## Install binary to system
 		install -d $(LIBDIR)/cdisplayagain; \
 		cp -a dist/cdisplayagain/* $(LIBDIR)/cdisplayagain/; \
 		install -d $(BINDIR); \
+		rm -rf $(BINDIR)/cdisplayagain; \
 		printf '%s\n' '#!/usr/bin/env sh' 'exec $(LIBDIR)/cdisplayagain/cdisplayagain "$$@"' > $(BINDIR)/cdisplayagain; \
 		chmod 0755 $(BINDIR)/cdisplayagain; \
 	else \
@@ -99,7 +98,7 @@ install-desktop:  ## Install desktop entry
 		'[Desktop Entry]' \
 		'Type=Application' \
 		'Name=cdisplayagain' \
-		'Exec=$(BINDIR)/cdisplayagain %f' \
+		"Exec=$(BINDIR)/cdisplayagain %f" \
 		'Terminal=false' \
 		'Categories=Graphics;Viewer;' \
 		'MimeType=application/x-cbz;application/x-cbr;' \
