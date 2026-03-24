@@ -1096,7 +1096,7 @@ class ComicViewer(tk.Frame):
         dialog = tk.Toplevel(self)
         dialog.title("Configuration")
         dialog.geometry("400x450")
-        cast(tk.Tk, self.master).wm_transient(dialog)
+        dialog.transient(cast(tk.Tk, self.master))
         dialog.grab_set()
 
         main_frame = tk.Frame(dialog, padx=20, pady=20)
@@ -1203,18 +1203,18 @@ class ComicViewer(tk.Frame):
 
         tk.Button(color_frame, text="Apply", command=apply_color).pack(side=tk.LEFT, padx=5)
 
-        button_frame = tk.Frame(main_frame)
-        button_frame.pack(side=tk.BOTTOM, pady=(20, 0))
-        tk.Button(button_frame, text="Close", command=dialog.destroy).pack(side=tk.RIGHT)
-
         def on_close():
             self._dialog_active = False
             dialog.destroy()
 
-        dialog.protocol("WM_DELETE_WINDOW", on_close)
+        button_frame = tk.Frame(main_frame)
+        button_frame.pack(side=tk.BOTTOM, pady=(20, 0))
+        tk.Button(button_frame, text="Close", command=on_close).pack(side=tk.RIGHT)
 
-        dialog.bind("<Key>", lambda e: on_close())
-        dialog.bind("<Double-Button-1>", lambda e: on_close())
+        dialog.protocol("WM_DELETE_WINDOW", on_close)
+        dialog.bind("<Escape>", lambda e: on_close())
+        dialog.bind("q", lambda e: on_close())
+        dialog.bind("Q", lambda e: on_close())
 
         dialog.wait_window()
         self._dialog_active = False
