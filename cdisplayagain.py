@@ -418,6 +418,7 @@ class ComicViewer(tk.Frame):
         self._hint_timer: str | None = None
 
         self._dialog_active = False
+        self._active_dialog: tk.Toplevel | None = None
         self._pending_quit: bool = False
         self._quitting: bool = False
         self._canvas_properly_sized: bool = False
@@ -522,17 +523,7 @@ class ComicViewer(tk.Frame):
 
     def _set_cursor_hidden(self, hidden: bool) -> None:
         self._cursor_hidden = hidden
-        if hidden:
-            cursor_name = "none"
-            try:
-                self.configure(cursor=cursor_name)
-                self.canvas.configure(cursor=cursor_name)
-                return
-            except tk.TclError:
-                cursor_name = self._cursor_name
-        else:
-            cursor_name = self._cursor_name
-
+        cursor_name = "none" if hidden else "arrow"
         try:
             self.configure(cursor=cursor_name)
             self.canvas.configure(cursor=cursor_name)
@@ -666,24 +657,13 @@ class ComicViewer(tk.Frame):
         )
 
     def _cancel_active_dialog(self) -> None:
-        """Best-effort close of a Tk file dialog when quitting."""
-        try:
-            focus = self.tk.call("focus")
-            if focus:
-                toplevel = self.tk.call("winfo", "toplevel", focus)
-                main_win = str(self.master)
-                if toplevel and toplevel != main_win and toplevel != str(self):
-                    logging.info("Closing focused dialog: %s", toplevel)
-                    self.tk.call("destroy", toplevel)
-                    return
-            children = self.tk.call("winfo", "children", ".")
-            for child in children:
-                if child.startswith(".__tk_filedialog"):
-                    logging.info("Closing file dialog: %s", child)
-                    self.tk.call("destroy", child)
-                    return
-        except tk.TclError:
-            return
+        """Close the tracked active dialog when quitting."""
+        if self._active_dialog is not None:
+            try:
+                self._active_dialog.destroy()
+            except tk.TclError:
+                pass
+            self._active_dialog = None
 
     def _open_dialog(self):
         if self._dialog_active:
@@ -696,6 +676,7 @@ class ComicViewer(tk.Frame):
         path = None
         try:
             dialog = tk.Toplevel(self.master)
+            self._active_dialog = dialog
             dialog.title("Open Comic")
             _as_wm(dialog).transient(_as_wm(self.master))
             dialog.resizable(False, False)
@@ -763,6 +744,7 @@ class ComicViewer(tk.Frame):
                 logging.info("Open dialog selected: %s", path)
                 self._open_comic(Path(path))
         finally:
+            self._active_dialog = None
             if cursor_was_hidden:
                 self._set_cursor_hidden(True)
             self._dialog_active = False
