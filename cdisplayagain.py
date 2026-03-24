@@ -671,7 +671,8 @@ class ComicViewer(tk.Frame):
             focus = self.tk.call("focus")
             if focus:
                 toplevel = self.tk.call("winfo", "toplevel", focus)
-                if toplevel and toplevel != str(self):
+                main_win = str(self.master)
+                if toplevel and toplevel != main_win and toplevel != str(self):
                     logging.info("Closing focused dialog: %s", toplevel)
                     self.tk.call("destroy", toplevel)
                     return
@@ -932,7 +933,10 @@ class ComicViewer(tk.Frame):
             self._worker.stop()
         finally:
             logging.info("Destroying app window.")
-            self.master.destroy()
+            try:
+                self.master.destroy()
+            except tk.TclError:
+                pass
 
     def _minimize(self) -> None:
         logging.info("Minimize requested.")
