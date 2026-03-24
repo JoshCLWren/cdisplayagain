@@ -93,6 +93,22 @@ This document tracks the evolution of cdisplayagain's performance improvements o
 
 ---
 
+### Current Performance (Mar 22, 2026)
+
+| Metric | Time | Threshold | Status |
+|--------|------|-----------|--------|
+| CBZ Launch | 0.0062s | 0.02s | ✅ Pass |
+| CBR Launch | 0.034s | 0.06s | ✅ Pass |
+| First Paint | 0.00177s | 0.01s | ✅ Pass |
+| Page Turn (cached) | 0.00024s | 0.100s | ✅ Pass |
+| 4K→1080p Resize | 0.194s | 0.500s | ✅ Pass |
+| Load CBZ (1000 pages) | 0.044s | 0.100s | ✅ Pass |
+| Natural Sort (5000) | 0.038s | 0.100s | ✅ Pass |
+
+**All metrics within acceptable thresholds with significant margin.**
+
+---
+
 ### Phase 4: Python 3.13 Upgrade
 
 **Date**: Dec 30, 2025
@@ -200,9 +216,42 @@ Current performance is already excellent with sub-millisecond page turns on cach
 
 ---
 
+### Phase 5: Worker Thread Drain Loop Fix (Mar 2026)
+
+**Commit**: `5a98fe9` (Mar 22, 2026)
+**Changes**:
+- Fixed black screen issue where images were processed but never displayed
+- Worker drain loop now continues running while workers are active
+- Reschedules every 10ms when idle (vs stopping completely)
+
+**Problem**: The `_schedule_worker_drain()` method was stopping when the queue was empty, preventing it from picking up results when workers completed.
+
+**Solution**: Modified drain loop to:
+- Continue rescheduling if workers are still active (even with empty queue)
+- Check every 10ms when idle (reduced CPU vs 1ms)
+- Only stop when workers are stopped or app is quitting
+
+**Performance Impact**: Negligible - drain loop overhead is < 0.01ms when idle.
+
+| Metric | Before Fix | After Fix | Change |
+|--------|-----------|-----------|--------|
+| First Paint | N/A (black screen) | 0.00177s | Fixed |
+| Page Turn (cached) | N/A | 0.00024s | Fixed |
+| 4K→1080p Resize | N/A | 0.194s | Fixed |
+| Drain Loop Overhead | N/A | < 0.01ms | Minimal |
+
+**Test Results**:
+- All performance tests pass with excellent margins
+- Page turn: 0.24ms (416x faster than 100ms threshold)
+- First paint: 1.77ms (includes full pipeline)
+- No performance regression from the fix
+
+---
+
 ## References
 
 - Initial profiling: `docs/archive/MIGRATION_PLAN.md`
 - Performance baselines: `docs/PERFORMANCE.md`
 - Test thresholds: `tests/test_performance.py`
 - Migration plan: `docs/archive/MIGRATION_PLAN.md`
+- Crash analysis: `TEST_CRASH_ANALYSIS.md`

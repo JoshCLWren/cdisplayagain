@@ -9,22 +9,19 @@ import io
 import logging
 import os
 import queue
-import re
-import shutil
 import sys
-import tempfile
 import threading
 import time
+import weakref
 from collections import OrderedDict
 from collections.abc import Callable
-from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
 try:
     import tkinter as tk
     from tkinter import filedialog, messagebox
-except ImportError as e:
+except ImportError as e:  # pragma: no cover
     print(
         "Error: tkinter is not installed or not working.\n\n"
         "Check which Python you're using: "
@@ -40,6 +37,25 @@ except ImportError as e:
 
 from PIL import Image, ImageTk
 
+from archives import ARCHIVE_EXTS as ARCHIVE_EXTS
+from archives import IMAGE_EXTS as IMAGE_EXTS
+from archives import (
+    IMAGE_FILETYPE_PATTERN,
+    PageSource,
+    get_sibling_comics,
+    is_text_name,
+    load_comic,
+    perf_log,
+)
+from archives import PERF_LOGGING as PERF_LOGGING
+from archives import PerfTimer as PerfTimer
+from archives import is_image_name as is_image_name
+from archives import load_cbr as load_cbr
+from archives import load_cbz as load_cbz
+from archives import load_directory as load_directory
+from archives import load_image_file as load_image_file
+from archives import load_tar as load_tar
+from archives import natural_key as natural_key
 from image_backend import get_resized_pil
 
 TkPhotoImage = tk.PhotoImage | ImageTk.PhotoImage
@@ -50,8 +66,6 @@ def _as_wm(obj: tk.Misc) -> tk.Wm:
     return cast(tk.Wm, obj)
 
 
-IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tif", ".tiff"}
-IMAGE_FILETYPE_PATTERN = " ".join(f"*{ext}" for ext in sorted(IMAGE_EXTS))
 FILE_DIALOG_TYPES = [
     ("Comic Archives", "*.cbz *.cbr *.cbt *.cba *.tar *.zip *.rar *.ace"),
     ("Image Files", IMAGE_FILETYPE_PATTERN),
@@ -64,7 +78,6 @@ FILE_DIALOG_TYPES = [
 
 LOG_ROOT = Path(os.environ.get("CDISPLAYAGAIN_LOG_DIR", "logs")).expanduser()
 LOG_PATH: Path | None = None
-PERF_LOGGING = os.environ.get("CDISPLAYAGAIN_PERF") == "1"
 
 
 def _init_logging() -> None:
@@ -80,50 +93,6 @@ def _init_logging() -> None:
         format="%(asctime)s %(levelname)s %(message)s",
     )
     logging.info("Logging initialized at %s", LOG_PATH)
-
-
-def perf_log(operation: str, duration: float, extra: str = "") -> None:
-    """Log performance metrics if perf logging is enabled."""
-    if PERF_LOGGING:
-        logging.info("PERF %s: %.6f%s %s", operation, duration, "s", extra)
-
-
-class PerfTimer:
-    """Context manager for timing operations."""
-
-    def __init__(self, operation: str, extra: str = ""):
-        """Initialize timer with operation name and extra metadata."""
-        self.operation = operation
-        self.extra = extra
-        self.start_time: float | None = None
-
-    def __enter__(self):
-        """Start timing and return self."""
-        self.start_time = time.perf_counter()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """Stop timing and log performance metric."""
-        if self.start_time is not None:
-            duration = time.perf_counter() - self.start_time
-            perf_log(self.operation, duration, self.extra)
-        return False
-
-
-def natural_key(s: str):
-    """Return a key for natural sorting with numeric segments."""
-    # Natural sort: "10" > "2" correctly
-    return [int(t) if t.isdigit() else t.casefold() for t in re.split(r"(\d+)", s)]
-
-
-def is_image_name(name: str) -> bool:
-    """Return True when a path looks like a supported image."""
-    return Path(name).suffix.casefold() in IMAGE_EXTS
-
-
-def is_text_name(name: str) -> bool:
-    """Return True when a path looks like an info text file."""
-    return Path(name).suffix.casefold() in {".nfo", ".txt"}
 
 
 class LRUCache:
@@ -172,15 +141,6 @@ class LRUCache:
         self._cache.clear()
 
 
-@dataclass
-class PageSource:
-    """Abstraction over where pages come from."""
-
-    pages: list[str]  # display/order names
-    get_bytes: Callable[[str], bytes]
-    cleanup: Callable[[], None] | None = None  # called on exit
-
-
 class FocusRestorer:
     """Schedules focus-restoring callbacks without spamming Tk."""
 
@@ -226,187 +186,64 @@ class Debouncer:
         self._timer_id = self._app.after(self._delay, wrapper)
 
 
-def load_cbz(path: Path) -> PageSource:
-    """Load a CBZ/ZIP archive into a page source."""
-    import zipfile
-
-    zf = zipfile.ZipFile(path, "r")
-    # Include images even if nested in directories inside the zip
-    names = [n for n in zf.namelist() if not n.endswith("/")]
-    text_names = [n for n in names if is_text_name(n)]
-    image_names = [n for n in names if is_image_name(n)]
-    text_names.sort(key=natural_key)
-    image_names.sort(key=natural_key)
-    pages = text_names + image_names
-
-    if not pages:
-        zf.close()
-        raise RuntimeError("No images or info files found inside CBZ.")
-
-    def get_bytes(name: str) -> bytes:
-        return zf.read(name)
-
-    def cleanup():
-        try:
-            zf.close()
-        except Exception as e:
-            logging.warning("Cleanup failed: %s", e)
-
-    return PageSource(pages=pages, get_bytes=get_bytes, cleanup=cleanup)
-
-
-def load_cbr(path: Path) -> PageSource:
-    """Extract a CBR archive via unrar2-cffi and build a page source."""
-    from unrar.cffi import rarfile as rarfile_cffi
-
-    tmpdir = Path(tempfile.mkdtemp(prefix="cdisplayagain_"))
-    try:
-        with PerfTimer("load_cbr"):
-            rar = rarfile_cffi.RarFile(str(path))
-            filenames = rar.namelist()
-
-            text_files: list[Path] = []
-            image_files: list[Path] = []
-
-            for filename in filenames:
-                if not filename:
-                    continue
-
-                dest = tmpdir / filename
-                if filename.endswith("/"):
-                    dest.mkdir(parents=True, exist_ok=True)
-                    continue
-
-                try:
-                    data = rar.read(filename)
-                    dest.parent.mkdir(parents=True, exist_ok=True)
-                    dest.write_bytes(data)
-
-                    if is_text_name(filename):
-                        text_files.append(dest)
-                    elif Path(filename).suffix.casefold() in IMAGE_EXTS:
-                        image_files.append(dest)
-                except Exception as e:
-                    logging.warning("Failed to extract %s: %s", filename, e)
-
-            text_files.sort(key=lambda p: natural_key(str(p.relative_to(tmpdir))))
-            image_files.sort(key=lambda p: natural_key(str(p.relative_to(tmpdir))))
-
-            if not text_files and not image_files:
-                raise RuntimeError("No images or info files found after extracting CBR.")
-
-            rel_names = [str(p.relative_to(tmpdir)) for p in text_files + image_files]
-
-            def get_bytes(rel_name: str) -> bytes:
-                return (tmpdir / rel_name).read_bytes()
-
-            def cleanup():
-                try:
-                    shutil.rmtree(tmpdir)
-                except Exception as e:
-                    logging.warning("Cleanup failed: %s", e)
-
-            return PageSource(pages=rel_names, get_bytes=get_bytes, cleanup=cleanup)
-    except Exception:
-        try:
-            shutil.rmtree(tmpdir, ignore_errors=True)
-        except Exception as e:
-            logging.warning("CBR cleanup failed: %s", e)
-        raise
-
-
-def load_tar(path: Path) -> PageSource:
-    """Load a TAR archive into a page source."""
-    import tarfile
-
-    try:
-        tf = tarfile.open(path, "r")
-    except tarfile.TarError as exc:
-        raise RuntimeError(f"Could not open TAR archive: {exc}") from exc
-
-    members = [m for m in tf.getmembers() if m.isfile()]
-    text_names = [m.name for m in members if is_text_name(m.name)]
-    image_names = [m.name for m in members if is_image_name(m.name)]
-    text_names.sort(key=natural_key)
-    image_names.sort(key=natural_key)
-    pages = text_names + image_names
-
-    if not pages:
-        tf.close()
-        raise RuntimeError("No images or info files found inside TAR.")
-
-    member_map = {m.name: m for m in members}
-
-    def get_bytes(name: str) -> bytes:
-        member = member_map.get(name)
-        if not member:
-            raise RuntimeError(f"Missing entry in TAR: {name}")
-        handle = tf.extractfile(member)
-        if handle is None:
-            raise RuntimeError(f"Could not read TAR member: {name}")
-        with handle:
-            return handle.read()
-
-    def cleanup():
-        try:
-            tf.close()
-        except Exception as e:
-            logging.warning("Cleanup failed: %s", e)
-
-    return PageSource(pages=pages, get_bytes=get_bytes, cleanup=cleanup)
-
-
-def load_directory(path: Path) -> PageSource:
-    """Load a directory of images and text into a page source."""
-    if not path.is_dir():
-        raise RuntimeError("Provided path is not a directory")
-
-    text_files = [
-        p for p in path.rglob("*") if p.is_file() and p.suffix.casefold() in {".nfo", ".txt"}
-    ]
-    image_files = [p for p in path.rglob("*") if p.is_file() and is_image_name(p.name)]
-    text_files.sort(key=lambda p: natural_key(str(p.relative_to(path))))
-    image_files.sort(key=lambda p: natural_key(str(p.relative_to(path))))
-
-    if not text_files and not image_files:
-        raise RuntimeError("No images found in this directory.")
-
-    rel_names = [str(p.relative_to(path)) for p in text_files + image_files]
-
-    def get_bytes(rel_name: str) -> bytes:
-        return (path / rel_name).read_bytes()
-
-    return PageSource(pages=rel_names, get_bytes=get_bytes, cleanup=None)
-
-
-def load_image_file(path: Path) -> PageSource:
-    """Wrap a single image file as a one-page source."""
-    if not path.is_file() or not is_image_name(path.name):
-        raise RuntimeError("Not an image file")
-
-    name = path.name
-
-    def get_bytes(_: str) -> bytes:
-        return path.read_bytes()
-
-    return PageSource(pages=[name], get_bytes=get_bytes, cleanup=None)
-
-
 class ImageWorker:
     """Background thread pool for image processing."""
 
     _app: ComicViewer | None = None
+    _instances: weakref.WeakSet[ImageWorker] = weakref.WeakSet()
+    _instances_lock = threading.Lock()
 
-    def __init__(self, app, num_workers: int = 4):
-        """Initialize worker pool with app reference and start daemon threads."""
+    def __init__(self, app, num_workers: int = 4, autostart: bool = False):
+        """Initialize worker pool with app reference.
+
+        Args:
+            app: ComicViewer instance that owns this worker pool.
+            num_workers: Number of worker threads to create for parallel processing.
+            autostart: If True, start worker threads immediately. If False (default),
+                threads are created lazily on first call to request_page() for
+                faster application startup.
+
+        Note:
+            When autostart=False, threads are only created when the first page is
+            requested, which improves startup time but may cause a slight delay for
+            the first page turn.
+
+        """
         self._app = app
+        self._num_workers = num_workers
         self._queue = queue.PriorityQueue(maxsize=4)
         self._threads: list[threading.Thread] = []
         self._stopped: bool = False
-        for i in range(num_workers):
-            thread = threading.Thread(target=self._run, daemon=True, name=f"ImageWorker-{i}")
-            thread.start()
-            self._threads.append(thread)
+        self._threads_started: bool = False
+        self._start_lock = threading.Lock()
+        with self._instances_lock:
+            self._instances.add(self)
+        if autostart:
+            self._ensure_threads_started()
+
+    @classmethod
+    def stop_all(cls) -> None:
+        """Stop any leaked workers still alive in process."""
+        with cls._instances_lock:
+            workers = list(cls._instances)
+        for worker in workers:
+            try:
+                worker.stop()
+            except Exception:
+                continue
+
+    def _ensure_threads_started(self) -> None:
+        """Start worker threads once, on first real request."""
+        if self._threads_started or self._stopped:
+            return
+        with self._start_lock:
+            if self._threads_started or self._stopped:
+                return
+            for i in range(self._num_workers):
+                thread = threading.Thread(target=self._run, daemon=True, name=f"ImageWorker-{i}")
+                thread.start()
+                self._threads.append(thread)
+            self._threads_started = True
 
     def request_page(
         self, index: int, width: int, height: int, preload: bool = False, render_generation: int = 0
@@ -414,9 +251,12 @@ class ImageWorker:
         """Request a page be processed in background."""
         if self._stopped or not self._app:
             return
+        self._ensure_threads_started()
         try:
             priority = 1 if preload else 0
             self._queue.put_nowait((priority, index, width, height, preload, render_generation))
+            if self._app and hasattr(self._app, "_ensure_worker_drain_running"):
+                self._app._ensure_worker_drain_running()
         except queue.Full:
             pass
 
@@ -432,20 +272,20 @@ class ImageWorker:
         """Signal all worker threads to stop and wait for them to exit."""
         self._stopped = True
 
-        self._app = None
-
         for _ in self._threads:
             try:
                 self._queue.put_nowait((2, None, None, None, None, None))
             except queue.Full:
-                break
+                pass  # workers will exit via _stopped flag within 0.1s
 
         for thread in self._threads:
             try:
-                thread.join(timeout=1.0)
+                thread.join(timeout=0.5)
             except Exception:
                 pass
+
         self._threads.clear()
+        self._threads_started = False
 
     def __enter__(self):
         """Context manager entry."""
@@ -480,18 +320,7 @@ class ImageWorker:
                     break
                 assert app is not None
 
-                if preload:
-                    logging.info("Worker preloading page %d at %dx%d", index, width, height)
-                else:
-                    logging.info("Worker processing page %d at %dx%d", index, width, height)
-
                 if not preload and render_generation != app._render_generation:
-                    logging.info(
-                        "Worker cancelling stale render for page %d (gen %d != %d)",
-                        index,
-                        render_generation,
-                        app._render_generation,
-                    )
                     continue
 
                 if self._should_stop():
@@ -506,63 +335,34 @@ class ImageWorker:
                 if self._should_stop():
                     break
 
-                if preload:
-                    logging.info("Worker finished preloading page %d", index)
-                else:
-                    logging.info("Worker finished page %d, scheduling callback", index)
-
-                if app and hasattr(app, "after_idle"):
-                    try:
-                        app.after_idle(
-                            lambda idx=index, img=resized_pil, app=app: app._update_from_cache(
-                                idx, img
-                            )
-                        )
-                    except Exception:
-                        pass
+                if app and hasattr(app, "_worker_results"):
+                    app._worker_results.put((index, resized_pil))
 
             except queue.Empty:
                 continue
-            except Exception as e:
-                logging.error("Image worker error: %s", e)
+            except Exception:
+                if self._stopped or sys.is_finalizing():
+                    break
                 break
-
-
-def load_comic(path: Path) -> PageSource:
-    """Load a path containing a directory, archive, or image."""
-    if path.is_dir():
-        return load_directory(path)
-
-    ext = path.suffix.casefold()
-    if ext in {".cbz", ".zip"}:
-        return load_cbz(path)
-    if ext in {".cbr", ".rar", ".ace"}:
-        if path.stat().st_size == 0:
-            raise RuntimeError(f"Archive is empty: {path.name}")
-        return load_cbr(path)
-    if ext == ".tar":
-        if path.stat().st_size == 0:
-            raise RuntimeError(f"Archive is empty: {path.name}")
-        return load_tar(path)
-    if ext in IMAGE_EXTS:
-        return load_image_file(path)
-    raise RuntimeError("Unsupported type. Open a .cbz, .cbr, directory, or image file.")
 
 
 class ComicViewer(tk.Frame):
     """Tk viewer for comic archives and image folders."""
 
-    def __del__(self):
-        """Cleanup worker threads on garbage collection."""
-        self.cleanup()
-
     def cleanup(self):
         """Stop worker threads to prevent threading crashes during shutdown."""
+        if hasattr(self, "_worker_drain_job") and self._worker_drain_job:
+            try:
+                self.after_cancel(self._worker_drain_job)
+            except Exception:
+                pass
+            self._worker_drain_job = None
         if hasattr(self, "_worker") and self._worker:
             self._worker.stop()
 
     def __init__(self, master: tk.Tk, comic_path: Path):
         """Initialize the viewer frame and load the initial comic."""
+        ImageWorker.stop_all()
         init_start = time.perf_counter()
         perf_log("app_init_start", 0, f"path={comic_path.name}")
         super().__init__(master)
@@ -611,15 +411,20 @@ class ComicViewer(tk.Frame):
         self._small_cursor_enabled: bool = False
         self._mouse_bindings: dict[str, str] = {"Button-2": "go_to_page"}
 
+        self._sibling_comics: list[Path] = []
+        self._sibling_index: int = -1
+
         self._hint_popup: tk.Label | None = None
         self._hint_timer: str | None = None
 
         self._dialog_active = False
+        self._active_dialog: tk.Toplevel | None = None
         self._pending_quit: bool = False
         self._quitting: bool = False
         self._canvas_properly_sized: bool = False
-
-        self._worker = ImageWorker(self)
+        self._worker = ImageWorker(self, autostart=False)
+        self._worker_results: queue.Queue[tuple[int, Image.Image]] = queue.Queue()
+        self._worker_drain_job: str | None = None
         self._pending_index: int | None = None
         self._nav_debounce = Debouncer(150, self._execute_page_change, self)
         self._first_render_done: bool = False
@@ -633,6 +438,7 @@ class ComicViewer(tk.Frame):
         self.bind("<FocusIn>", lambda _: self._request_focus())
         self.bind("<Double-Button-1>", lambda _: self._dismiss_info())
         self.bind("<Key>", lambda _: self._dismiss_info())
+        self.bind("<Destroy>", self._on_destroy)
 
         # Redraw on resize
         self.canvas.bind("<Configure>", self._on_canvas_configure)
@@ -642,6 +448,55 @@ class ComicViewer(tk.Frame):
         self._request_focus()
 
         perf_log("app_init_total", time.perf_counter() - init_start)
+
+    def _on_destroy(self, event: tk.Event) -> None:
+        """Stop background workers when this widget is destroyed."""
+        if event.widget is self:
+            self.cleanup()
+
+    def _schedule_worker_drain(self) -> None:
+        """Drain worker results in the Tk main loop."""
+        if self._quitting:
+            self._worker_drain_job = None
+            return
+        had_items = self._drain_worker_results()
+        if had_items:
+            try:
+                self._worker_drain_job = self.after(1, self._schedule_worker_drain)
+            except tk.TclError:
+                self._worker_drain_job = None
+        elif hasattr(self, "_worker") and self._worker and not self._worker._stopped:
+            try:
+                self._worker_drain_job = self.after(10, self._schedule_worker_drain)
+            except tk.TclError:
+                self._worker_drain_job = None
+        else:
+            self._worker_drain_job = None
+
+    def _ensure_worker_drain_running(self) -> None:
+        """Start worker drain loop if not already scheduled."""
+        if self._worker_drain_job is not None:
+            return
+        try:
+            self._worker_drain_job = self.after(1, self._schedule_worker_drain)
+        except tk.TclError:
+            self._worker_drain_job = None
+
+    def _drain_worker_results(self) -> bool:
+        """Apply completed worker results on the UI thread."""
+        had_items = False
+        while True:
+            try:
+                index, img = self._worker_results.get_nowait()
+            except queue.Empty:
+                break
+            had_items = True
+            self._update_from_cache(index, img)
+        return had_items
+
+    def _get_worker(self) -> ImageWorker:
+        """Return the app worker, creating it lazily."""
+        return self._worker
 
     def _request_focus(self) -> None:
         self._focus_restorer.schedule()
@@ -668,17 +523,7 @@ class ComicViewer(tk.Frame):
 
     def _set_cursor_hidden(self, hidden: bool) -> None:
         self._cursor_hidden = hidden
-        if hidden:
-            cursor_name = "none"
-            try:
-                self.configure(cursor=cursor_name)
-                self.canvas.configure(cursor=cursor_name)
-                return
-            except tk.TclError:
-                cursor_name = self._cursor_name
-        else:
-            cursor_name = self._cursor_name
-
+        cursor_name = "none" if hidden else "arrow"
         try:
             self.configure(cursor=cursor_name)
             self.canvas.configure(cursor=cursor_name)
@@ -783,6 +628,10 @@ class ComicViewer(tk.Frame):
         self.bind_all("L", lambda e: self._open_dialog())
         self.bind_all("<F1>", lambda e: self._show_help())
         self.bind_all("<F2>", lambda e: self._show_config())
+        self.bind_all("n", lambda e: self.next_comic())
+        self.bind_all("N", lambda e: self.next_comic())
+        self.bind_all("p", lambda e: self.prev_comic())
+        self.bind_all("P", lambda e: self.prev_comic())
         self.bind_all("<Button-3>", self._show_context_menu)
 
     def _trigger_next(self):
@@ -808,23 +657,13 @@ class ComicViewer(tk.Frame):
         )
 
     def _cancel_active_dialog(self) -> None:
-        """Best-effort close of a Tk file dialog when quitting."""
-        try:
-            focus = self.tk.call("focus")
-            if focus:
-                toplevel = self.tk.call("winfo", "toplevel", focus)
-                if toplevel and toplevel != str(self):
-                    logging.info("Closing focused dialog: %s", toplevel)
-                    self.tk.call("destroy", toplevel)
-                    return
-            children = self.tk.call("winfo", "children", ".")
-            for child in children:
-                if child.startswith(".__tk_filedialog"):
-                    logging.info("Closing file dialog: %s", child)
-                    self.tk.call("destroy", child)
-                    return
-        except tk.TclError:
-            return
+        """Close the tracked active dialog when quitting."""
+        if self._active_dialog is not None:
+            try:
+                self._active_dialog.destroy()
+            except tk.TclError:
+                pass
+            self._active_dialog = None
 
     def _open_dialog(self):
         if self._dialog_active:
@@ -837,6 +676,7 @@ class ComicViewer(tk.Frame):
         path = None
         try:
             dialog = tk.Toplevel(self.master)
+            self._active_dialog = dialog
             dialog.title("Open Comic")
             _as_wm(dialog).transient(_as_wm(self.master))
             dialog.resizable(False, False)
@@ -904,6 +744,7 @@ class ComicViewer(tk.Frame):
                 logging.info("Open dialog selected: %s", path)
                 self._open_comic(Path(path))
         finally:
+            self._active_dialog = None
             if cursor_was_hidden:
                 self._set_cursor_hidden(True)
             self._dialog_active = False
@@ -933,7 +774,9 @@ class ComicViewer(tk.Frame):
         self._current_index = 0
         self._scroll_offset = 0
         self._scaled_size = None
+        self._render_generation += 1
         self.comic_path = path
+        self._sibling_comics, self._sibling_index = get_sibling_comics(path)
 
         try:
             logging.info("Opening comic: %s", path)
@@ -1072,7 +915,10 @@ class ComicViewer(tk.Frame):
             self._worker.stop()
         finally:
             logging.info("Destroying app window.")
-            self.master.destroy()
+            try:
+                self.master.destroy()
+            except tk.TclError:
+                pass
 
     def _minimize(self) -> None:
         logging.info("Minimize requested.")
@@ -1085,7 +931,7 @@ class ComicViewer(tk.Frame):
         logging.info("Help dialog requested.")
         messagebox.showinfo(
             "cdisplayagain help",
-            "Use arrow keys, Page Up/Down, or mouse wheel to navigate. W toggles fullscreen. Esc quits.",
+            "Use arrow keys, Page Up/Down, or mouse wheel to navigate. W toggles fullscreen. N/P switches comics. Esc quits.",
         )
 
     def _show_config(self) -> None:
@@ -1227,6 +1073,8 @@ class ComicViewer(tk.Frame):
     def _build_context_menu(self) -> tk.Menu:
         menu = tk.Menu(self, tearoff=0)
         menu.add_command(label="Load files", command=self._open_dialog)
+        menu.add_command(label="Next comic", command=self.next_comic)
+        menu.add_command(label="Previous comic", command=self.prev_comic)
         menu.add_command(label="Configuration", command=self._show_config)
         menu.add_separator()
         menu.add_command(label="Minimize", command=self._minimize)
@@ -1304,11 +1152,17 @@ class ComicViewer(tk.Frame):
 
     def _update_title(self):
         wm = _as_wm(self.master)
+        sibling_prefix = ""
+        if self._sibling_comics and self._sibling_index >= 0:
+            sibling_prefix = f"[{self._sibling_index + 1}/{len(self._sibling_comics)}] "
         if not self.source:
-            wm.title(f"cdisplayagain - {self.comic_path.name}")
+            wm.title(f"cdisplayagain - {sibling_prefix}{self.comic_path.name}")
             return
         total = len(self.source.pages)
-        wm.title(f"cdisplayagain - {self.comic_path.name} ({self._current_index + 1}/{total})")
+        wm.title(
+            f"cdisplayagain - {sibling_prefix}{self.comic_path.name}"
+            f" ({self._current_index + 1}/{total})"
+        )
 
     def _find_next_image_index(self, start_index: int) -> int | None:
         if not self.source:
@@ -1345,7 +1199,7 @@ class ComicViewer(tk.Frame):
             self._update_title()
         else:
             logging.info("Cache miss for page %d, requesting worker", index)
-            self._worker.request_page(
+            self._get_worker().request_page(
                 index, cw, ch, preload=False, render_generation=self._render_generation
             )
             self._update_title()
@@ -1353,7 +1207,7 @@ class ComicViewer(tk.Frame):
         next_idx = self._find_next_image_index(index)
         if next_idx is not None:
             logging.info("Preloading next image page %d", next_idx)
-            self._worker.preload(next_idx)
+            self._get_worker().preload(next_idx)
 
     def _render_current_sync(self):
         if not self.source:
@@ -1386,7 +1240,7 @@ class ComicViewer(tk.Frame):
 
         if not self._first_proper_render_completed:
             logging.info("First proper render, skipping preview, requesting high-quality resize")
-            self._worker.request_page(
+            self._get_worker().request_page(
                 index, cw, ch, preload=False, render_generation=self._render_generation
             )
             self._update_title()
@@ -1408,7 +1262,7 @@ class ComicViewer(tk.Frame):
         perf_log("display_preview", time.perf_counter() - display_start)
 
         logging.info("Requesting high-quality resize for page %d", index)
-        self._worker.request_page(
+        self._get_worker().request_page(
             index, cw, ch, preload=False, render_generation=self._render_generation
         )
         self._update_title()
@@ -1436,7 +1290,7 @@ class ComicViewer(tk.Frame):
             self._show_info_overlay(name)
             return
 
-        self._worker.request_page(
+        self._get_worker().request_page(
             image_index, cw, ch, preload=False, render_generation=self._render_generation
         )
         self._show_info_overlay(name)
@@ -1533,7 +1387,7 @@ class ComicViewer(tk.Frame):
         self.canvas.coords(self._canvas_image_id, cw // 2, y)
 
     def next_page(self):
-        """Advance to the next page if available."""
+        """Advance to the next page, or next comic at end of current."""
         logging.info("Next page requested.")
         if not self.source:
             return
@@ -1542,9 +1396,11 @@ class ComicViewer(tk.Frame):
             self._scroll_offset = 0
             self._render_generation += 1
             self._render_current()
+        else:
+            self.next_comic()
 
     def prev_page(self):
-        """Move to the previous page if available."""
+        """Move to the previous page, or previous comic at start of current."""
         logging.info("Prev page requested.")
         if not self.source:
             return
@@ -1553,6 +1409,8 @@ class ComicViewer(tk.Frame):
             self._scroll_offset = 0
             self._render_generation += 1
             self._render_current()
+        else:
+            self.prev_comic()
 
     def first_page(self):
         """Jump to the first page in the source."""
@@ -1572,6 +1430,28 @@ class ComicViewer(tk.Frame):
         self._current_index = len(self.source.pages) - 1
         self._scroll_offset = 0
         self._render_generation += 1
+        self._render_current()
+
+    def next_comic(self) -> None:
+        """Open the next comic archive in the same directory."""
+        logging.info("Next comic requested.")
+        if not self._sibling_comics or self._sibling_index < 0:
+            return
+        if self._sibling_index >= len(self._sibling_comics) - 1:
+            return
+        next_path = self._sibling_comics[self._sibling_index + 1]
+        self._open_comic(next_path)
+        self._render_current()
+
+    def prev_comic(self) -> None:
+        """Open the previous comic archive in the same directory."""
+        logging.info("Previous comic requested.")
+        if not self._sibling_comics or self._sibling_index < 0:
+            return
+        if self._sibling_index <= 0:
+            return
+        prev_path = self._sibling_comics[self._sibling_index - 1]
+        self._open_comic(prev_path)
         self._render_current()
 
     def set_one_page_mode(self) -> None:
@@ -1702,7 +1582,7 @@ def main():
         root.destroy()
         sys.exit(1)
 
-    if "cbr" in path.suffix:
+    if "cbr" in path.suffix:  # pragma: no cover
         require_pyvips()
     # Set initial full screen state BEFORE creating viewer
     # to ensure first render uses correct canvas dimensions

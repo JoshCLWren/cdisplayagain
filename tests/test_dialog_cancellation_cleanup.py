@@ -20,92 +20,46 @@ def _make_cbz(path: Path, names: list[str]) -> None:
             zf.writestr(name, buf.getvalue())
 
 
-def test_cancel_active_dialog_closes_focused_toplevel(caplog):
-    """Test _cancel_active_dialog closes focused toplevel window."""
+def test_cancel_active_dialog_closes_tracked_dialog(tmp_path):
+    """Test _cancel_active_dialog destroys the tracked _active_dialog."""
     root = cdisplayagain.tk.Tk()
     root.withdraw()
     root.update()
 
     try:
-        test_img = Image.new("RGB", (100, 100), color="red")
-        buf = io.BytesIO()
-        test_img.save(buf, format="PNG")
-        valid_image_bytes = buf.getvalue()
+        cbz_path = tmp_path / "test.cbz"
+        _make_cbz(cbz_path, ["page1.png"])
 
-        with (
-            patch("cdisplayagain.load_comic") as mock_load,
-            patch("tkinter.messagebox.showerror"),
-            patch("tkinter.messagebox.showinfo"),
-        ):
-            mock_source = Mock()
-            mock_source.pages = ["page1.jpg"]
-            mock_source.cleanup = None
-            mock_source.get_bytes.return_value = valid_image_bytes
-            mock_load.return_value = mock_source
+        app = cdisplayagain.ComicViewer(root, cbz_path)
+        root.update()
 
-            app = cdisplayagain.ComicViewer(root, Path("dummy.cbz"))
-            root.update()
+        mock_dialog = MagicMock()
+        app._active_dialog = mock_dialog
 
-            def mock_tk_call(*args):
-                if args[0] == "focus":
-                    return ".dialog"
-                if args[0] == "winfo" and args[1] == "toplevel":
-                    return ".dialog"
-                if args[0] == "destroy":
-                    return None
-                return None
+        app._cancel_active_dialog()
 
-            with patch.object(app, "tk") as mock_tk:
-                mock_tk.call = mock_tk_call
-                with caplog.at_level("INFO"):
-                    app._cancel_active_dialog()
-                    assert any(
-                        "Closing focused dialog" in record.message for record in caplog.records
-                    )
+        mock_dialog.destroy.assert_called_once()
+        assert app._active_dialog is None
     finally:
         root.destroy()
 
 
-def test_cancel_active_dialog_closes_file_dialog_child(caplog):
-    """Test _cancel_active_dialog closes file dialog child window."""
+def test_cancel_active_dialog_no_active_dialog(tmp_path):
+    """Test _cancel_active_dialog is a no-op when no dialog is tracked."""
     root = cdisplayagain.tk.Tk()
     root.withdraw()
     root.update()
 
     try:
-        test_img = Image.new("RGB", (100, 100), color="red")
-        buf = io.BytesIO()
-        test_img.save(buf, format="PNG")
-        valid_image_bytes = buf.getvalue()
+        cbz_path = tmp_path / "test.cbz"
+        _make_cbz(cbz_path, ["page1.png"])
 
-        with (
-            patch("cdisplayagain.load_comic") as mock_load,
-            patch("tkinter.messagebox.showerror"),
-            patch("tkinter.messagebox.showinfo"),
-        ):
-            mock_source = Mock()
-            mock_source.pages = ["page1.jpg"]
-            mock_source.cleanup = None
-            mock_source.get_bytes.return_value = valid_image_bytes
-            mock_load.return_value = mock_source
+        app = cdisplayagain.ComicViewer(root, cbz_path)
+        root.update()
 
-            app = cdisplayagain.ComicViewer(root, Path("dummy.cbz"))
-            root.update()
-
-            def mock_tk_call(*args):
-                if args[0] == "focus":
-                    return None
-                if args[0] == "winfo" and args[1] == "children":
-                    return [".", ".__tk_filedialog123"]
-                if args[0] == "destroy":
-                    return None
-                return None
-
-            with patch.object(app, "tk") as mock_tk:
-                mock_tk.call = mock_tk_call
-                with caplog.at_level("INFO"):
-                    app._cancel_active_dialog()
-                    assert any("Closing file dialog" in record.message for record in caplog.records)
+        assert app._active_dialog is None
+        app._cancel_active_dialog()  # Should not raise
+        assert app._active_dialog is None
     finally:
         root.destroy()
 

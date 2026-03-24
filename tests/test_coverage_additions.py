@@ -600,7 +600,7 @@ def test_load_cbr_cleanup_failure_logged(tmp_path, monkeypatch, caplog):
     mock_rar.read.return_value = b"content"
 
     with patch("unrar.cffi.rarfile.RarFile", return_value=mock_rar):
-        with patch("cdisplayagain.shutil.rmtree", side_effect=failing_rmtree):
+        with patch("archives.shutil.rmtree", side_effect=failing_rmtree):
             with caplog.at_level(logging.WARNING):
                 source = cdisplayagain.load_cbr(cbr_path)
                 if source.cleanup:

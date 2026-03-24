@@ -28,6 +28,7 @@ These features match CDisplay's behavior and are fully implemented:
 - ✅ Arrow keys (Left/Right) turn pages forward/back
 - ✅ Page Down/Up keys turn pages
 - ✅ Spacebar smart-forward (scrolls until fully shown, then advances)
+- ✅ Sequential reading across comics in same directory (next/previous comic)
 - ✅ Mouse wheel scrolls/navigates (Windows/Mac/Linux X11 bindings)
 - ✅ Mouse drag to pan page
 
@@ -68,7 +69,26 @@ These features match CDisplay's behavior and are fully implemented:
 - ✅ Cleanup error logging for resource leaks
 - ✅ Friendly CBR error messages with troubleshooting hints
 
-## API-Only Placeholders (Not Yet Implemented)
+## Not Yet Implemented
+
+These features existed in the original CDisplay 1.8 but are not yet present in cdisplayagain.
+
+### Sequential Reading
+- ✅ Read issues sequentially (auto-advance to next comic in directory)
+- ✅ Go to previous comic in directory
+
+### Navigation
+- ❌ Go To Page (jump to a specific page number by entering it)
+- ❌ Zooming (manual zoom in/out toggle)
+
+### Archive & File Loading
+- ❌ BMP image support
+- ❌ SFV file verification (verify archive integrity via .sfv checksums)
+
+### Mouse Configurability
+- ❌ Left/Middle/Right mouse buttons reassignable to actions (next page, prev page, go to page, etc.)
+
+## API-Only Placeholders
 
 These features have API stubs with placeholder implementations to maintain interface compatibility. Tests verify the methods exist, but they don't do anything yet.
 

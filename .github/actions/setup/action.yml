@@ -1,5 +1,5 @@
 name: 'Setup Environment'
-description: 'Install system dependencies, set up uv, Python 3.12, and sync project dependencies'
+description: 'Install system dependencies, set up uv, Python 3.13, and sync project dependencies'
 
 runs:
   using: 'composite'
@@ -7,16 +7,42 @@ runs:
     - name: Install system dependencies
       shell: bash
       run: |
-        apt-get update -qq
-        apt-get install -y -qq ca-certificates curl git libvips python3 python3-tk python3-venv xvfb unar
+        # Only install packages if running as root (in container)
+        if [ "$(id -u)" = "0" ]; then
+          apt-get update -qq
+          apt-get install -y -qq ca-certificates curl git libvips-dev python3 python3-tk python3-venv xvfb unar libatomic1 gnupg libglib2.0-0 libglib2.0-dev libexpat1-dev
+        fi
+        # Install libvips-dev on GitHub Actions for pyvips source build
+        if [ "${GITHUB_ACTIONS}" = "true" ] && [ "$(id -u)" != "0" ]; then
+          sudo apt-get install -y -qq libvips-dev
+        fi
 
     - name: Set up uv
       uses: astral-sh/setup-uv@v5
 
-    - name: Install Python 3.12 and create venv
+    - name: Install Python 3.13 and create venv
       shell: bash
-      run: uv python install 3.12 && uv venv
+      run: |
+        uv python install 3.13
+        # Only create venv if it doesn't exist (may be cached)
+        if [ ! -d .venv ]; then
+          uv venv
+        fi
 
     - name: Sync dependencies
       shell: bash
-      run: uv sync --locked
+      env:
+        PILLOW_NO_SIMD: 1
+      run: |
+        # Install build deps if running as root (container)
+        if [ "$(id -u)" = "0" ]; then
+          apt-get install -y -qq libglib2.0-0 libglib2.0-dev libexpat1-dev
+        fi
+        # Sync all dependencies
+        uv sync --locked
+        # Build pyvips from source to avoid SIMD incompatibility with pyvips-binary
+        # (affects both Docker containers and GitHub Actions runners)
+        if [ "$(id -u)" = "0" ] || [ "${GITHUB_ACTIONS}" = "true" ]; then
+          uv pip uninstall pyvips-binary || true
+          uv pip install pyvips --no-binary pyvips --no-build-isolation --cache-dir /tmp/pip-cache
+        fi

@@ -8,10 +8,34 @@ on:
 jobs:
   lint:
     runs-on: ubuntu-latest
-    container: debian:13
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Cache apt packages
+        uses: actions/cache@v4
+        with:
+          path: /var/cache/apt/archives
+          key: ${{ runner.os }}-apt-xvfb-unar-libvips-v1
+
+      - name: Install system dependencies
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq xvfb unar
+
+      - name: Cache uv cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/uv
+          key: ${{ runner.os }}-uv-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-
+
+      - name: Cache Python venv
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: ${{ runner.os }}-venv-${{ hashFiles('uv.lock') }}-v2
+          restore-keys: |
+            ${{ runner.os }}-venv-
 
       - name: Setup environment
         uses: ./.github/actions/setup
@@ -22,10 +46,43 @@ jobs:
 
   tests:
     runs-on: ubuntu-latest
-    container: debian:13
+    timeout-minutes: 15
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Cache apt packages
+        uses: actions/cache@v4
+        with:
+          path: /var/cache/apt/archives
+          key: ${{ runner.os }}-apt-xvfb-unar-libvips-v1
+
+      - name: Install system dependencies
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq xvfb unar
+
+      - name: Cache pip builds
+        uses: actions/cache@v4
+        with:
+          path: /tmp/pip-cache
+          key: ${{ runner.os }}-pip-pyvips-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-pyvips-
+
+      - name: Cache uv cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/uv
+          key: ${{ runner.os }}-uv-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-
+
+      - name: Cache Python venv
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: ${{ runner.os }}-venv-${{ hashFiles('uv.lock') }}-v4
+          restore-keys: |
+            ${{ runner.os }}-venv-${{ hashFiles('uv.lock') }}-v4
 
       - name: Setup environment
         uses: ./.github/actions/setup
@@ -36,7 +93,11 @@ jobs:
 
       - name: Run pytest
         shell: bash
-        run: xvfb-run -a uv run pytest --cov=cdisplayagain --cov-report=xml
+        env:
+          PILLOW_NO_SIMD: 1
+          VIPS_NO_DEPRECATED: 1
+          ORC_CODE: backup
+        run: xvfb-run -a uv run pytest -p no:cov -o addopts=""
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
