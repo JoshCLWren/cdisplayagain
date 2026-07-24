@@ -4,11 +4,18 @@ import gc
 import logging
 import threading
 import time
-import tkinter as tk
 from unittest.mock import patch
 
 import pytest
 from PIL import Image
+
+try:
+    from tk_bootstrap import configure_tk_library
+
+    configure_tk_library()
+    import tkinter as tk
+except ImportError:
+    raise
 
 import cdisplayagain
 

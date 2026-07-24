@@ -19,6 +19,9 @@ from pathlib import Path
 from typing import cast
 
 try:
+    from tk_bootstrap import configure_tk_library
+
+    configure_tk_library()
     import tkinter as tk
     from tkinter import filedialog, messagebox
 except ImportError as e:  # pragma: no cover
@@ -76,7 +79,18 @@ FILE_DIALOG_TYPES = [
     ("All files", "*.*"),
 ]
 
-LOG_ROOT = Path(os.environ.get("CDISPLAYAGAIN_LOG_DIR", "logs")).expanduser()
+
+def _get_log_root() -> Path:
+    """Return a writable log directory for source and packaged launches."""
+    configured_root = os.environ.get("CDISPLAYAGAIN_LOG_DIR")
+    if configured_root:
+        return Path(configured_root).expanduser()
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Logs" / "cdisplayagain"
+    return Path("logs")
+
+
+LOG_ROOT = _get_log_root()
 LOG_PATH: Path | None = None
 
 

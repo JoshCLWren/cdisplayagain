@@ -17,6 +17,15 @@ def _write_image(path: Path) -> None:
     img.save(path)
 
 
+def test_get_log_root_uses_user_directory_for_macos_bundle(monkeypatch, tmp_path):
+    """Packaged macOS launches must not write logs relative to the working directory."""
+    monkeypatch.setattr(cdisplayagain.sys, "platform", "darwin")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.delenv("CDISPLAYAGAIN_LOG_DIR", raising=False)
+
+    assert cdisplayagain._get_log_root() == tmp_path / "Library" / "Logs" / "cdisplayagain"
+
+
 def test_main_function_with_file_argument(monkeypatch, tmp_path):
     """Test main function with command line file argument."""
     _write_image(tmp_path / "test.png")

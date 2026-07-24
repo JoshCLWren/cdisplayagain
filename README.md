@@ -63,12 +63,17 @@ curl -Ls https://astral.sh/uv/install.sh | sh
 
 ### macOS Setup
 
-**Note:** Recent Python versions on macOS no longer include tkinter by default.
-You must install it separately:
+The viewer needs a Python build with Tk support. `uv`'s managed Python includes
+the Tk extension; install the project-supported interpreter and recreate the
+virtual environment with it:
 
 ```bash
-brew install python-tk
+uv python install 3.13.11
+uv venv --clear --python 3.13.11 --managed-python
+uv sync
 ```
+
+Do not install `tkinter` with pip: it is part of Python, not a PyPI package.
 
 If you encounter issues with the UI not responding or appearing, try:
 ```bash
@@ -95,6 +100,24 @@ Or via the Makefile:
 ```bash
 make run FILE=path/to/comic.cbz
 ```
+
+To associate comic files with cdisplayagain:
+
+```bash
+# macOS
+make macos-install
+
+# Linux
+make linux-install
+```
+
+The macOS target installs an app bundle in `~/Applications` and registers CBZ
+and CBR files with Launch Services. The Linux target installs the executable,
+desktop entry, MIME definitions, and the existing cdisplayagain icon.
+
+On macOS, `duti` is used to select cdisplayagain as the default opener when it
+is installed (`brew install duti`). Otherwise choose cdisplayagain once via
+Finder's **Open With → Other…**, then enable **Always Open With**.
 
 While viewing, navigate with the arrow keys, scroll wheel, or spacebar,
 and use `Esc` or `q` to close the window.

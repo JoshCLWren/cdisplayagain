@@ -1,4 +1,4 @@
-.PHONY: help lint pytest sync venv run smoke clean-build build build-onedir install install-bin install-desktop mime-query redo ci-test-debian ci-test-local ci-build-image githook install-githook
+.PHONY: help lint pytest sync venv run smoke clean-build build build-onedir macos-app macos-install linux-install install install-bin install-desktop mime-query redo ci-test-debian ci-test-local ci-build-image githook install-githook
 
 # Configuration
 PREFIX ?= /usr/local
@@ -58,7 +58,7 @@ smoke:  ## Run manual smoke test checklist
 	uv run --active python cdisplayagain.py "$(FILE)"
 
 clean-build:  ## Clean build artifacts
-	rm -rf build dist *.spec __pycache__ .pytest_cache
+	rm -rf build dist __pycache__ .pytest_cache
 
 build: clean-build  ## Build single-file executable (slower startup)
 	uv run --active pyinstaller --onefile --name cdisplayagain cdisplayagain.py
@@ -69,6 +69,37 @@ build-onedir:  ## Build onedir bundle (faster startup than onefile)
 		--icon=cdisplayagain.png \
 		--name cdisplayagain \
 		cdisplayagain.py
+
+macos-app: clean-build  ## Build a macOS app bundle associated with CBZ/CBR files
+	@if [ "$$(uname -s)" != "Darwin" ]; then echo "macos-app requires macOS"; exit 1; fi
+	mkdir -p build/cdisplayagain.iconset
+	sips -z 16 16 cdisplayagain.png --out build/cdisplayagain.iconset/icon_16x16.png >/dev/null
+	sips -z 32 32 cdisplayagain.png --out build/cdisplayagain.iconset/icon_16x16@2x.png >/dev/null
+	sips -z 32 32 cdisplayagain.png --out build/cdisplayagain.iconset/icon_32x32.png >/dev/null
+	sips -z 64 64 cdisplayagain.png --out build/cdisplayagain.iconset/icon_32x32@2x.png >/dev/null
+	sips -z 128 128 cdisplayagain.png --out build/cdisplayagain.iconset/icon_128x128.png >/dev/null
+	sips -z 256 256 cdisplayagain.png --out build/cdisplayagain.iconset/icon_128x128@2x.png >/dev/null
+	sips -z 256 256 cdisplayagain.png --out build/cdisplayagain.iconset/icon_256x256.png >/dev/null
+	sips -z 512 512 cdisplayagain.png --out build/cdisplayagain.iconset/icon_256x256@2x.png >/dev/null
+	sips -z 512 512 cdisplayagain.png --out build/cdisplayagain.iconset/icon_512x512.png >/dev/null
+	sips -z 1024 1024 cdisplayagain.png --out build/cdisplayagain.iconset/icon_512x512@2x.png >/dev/null
+	iconutil -c icns build/cdisplayagain.iconset -o build/cdisplayagain.icns
+	uv run --active pyinstaller --noconfirm cdisplayagain-macos.spec
+
+macos-install: macos-app  ## Install the macOS app and register it with Launch Services
+	mkdir -p "$(HOME)/Applications"
+	ditto dist/cdisplayagain.app "$(HOME)/Applications/cdisplayagain.app"
+	/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister \
+		-f "$(HOME)/Applications/cdisplayagain.app"
+	@if command -v duti >/dev/null 2>&1; then \
+		duti -s com.cdisplayagain.viewer .cbz all; \
+		duti -s com.cdisplayagain.viewer .cbr all; \
+	else \
+		echo "Install duti to make cdisplayagain the default CBZ/CBR opener: brew install duti"; \
+	fi
+	@echo "Installed $(HOME)/Applications/cdisplayagain.app"
+
+linux-install: build-onedir install  ## Build and install the Linux CBZ/CBR file association
 
 
 install: install-bin install-desktop  ## Install everything
@@ -94,11 +125,17 @@ install-bin:  ## Install binary to system
 
 install-desktop:  ## Install desktop entry
 	mkdir -p $(HOME)/.local/share/applications
+	mkdir -p $(HOME)/.local/share/mime/packages
+	install -m 0644 packaging/linux/cdisplayagain.xml $(HOME)/.local/share/mime/packages/cdisplayagain.xml
+	update-mime-database $(HOME)/.local/share/mime
+	mkdir -p $(HOME)/.local/share/icons/hicolor/1024x1024/apps
+	install -m 0644 cdisplayagain.png $(HOME)/.local/share/icons/hicolor/1024x1024/apps/cdisplayagain.png
 	printf '%s\n' \
 		'[Desktop Entry]' \
 		'Type=Application' \
 		'Name=cdisplayagain' \
 		"Exec=$(BINDIR)/cdisplayagain %f" \
+		'Icon=cdisplayagain' \
 		'Terminal=false' \
 		'Categories=Graphics;Viewer;' \
 		'MimeType=application/x-cbz;application/x-cbr;' \
