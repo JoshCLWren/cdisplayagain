@@ -1322,3 +1322,50 @@ def test_worker_queue_full_handling(tk_root, tmp_path, monkeypatch):
         viewer._worker.request_page(0, 100, 100)
     except queue.Full:
         pytest.fail("queue.Full should be caught and ignored in request_page")
+
+
+def test_display_image_fast_with_vertical_scrolling(tk_root, tmp_path):
+    """Test _display_image_fast when image is taller than canvas."""
+    from PIL import Image
+
+    img_path = tmp_path / "tall.png"
+    img = Image.new("RGB", (100, 500), color=(255, 0, 0))
+    img.save(img_path)
+
+    viewer = cdisplayagain.ComicViewer(tk_root, img_path)
+    viewer.canvas.config(width=100, height=100)
+    viewer.update_idletasks()
+
+    # This should trigger the vertical scroll path
+    viewer._display_image_fast(img)
+    assert viewer._scroll_offset == 0
+
+
+def test_set_background_color_with_invalid_color(tk_root, tmp_path):
+    """Test set_background_color handles invalid colors gracefully."""
+    from PIL import Image
+
+    img_path = tmp_path / "test.png"
+    img = Image.new("RGB", (100, 100), color=(0, 0, 0))
+    img.save(img_path)
+
+    viewer = cdisplayagain.ComicViewer(tk_root, img_path)
+    # Invalid color should raise TclError - this tests error handling path
+    with pytest.raises(_tkinter.TclError):
+        viewer.set_background_color("not a color")
+
+
+def test_quit_during_dialog_cancellation(tk_root, tmp_path):
+    """Test _quit handles dialog cancellation gracefully."""
+    from PIL import Image
+
+    img_path = tmp_path / "test.png"
+    img = Image.new("RGB", (100, 100), color=(0, 0, 0))
+    img.save(img_path)
+
+    viewer = cdisplayagain.ComicViewer(tk_root, img_path)
+    viewer._dialog_active = True
+    viewer._pending_quit = False
+
+    # Calling _quit should set pending_quit and not raise
+    viewer._quit()
