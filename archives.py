@@ -164,12 +164,21 @@ def load_cbr(path: Path) -> PageSource:
     Filters to image/text members before decompression to avoid decompressing
     unrelated files. Extraction is lazy - bytes are decompressed on-demand via
     get_bytes() with in-memory caching to avoid repeated solid-RAR rescans.
+    Thread-safe: uses a lock to protect rar.read() and cache access.
     """
     from unrar.cffi import rarfile as rarfile_cffi
 
     tmpdir = Path(tempfile.mkdtemp(prefix="cdisplayagain_"))
+    rar = None
     try:
-        rar = rarfile_cffi.RarFile(str(path))
+        try:
+            rar = rarfile_cffi.RarFile(str(path))
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to open CBR: {path.name}. The file may be corrupt, "
+                f"encrypted, or not a valid RAR archive."
+            ) from e
+
         with PerfTimer("load_cbr"):
             filenames = rar.namelist()
 
@@ -187,20 +196,22 @@ def load_cbr(path: Path) -> PageSource:
                 )
 
             extracted_cache: dict[str, bytes] = {}
+            read_lock = threading.Lock()
 
             def get_bytes(rel_name: str) -> bytes:
-                if rel_name in extracted_cache:
-                    return extracted_cache[rel_name]
-                try:
-                    data = rar.read(rel_name)
-                except Exception as e:
-                    logging.error("Failed to decompress %s from CBR: %s", rel_name, e)
-                    raise RuntimeError(
-                        f"Failed to decompress page: {rel_name}. "
-                        f"The archive may be corrupted, encrypted, or use an unsupported RAR feature."
-                    ) from e
-                extracted_cache[rel_name] = data
-                return data
+                with read_lock:
+                    if rel_name in extracted_cache:
+                        return extracted_cache[rel_name]
+                    try:
+                        data = rar.read(rel_name)
+                    except Exception as e:
+                        logging.error("Failed to decompress %s from CBR: %s", rel_name, e)
+                        raise RuntimeError(
+                            f"Failed to decompress page: {rel_name}. "
+                            f"The archive may be corrupted, encrypted, or use an unsupported RAR feature."
+                        ) from e
+                    extracted_cache[rel_name] = data
+                    return data
 
             def cleanup():
                 try:
