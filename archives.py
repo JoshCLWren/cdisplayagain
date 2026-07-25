@@ -100,11 +100,26 @@ def get_sibling_comics(path: Path) -> tuple[list[Path], int]:
 
 
 def load_cbz(path: Path) -> PageSource:
-    """Load a CBZ/ZIP archive into a page source."""
+    """Load a CBZ/ZIP archive into a page source.
+
+    Reads member names lazily without decompressing file contents. Actual
+    decompression happens on-demand via get_bytes().
+    """
     import zipfile
 
-    zf = zipfile.ZipFile(path, "r")
-    # Include images even if nested in directories inside the zip
+    try:
+        zf = zipfile.ZipFile(path, "r")
+    except zipfile.BadZipFile as e:
+        raise RuntimeError(
+            f"Failed to open CBZ: {path.name}. The file may be corrupt, "
+            f"incomplete, or not a valid ZIP archive."
+        ) from e
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to open CBZ: {path.name}. Check that the file exists "
+            f"and is readable."
+        ) from e
+
     names = [n for n in zf.namelist() if not n.endswith("/")]
     text_names = [n for n in names if is_text_name(n)]
     image_names = [n for n in names if is_image_name(n)]
@@ -114,13 +129,25 @@ def load_cbz(path: Path) -> PageSource:
 
     if not pages:
         zf.close()
-        raise RuntimeError("No images or info files found inside CBZ.")
+        raise RuntimeError(
+            f"No images or info files found inside CBZ. "
+            f"Checked {len(names)} members."
+        )
 
     read_lock = threading.Lock()
 
     def get_bytes(name: str) -> bytes:
         with read_lock:
-            return zf.read(name)
+            try:
+                return zf.read(name)
+            except zipfile.BadZipFile as e:
+                raise RuntimeError(
+                    f"Failed to read page {name} from CBZ. The archive may be corrupt."
+                ) from e
+            except Exception as e:
+                raise RuntimeError(
+                    f"Failed to read page {name}. Check disk space and file permissions."
+                ) from e
 
     def cleanup():
         try:
@@ -132,49 +159,59 @@ def load_cbz(path: Path) -> PageSource:
 
 
 def load_cbr(path: Path) -> PageSource:
-    """Extract a CBR archive via unrar2-cffi and build a page source."""
+    """Extract a CBR archive via unrar2-cffi and build a page source.
+
+    Filters to image/text members before decompression to avoid decompressing
+    unrelated files. Extraction is lazy - bytes are decompressed on-demand via
+    get_bytes() with in-memory caching to avoid repeated solid-RAR rescans.
+    Thread-safe: uses a lock to protect rar.read() and cache access.
+    """
     from unrar.cffi import rarfile as rarfile_cffi
 
     tmpdir = Path(tempfile.mkdtemp(prefix="cdisplayagain_"))
+    rar = None
     try:
-        with PerfTimer("load_cbr"):
+        try:
             rar = rarfile_cffi.RarFile(str(path))
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to open CBR: {path.name}. The file may be corrupt, "
+                f"encrypted, or not a valid RAR archive."
+            ) from e
+
+        with PerfTimer("load_cbr"):
             filenames = rar.namelist()
 
-            text_files: list[Path] = []
-            image_files: list[Path] = []
+            text_file_names = [n for n in filenames if is_text_name(n)]
+            image_file_names = [n for n in filenames if is_image_name(n)]
 
-            for filename in filenames:
-                if not filename:
-                    continue
+            text_file_names.sort(key=natural_key)
+            image_file_names.sort(key=natural_key)
+            all_file_names = text_file_names + image_file_names
 
-                dest = tmpdir / filename
-                if filename.endswith("/"):
-                    dest.mkdir(parents=True, exist_ok=True)
-                    continue
+            if not all_file_names:
+                raise RuntimeError(
+                    f"No images or info files found in CBR. "
+                    f"Checked {len(filenames)} members."
+                )
 
-                try:
-                    data = rar.read(filename)
-                    dest.parent.mkdir(parents=True, exist_ok=True)
-                    dest.write_bytes(data)
-
-                    if is_text_name(filename):
-                        text_files.append(dest)
-                    elif Path(filename).suffix.casefold() in IMAGE_EXTS:
-                        image_files.append(dest)
-                except Exception as e:
-                    logging.warning("Failed to extract %s: %s", filename, e)
-
-            text_files.sort(key=lambda p: natural_key(str(p.relative_to(tmpdir))))
-            image_files.sort(key=lambda p: natural_key(str(p.relative_to(tmpdir))))
-
-            if not text_files and not image_files:
-                raise RuntimeError("No images or info files found after extracting CBR.")
-
-            rel_names = [str(p.relative_to(tmpdir)) for p in text_files + image_files]
+            extracted_cache: dict[str, bytes] = {}
+            read_lock = threading.Lock()
 
             def get_bytes(rel_name: str) -> bytes:
-                return (tmpdir / rel_name).read_bytes()
+                with read_lock:
+                    if rel_name in extracted_cache:
+                        return extracted_cache[rel_name]
+                    try:
+                        data = rar.read(rel_name)
+                    except Exception as e:
+                        logging.error("Failed to decompress %s from CBR: %s", rel_name, e)
+                        raise RuntimeError(
+                            f"Failed to decompress page: {rel_name}. "
+                            f"The archive may be corrupted, encrypted, or use an unsupported RAR feature."
+                        ) from e
+                    extracted_cache[rel_name] = data
+                    return data
 
             def cleanup():
                 try:
@@ -182,7 +219,7 @@ def load_cbr(path: Path) -> PageSource:
                 except Exception as e:
                     logging.warning("Cleanup failed: %s", e)
 
-            return PageSource(pages=rel_names, get_bytes=get_bytes, cleanup=cleanup)
+            return PageSource(pages=all_file_names, get_bytes=get_bytes, cleanup=cleanup)
     except Exception:
         try:
             shutil.rmtree(tmpdir, ignore_errors=True)

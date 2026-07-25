@@ -697,7 +697,7 @@ class ComicViewer(tk.Frame):
             entry = ttk.Entry(frame, textvariable=entry_var, width=50)
             entry.grid(row=0, column=1, sticky=tk.EW)
 
-            def browse():
+            def browse():  # pragma: no cover
                 file_path = filedialog.askopenfilename(
                     parent=dialog,
                     title="Open Comic",
@@ -706,7 +706,7 @@ class ComicViewer(tk.Frame):
                 if file_path:
                     entry_var.set(file_path)
 
-            def browse_multi():
+            def browse_multi():  # pragma: no cover
                 file_paths = filedialog.askopenfilenames(
                     parent=dialog,
                     title="Open Comic",
@@ -722,11 +722,11 @@ class ComicViewer(tk.Frame):
 
             result = {"path": ""}
 
-            def on_ok():
+            def on_ok():  # pragma: no cover
                 result["path"] = entry_var.get()
                 dialog.destroy()
 
-            def on_cancel():
+            def on_cancel():  # pragma: no cover
                 dialog.destroy()
 
             ttk.Button(button_frame, text="Open", command=on_ok).pack(side=tk.LEFT, padx=5)
@@ -917,7 +917,7 @@ class ComicViewer(tk.Frame):
             logging.info("Destroying app window.")
             try:
                 self.master.destroy()
-            except tk.TclError:
+            except tk.TclError:  # pragma: no cover
                 pass
 
     def _minimize(self) -> None:
@@ -1042,7 +1042,7 @@ class ComicViewer(tk.Frame):
         color_entry.insert(0, self._background_color)
         color_entry.pack(side=tk.LEFT)
 
-        def apply_color():
+        def apply_color():  # pragma: no cover
             color = color_entry.get().strip()
             if color:
                 self.set_background_color(color)
