@@ -30,7 +30,7 @@ def test_load_comic_with_corrupted_cbz(tmp_path):
     cbz_path = tmp_path / "corrupted.cbz"
     _create_invalid_zip(cbz_path)
 
-    with pytest.raises(zipfile.BadZipFile):
+    with pytest.raises(RuntimeError, match="Failed to open CBZ"):
         cdisplayagain.load_comic(cbz_path)
 
 
