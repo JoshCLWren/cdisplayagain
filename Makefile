@@ -1,7 +1,7 @@
-.PHONY: help lint pytest sync venv run smoke clean-build build build-onedir install install-bin install-desktop mime-query redo ci-test-debian ci-test-local ci-build-image githook install-githook
+.PHONY: help lint pytest sync venv run smoke clean-build build build-onedir install install-bin install-desktop mime-query redo ci-test-debian ci-test-local ci-build-image githook install-githook deploy
 
 # Configuration
-PREFIX ?= /usr/local
+PREFIX ?= $(HOME)/.local
 BINDIR ?= $(PREFIX)/bin
 LIBDIR ?= $(PREFIX)/lib
 
@@ -60,6 +60,8 @@ smoke:  ## Run manual smoke test checklist
 clean-build:  ## Clean build artifacts
 	rm -rf build dist *.spec __pycache__ .pytest_cache
 
+deploy: clean-build build install  ## Build + install for this machine (one command)
+
 build: clean-build  ## Build single-file executable (slower startup)
 	uv run --active pyinstaller --onefile --name cdisplayagain cdisplayagain.py
 
@@ -92,24 +94,36 @@ install-bin:  ## Install binary to system
 		exit 1; \
 	fi
 
-install-desktop:  ## Install desktop entry
-	mkdir -p $(HOME)/.local/share/applications
-	printf '%s\n' \
-		'[Desktop Entry]' \
-		'Type=Application' \
-		'Name=cdisplayagain' \
-		"Exec=$(BINDIR)/cdisplayagain %f" \
-		'Terminal=false' \
-		'Categories=Graphics;Viewer;' \
-		'MimeType=application/x-cbz;application/x-cbr;' \
-		> $(HOME)/.local/share/applications/cdisplayagain.desktop
-	update-desktop-database $(HOME)/.local/share/applications || true
-	xdg-mime default cdisplayagain.desktop application/x-cbz
-	xdg-mime default cdisplayagain.desktop application/x-cbr
+install-desktop:  ## Install desktop entry (Linux) or app symlink (macOS)
+	@if [ "$$(uname)" = "Darwin" ]; then \
+		echo "macOS: file associations handled by 'open' command and Launch Services."; \
+		echo "Double-click a .cbz/.cbr once and choose cdisplayagain, then 'Always Open With'."; \
+	else \
+		mkdir -p $(HOME)/.local/share/applications; \
+		printf '%s\n' \
+			'[Desktop Entry]' \
+			'Type=Application' \
+			'Name=cdisplayagain' \
+			"Exec=$(BINDIR)/cdisplayagain %f" \
+			'Terminal=false' \
+			'Categories=Graphics;Viewer;' \
+			'MimeType=application/x-cbz;application/x-cbr;application/vnd.comicbook+zip;application/vnd.comicbook-rar;application/x-ext-cbz;application/x-ext-cbr;' \
+			> $(HOME)/.local/share/applications/cdisplayagain.desktop; \
+		update-desktop-database $(HOME)/.local/share/applications || true; \
+		for mime in application/x-cbz application/x-cbr application/vnd.comicbook+zip application/vnd.comicbook-rar application/x-ext-cbz application/x-ext-cbr; do \
+			xdg-mime default cdisplayagain.desktop "$$mime" 2>/dev/null || true; \
+		done; \
+		echo "MIME associations:"; \
+		$(MAKE) --no-print-directory mime-query; \
+	fi
 
-mime-query:  ## Query current MIME associations
-	@echo "CBZ:" $$(xdg-mime query default application/x-cbz)
-	@echo "CBR:" $$(xdg-mime query default application/x-cbr)
+mime-query:  ## Query current MIME associations (Linux)
+	@if [ "$$(uname)" = "Darwin" ]; then \
+		echo "macOS: use 'open -a cdisplayagain file.cbz' to test."; \
+	else \
+		echo "CBZ:" $$(xdg-mime query default application/x-cbz); \
+		echo "CBR:" $$(xdg-mime query default application/x-cbr); \
+	fi
 
 redo: build-onedir install-bin  ## Rebuild and run (Usage: make redo FILE=...)
 	@if [ -n "$(FILE)" ]; then \

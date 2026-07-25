@@ -1566,7 +1566,10 @@ def main():
 
     path: Path | None = None
     if args.comic:
-        path = Path(args.comic).expanduser()
+        raw = args.comic
+        if raw.startswith("file://"):
+            raw = raw[7]
+        path = Path(raw).expanduser()
     else:
         # Use the existing root for the dialog
         selection = filedialog.askopenfilename(
