@@ -77,12 +77,19 @@ run_smoke() {
     CDISPLAYAGAIN_LOG_DIR="$log_dir" xvfb-run -a "$wrapper" "$input" \
         >"$workspace/$(basename "$input").log" 2>&1 &
     local smoke_pid=$!
-    sleep 3
+    sleep 1
     if ! kill -0 "$smoke_pid" 2>/dev/null; then
         wait "$smoke_pid" || true
         cat "$workspace/$(basename "$input").log"
         return 1
     fi
+    for _ in {1..18}; do
+        if grep -R -q "Opening comic: $input" "$log_dir" && \
+            grep -R -q "cached page 0" "$log_dir"; then
+            break
+        fi
+        sleep 0.5
+    done
     if ! grep -R -q "Opening comic: $input" "$log_dir" || \
         ! grep -R -q "cached page 0" "$log_dir"; then
         find "$log_dir" -type f -print -exec cat {} \;

@@ -32,13 +32,20 @@ PY
 echo "Starting packaged CBZ smoke test under Xvfb"
 CDISPLAYAGAIN_LOG_DIR="$test_root/logs" xvfb-run -a "$executable" "$fixture" >"$test_root/smoke.log" 2>&1 &
 smoke_pid=$!
-sleep 3
+sleep 1
 if ! kill -0 "$smoke_pid" 2>/dev/null; then
     wait "$smoke_pid" || true
     cat "$test_root/smoke.log"
     echo "ERROR: packaged executable exited during startup smoke test." >&2
     exit 1
 fi
+for _ in {1..18}; do
+    if grep -R -q "Opening comic: $fixture" "$test_root/logs" && \
+        grep -R -q "cached page 0" "$test_root/logs"; then
+        break
+    fi
+    sleep 0.5
+done
 if ! grep -R -q "Opening comic: $fixture" "$test_root/logs" || \
     ! grep -R -q "cached page 0" "$test_root/logs"; then
     cat "$test_root/smoke.log"
