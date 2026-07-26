@@ -326,6 +326,23 @@ def test_preload_next_page(tk_root, tmp_path):
     assert preload_requests[0] == 1
 
 
+def test_preloaded_page_is_cached_for_future_display(tk_root, tmp_path):
+    """Keep a completed preload so the next page turn does not resize it again."""
+    cbz_path = tmp_path / "test.cbz"
+    create_test_cbz(cbz_path, page_count=3)
+
+    app = cdisplayagain.ComicViewer(tk_root, cbz_path)
+    app.update()
+    app._canvas_properly_sized = True
+    image = Image.new("RGB", (100, 200))
+
+    app._update_from_cache(1, image)
+
+    cache_key = (1, max(1, app.canvas.winfo_width()), max(1, app.canvas.winfo_height()))
+    assert app._image_cache.get(cache_key) is image
+    assert app._current_index == 0
+
+
 def test_preload_on_last_page(tk_root, tmp_path):
     """Test that preloading is skipped on the last page."""
     cbz_path = tmp_path / "test.cbz"

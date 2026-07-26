@@ -216,6 +216,8 @@ class ImageWorker:
         self._stopped: bool = False
         self._threads_started: bool = False
         self._start_lock = threading.Lock()
+        self._pending_requests: set[tuple[int, int, int]] = set()
+        self._pending_requests_lock = threading.Lock()
         with self._instances_lock:
             self._instances.add(self)
         if autostart:
@@ -252,13 +254,19 @@ class ImageWorker:
         if self._stopped or not self._app:
             return
         self._ensure_threads_started()
+        request_key = (index, width, height)
+        with self._pending_requests_lock:
+            if request_key in self._pending_requests:
+                return
+            self._pending_requests.add(request_key)
         try:
             priority = 1 if preload else 0
             self._queue.put_nowait((priority, index, width, height, preload, render_generation))
             if self._app and hasattr(self._app, "_ensure_worker_drain_running"):
                 self._app._ensure_worker_drain_running()
         except queue.Full:
-            pass
+            with self._pending_requests_lock:
+                self._pending_requests.discard(request_key)
 
     def preload(self, index: int):
         """Preload a page at current canvas dimensions for future display."""
@@ -304,6 +312,9 @@ class ImageWorker:
         """Process resize requests in background."""
         while not self._stopped:
             priority = None
+            index = None
+            width = None
+            height = None
             try:
                 priority, index, width, height, preload, render_generation = self._queue.get(
                     timeout=0.1
@@ -344,6 +355,10 @@ class ImageWorker:
                 if self._stopped or sys.is_finalizing():
                     break
                 break
+            finally:
+                if index is not None and width is not None and height is not None:
+                    with self._pending_requests_lock:
+                        self._pending_requests.discard((index, width, height))
 
 
 class ComicViewer(tk.Frame):
@@ -881,19 +896,16 @@ class ComicViewer(tk.Frame):
         if not self.source:
             logging.warning("Update from cache: no source")
             return
-        if index != self._current_index:
-            logging.info("Update from cache: index mismatch, skipping")
-            return
-
         cw = max(1, self.canvas.winfo_width())
         ch = max(1, self.canvas.winfo_height())
 
-        cache_key: tuple[int, int, int] | None = None
-        # Only cache when canvas has proper dimensions to avoid caching tiny images
         if self._canvas_properly_sized:
-            cache_key = (index, cw, ch)
-        if cache_key is not None:
-            self._image_cache[cache_key] = img
+            self._image_cache[(index, cw, ch)] = img
+
+        if index != self._current_index:
+            logging.info("Update from cache: index mismatch, cached for future display")
+            return
+
         logging.info("Update from cache: cached page %d at %dx%d", index, cw, ch)
 
         self._display_cached_image(img)
@@ -1205,7 +1217,8 @@ class ComicViewer(tk.Frame):
             self._update_title()
 
         next_idx = self._find_next_image_index(index)
-        if next_idx is not None:
+        next_cache_key = (next_idx, cw, ch) if next_idx is not None else None
+        if next_idx is not None and next_cache_key not in self._image_cache:
             logging.info("Preloading next image page %d", next_idx)
             self._get_worker().preload(next_idx)
 
