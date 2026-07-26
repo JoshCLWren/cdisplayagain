@@ -105,3 +105,40 @@ jobs:
           files: ./coverage.xml
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  package-linux:
+    runs-on: ubuntu-22.04
+    needs: [lint, tests]
+    steps:
+      - name: Check out exact commit
+        uses: actions/checkout@v4
+
+      - name: Install packaging dependencies
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq libvips-dev python3-tk xvfb unar
+
+      - name: Set up environment
+        uses: ./.github/actions/setup
+
+      - name: Build onedir bundle once
+        run: uv run --active python scripts/generate_build_info.py && uv run --active pyinstaller --clean --noconfirm cdisplayagain.spec
+
+      - name: Smoke test bundle and installer
+        run: bash scripts/ci-package-check.sh
+
+      - name: Package tested bundle
+        id: package
+        shell: bash
+        run: |
+          asset_path=$(bash scripts/package-linux.sh)
+          sha256sum "$asset_path" > SHA256SUMS
+          bash scripts/ci-archive-check.sh "$asset_path"
+          echo "asset_path=$asset_path" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Linux release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cdisplayagain-linux-x86_64
+          path: |
+            ${{ steps.package.outputs.asset_path }}
+            SHA256SUMS
+          retention-days: 7
