@@ -4,7 +4,7 @@ import cdisplayagain
 
 
 def test_first_render_shows_preview(tmp_path, tk_root):
-    """Verify that first render displays a preview while high quality loads."""
+    """Verify that the initial cover preview is displayed without a second render."""
     cbz_path = tmp_path / "first_render_test.cbz"
     create_benchmark_cbz(cbz_path, page_count=3)
 
@@ -22,8 +22,8 @@ def test_first_render_shows_preview(tmp_path, tk_root):
 
     app._render_current_sync()
 
-    assert not app._first_proper_render_completed, "Preview should not mark as completed"
-    assert app._tk_img is not None, "Preview should be displayed while worker processing"
+    assert app._first_proper_render_completed, "Initial preview should be the completed cover render"
+    assert app._tk_img is not None, "Cover preview should be displayed immediately"
 
 
 def test_first_render_from_cache_marks_completed(tmp_path, tk_root):

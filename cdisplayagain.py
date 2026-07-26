@@ -1304,6 +1304,11 @@ class ComicViewer(tk.Frame):
         self._update_title()
         perf_log("display_preview", time.perf_counter() - display_start)
 
+        if not self._first_proper_render_completed:
+            self._first_proper_render_completed = True
+            perf_log("render_current_sync", time.perf_counter() - render_start, "initial_preview")
+            return
+
         logging.info("Requesting high-quality resize for page %d", index)
         self._get_worker().request_page(
             index, cw, ch, preload=False, render_generation=self._render_generation
