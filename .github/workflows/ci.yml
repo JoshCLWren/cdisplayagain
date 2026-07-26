@@ -171,7 +171,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          docker run --rm -v "$GITHUB_WORKSPACE:/workspace" -w /workspace \
+          docker run --rm -e "BUILD_SHA=${BUILD_SHA}" -v "$GITHUB_WORKSPACE:/workspace" -w /workspace \
             "${{ matrix.image }}" bash /workspace/scripts/compatibility-test.sh \
             "${{ matrix.family }}" 2>&1 | tee "compatibility-${{ matrix.name }}.log"
         env:
