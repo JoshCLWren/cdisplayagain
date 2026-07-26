@@ -43,14 +43,21 @@ kill -TERM "$smoke_pid"
 wait "$smoke_pid" || true
 
 installer="$root_dir/scripts/install-linux.sh"
-env HOME="$test_root/home" PREFIX="$test_root/prefix" XDG_DATA_HOME="$test_root/data" "$installer"
+installer_root="$test_root/installer"
+mkdir -p "$installer_root"
+cp -a "$root_dir/dist/cdisplayagain" "$installer_root/bundle"
+cp "$root_dir/cdisplayagain.png" "$root_dir/scripts/desktop-entry.template" "$installer_root/"
+cp "$installer" "$installer_root/install.sh"
+chmod 0755 "$installer_root/install.sh"
+env HOME="$test_root/home" PREFIX="$test_root/prefix" XDG_DATA_HOME="$test_root/data" \
+    "$installer_root/install.sh"
 env HOME="$test_root/home" PREFIX="$test_root/prefix" XDG_DATA_HOME="$test_root/data" \
     "$test_root/prefix/bin/cdisplayagain" --version | grep -F "build $expected_id)"
 test -x "$test_root/prefix/bin/cdisplayagain"
 test -f "$test_root/data/applications/cdisplayagain.desktop"
 test -f "$test_root/data/icons/hicolor/256x256/apps/cdisplayagain.png"
 env HOME="$test_root/home" PREFIX="$test_root/prefix" XDG_DATA_HOME="$test_root/data" \
-    "$installer" --uninstall
+    "$installer_root/install.sh" --uninstall
 test ! -e "$test_root/prefix/lib/cdisplayagain"
 test ! -e "$test_root/prefix/bin/cdisplayagain"
 test ! -e "$test_root/data/applications/cdisplayagain.desktop"
