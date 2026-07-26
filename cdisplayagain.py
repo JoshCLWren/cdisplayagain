@@ -19,6 +19,14 @@ from pathlib import Path
 from typing import cast
 
 try:
+    _build_info = importlib.import_module("build_info")
+    APP_VERSION = str(getattr(_build_info, "BUILD_VERSION", "0.1.0"))
+    BUILD_ID = str(getattr(_build_info, "BUILD_ID", "source"))
+except ImportError:
+    APP_VERSION = "0.1.0"
+    BUILD_ID = "source"
+
+try:
     import tkinter as tk
     from tkinter import filedialog, messagebox
 except ImportError as e:  # pragma: no cover
@@ -56,17 +64,15 @@ from archives import load_directory as load_directory
 from archives import load_image_file as load_image_file
 from archives import load_tar as load_tar
 from archives import natural_key as natural_key
-from image_backend import get_resized_pil
-
-try:
-    _build_info = importlib.import_module("build_info")
-    APP_VERSION = str(getattr(_build_info, "BUILD_VERSION", "0.1.0"))
-    BUILD_ID = str(getattr(_build_info, "BUILD_ID", "source"))
-except ImportError:
-    APP_VERSION = "0.1.0"
-    BUILD_ID = "source"
 
 TkPhotoImage = tk.PhotoImage | ImageTk.PhotoImage
+
+
+def get_resized_pil(raw_bytes: bytes, target_width: int, target_height: int) -> Image.Image:
+    """Resize an image lazily so pyvips does not delay initial cover display."""
+    from image_backend import get_resized_pil as resize_image
+
+    return resize_image(raw_bytes, target_width, target_height)
 
 
 def _as_wm(obj: tk.Misc) -> tk.Wm:
