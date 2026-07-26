@@ -51,6 +51,7 @@ trap 'rm -rf "$temp_root"' EXIT
 env HOME="$temp_root/home" PREFIX="$temp_root/prefix" XDG_DATA_HOME="$temp_root/data" \
     "$package_root/install.sh"
 wrapper="$temp_root/prefix/bin/cdisplayagain"
+export LD_LIBRARY_PATH="$temp_root/prefix/lib/cdisplayagain/_internal:$temp_root/prefix/lib/cdisplayagain/_internal/pillow.libs${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 version_output=$(env HOME="$temp_root/home" PREFIX="$temp_root/prefix" \
     XDG_DATA_HOME="$temp_root/data" "$wrapper" --version)
 build_sha=${BUILD_SHA:?}
