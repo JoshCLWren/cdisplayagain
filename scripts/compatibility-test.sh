@@ -38,8 +38,9 @@ esac
 
 cd "$artifact_dir"
 sha256sum -c "$checksum"
-test -n "$(tar -tzf "$archive" | head -1)"
-extract_root=$(tar -tzf "$archive" | head -1 | cut -d/ -f1)
+tar -tzf "$archive" > "$artifact_dir/archive.contents"
+test -s "$artifact_dir/archive.contents"
+extract_root=$(cut -d/ -f1 "$artifact_dir/archive.contents" | head -1)
 tar -xzf "$archive"
 package_root="$artifact_dir/$extract_root"
 test -x "$package_root/install.sh"
