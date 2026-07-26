@@ -40,7 +40,7 @@ cd "$artifact_dir"
 sha256sum -c "$checksum"
 tar -tzf "$archive" > "$artifact_dir/archive.contents"
 test -s "$artifact_dir/archive.contents"
-extract_root=$(cut -d/ -f1 "$artifact_dir/archive.contents" | head -1)
+extract_root=$(sed -n '1s:/.*::p' "$artifact_dir/archive.contents")
 tar -xzf "$archive"
 package_root="$artifact_dir/$extract_root"
 test -x "$package_root/install.sh"
