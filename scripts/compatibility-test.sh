@@ -21,7 +21,7 @@ case "$family" in
         dnf install -y \
             bash ca-certificates coreutils gzip tar xorg-x11-server-Xvfb \
             expat fontconfig glib2 libX11 libXext libXi libXrender \
-            libXss libXtst
+            libXScrnSaver libXtst
         ;;
     zypper)
         zypper --non-interactive refresh
@@ -62,7 +62,7 @@ for native_file in "$temp_root/prefix/lib/cdisplayagain/cdisplayagain" \
     ldd_output=$(env -u LD_LIBRARY_PATH ldd "$native_file" 2>&1)
     printf '%s\n%s\n' "=== $native_file" "$ldd_output" >> "$workspace/ldd.log"
     while IFS= read -r missing_line; do
-        dependency=${missing_line%% *}
+        dependency=$(awk '{print $1}' <<<"$missing_line")
         if [[ -z "$(find "$bundle_lib_dir" -name "$dependency" -print -quit)" ]]; then
             echo "Unresolved dependency in $native_file: $dependency" >&2
             exit 1
