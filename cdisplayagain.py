@@ -1591,6 +1591,7 @@ class ComicViewer(tk.Frame):
 def main():
     """Parse arguments and launch the comic viewer."""
     _init_logging()
+    main_start = time.perf_counter()
     parser = argparse.ArgumentParser(description="Simple CBZ/CBR viewer (cdisplay-ish)")
     parser.add_argument(
         "--version", action="version", version=f"%(prog)s {APP_VERSION} (build {BUILD_ID})"
@@ -1602,6 +1603,7 @@ def main():
     try:
         root = tk.Tk()
         root.withdraw()
+        logging.info("startup_root_ready_ms=%.3f", (time.perf_counter() - main_start) * 1000)
     except tk.TclError as e:
         print(
             f"Error: tkinter cannot initialize the display.\n\n"
@@ -1631,6 +1633,8 @@ def main():
             return
         path = Path(selection)
 
+    logging.info("startup_path_ready_ms=%.3f", (time.perf_counter() - main_start) * 1000)
+
     if not path.exists():
         print(f"File not found: {path}", file=sys.stderr)
         root.destroy()
@@ -1641,8 +1645,11 @@ def main():
     # Set initial full screen state BEFORE creating viewer
     # to ensure first render uses correct canvas dimensions
     root.attributes("-fullscreen", True)
+    logging.info("startup_fullscreen_ready_ms=%.3f", (time.perf_counter() - main_start) * 1000)
 
+    viewer_start = time.perf_counter()
     app = ComicViewer(root, path)
+    logging.info("startup_viewer_ready_ms=%.3f", (time.perf_counter() - viewer_start) * 1000)
     app._fullscreen = True
     app._set_cursor_hidden(True)
     app._request_focus()
