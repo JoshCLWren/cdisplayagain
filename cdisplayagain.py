@@ -93,8 +93,16 @@ class OpenRequestServer:
         except OSError as exc:
             self._socket.close()
             if exc.errno == errno.EADDRINUSE:
-                raise RuntimeError(f"Another cdisplayagain instance is using {self._path}") from exc
-            raise
+                if self._running_instance_owns_socket():
+                    raise RuntimeError(f"Another cdisplayagain instance is using {self._path}") from exc
+                try:
+                    self._path.unlink()
+                except FileNotFoundError:
+                    pass
+                self._socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                self._socket.bind(str(self._path))
+            else:
+                raise
         self._path.chmod(0o600)
         self._socket.listen(4)
         self._socket.settimeout(0.5)
@@ -102,6 +110,17 @@ class OpenRequestServer:
         self._thread.start()
         self._poll_id = root.after(50, self._dispatch_requests)
         logging.info("IPC server listening at %s", self._path)
+
+    def _running_instance_owns_socket(self) -> bool:
+        probe = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        probe.settimeout(0.2)
+        try:
+            probe.connect(str(self._path))
+        except OSError:
+            return False
+        finally:
+            probe.close()
+        return True
 
     def _serve(self) -> None:
         while not self._stop_event.is_set():

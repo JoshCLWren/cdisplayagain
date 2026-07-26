@@ -29,3 +29,16 @@ def test_open_request_server_dispatches_path(tk_root, tmp_path, monkeypatch):
 
     assert received == [requested_path]
     assert not cdisplayagain.ipc_socket_path().exists()
+
+
+def test_open_request_server_recovers_stale_socket(tk_root, tmp_path, monkeypatch):
+    """Replace a socket left behind by a process that exited without cleanup."""
+    monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path))
+    stale_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    stale_socket.bind(str(cdisplayagain.ipc_socket_path()))
+    stale_socket.close()
+
+    server = cdisplayagain.OpenRequestServer(tk_root, lambda _: None)
+    server.close()
+
+    assert not cdisplayagain.ipc_socket_path().exists()
