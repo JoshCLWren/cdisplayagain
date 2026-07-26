@@ -46,7 +46,6 @@ development workstation show:
 - **Launcher → cover preview visible**: ~0.95–1.0s on the real desktop display
 - **Archive open after logging**: ~0.005s for the measured CBZ samples
 - **Second open while viewer is running**: handed to the existing process over a
-  per-user Unix socket, avoiding a second Python/Tk startup
 
 These are cold desktop-launch measurements and are separate from the in-process render
 benchmarks below. The launcher records the build ID and timing in each session log.

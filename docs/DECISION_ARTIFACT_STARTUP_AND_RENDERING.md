@@ -24,8 +24,8 @@ The user did not ask for two UI toolkits. The intended split is two rendering pa
 - Branch: `fix-page-turn-responsiveness`.
 - PR: 48, “Fix redundant page preloading”.
 - Commit `c49e779`: added single-instance file handoff through a per-user Unix socket and bumped version to `0.1.5`.
-- Commit `53af28c`: attempted stale-socket recovery and bumped version to `0.1.6`; this commit passed lint and focused IPC tests but was not rebuilt or installed after the build was interrupted.
-- The currently installed Nuitka bundle remains version `0.1.5`, build `c49e779`.
+- Commit `53af28c`: attempted stale-socket recovery and bumped version to `0.1.6`; it passed lint and focused IPC tests but was superseded because the socket design was judged too complex for the current goal.
+- The socket handoff was removed in the follow-up working change. The next installed build should be a direct single-reader build with no socket state.
 - The old PyInstaller installation remains at `/home/josh/.local/lib/cdisplayagain/cdisplayagain`, version `0.1.4`, build `61284ae`.
 
 ## Measurements collected
@@ -102,13 +102,9 @@ In the current source, `_render_current_sync()` displays the initial preview and
 
 ### File opening
 
-- The launcher records a launch timestamp.
-- The installed launcher checks a per-user Unix socket.
-- If a reader is listening, the launcher sends the path to that reader.
-- Otherwise it starts the packaged reader.
-- The reader dispatches received paths through Tk’s event loop.
-
-This handoff was introduced to avoid a second cold startup when opening another comic while the reader is already running. It is not part of the page-rendering algorithm.
+- The launcher records a launch timestamp and starts one direct packaged reader process.
+- There is no socket, resident process, or single-instance handoff in the simplified design.
+- Opening another file starts a normal reader process; this is intentionally out of scope until rendering behavior is stable.
 
 ## Alternatives
 
@@ -144,7 +140,7 @@ Risks:
 - Adds process and packaging complexity.
 - Requires careful desktop-file and MIME-association testing.
 
-The current Unix-socket launcher is a prototype of this idea. It should not be treated as a rendering fix.
+A small direct launcher may still be useful for measuring cold startup, but it should not own reader state or be treated as a rendering fix.
 
 ### C. Replace Tk with another UI toolkit
 
@@ -184,7 +180,7 @@ Risks:
 - Requires explicit shutdown and error recovery behavior.
 - More difficult to make cross-platform.
 
-The current implementation is not a resident daemon: closing the viewer removes the socket and exits.
+The simplified implementation is not a resident daemon and has no socket lifecycle.
 
 ## Questions for a neutral decision
 
@@ -219,6 +215,5 @@ Do not change toolkit or packaging during that experiment. Decide whether the re
 ## Current recovery state
 
 - Nemo’s actual desktop entry was corrected to target the Nuitka build rather than the old PyInstaller wrapper.
-- The installed executable currently reports `0.1.5 (build c49e779)`.
-- Commit `53af28c` contains stale-socket recovery, passed focused tests and lint, but its Nuitka rebuild was interrupted and it is not installed.
+- The installed executable should report the new post-socket-removal version and clean build ID.
 - Any future deployment should first build from a clean commit, verify the reported version/build ID, then test one Nemo launch and one page-turn sequence.
