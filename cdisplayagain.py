@@ -1290,15 +1290,6 @@ class ComicViewer(tk.Frame):
             perf_log("render_current_sync", time.perf_counter() - render_start, "cache_hit")
             return
 
-        if not self._first_proper_render_completed:
-            logging.info("First proper render, skipping preview, requesting high-quality resize")
-            self._get_worker().request_page(
-                index, cw, ch, preload=False, render_generation=self._render_generation
-            )
-            self._update_title()
-            perf_log("render_current_sync", time.perf_counter() - render_start, "first_render")
-            return
-
         logging.info("Cache miss for page %d, displaying preview then requesting resize", index)
         raw_start = time.perf_counter()
         raw = self.source.get_bytes(self.source.pages[index])

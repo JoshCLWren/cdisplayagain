@@ -1,10 +1,10 @@
-"""Test first render behavior without preview."""
+"""Test first render behavior and progressive image quality."""
 
 import cdisplayagain
 
 
-def test_first_render_skips_preview(tmp_path, tk_root):
-    """Verify that first render skips fast preview to avoid tiny images."""
+def test_first_render_shows_preview(tmp_path, tk_root):
+    """Verify that first render displays a preview while high quality loads."""
     cbz_path = tmp_path / "first_render_test.cbz"
     create_benchmark_cbz(cbz_path, page_count=3)
 
@@ -22,10 +22,8 @@ def test_first_render_skips_preview(tmp_path, tk_root):
 
     app._render_current_sync()
 
-    assert not app._first_proper_render_completed, (
-        "Preview-only render should not mark as completed"
-    )
-    assert app._tk_img is None, "No image should be displayed yet (worker processing)"
+    assert not app._first_proper_render_completed, "Preview should not mark as completed"
+    assert app._tk_img is not None, "Preview should be displayed while worker processing"
 
 
 def test_first_render_from_cache_marks_completed(tmp_path, tk_root):
