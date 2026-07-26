@@ -168,22 +168,40 @@ class FocusRestorer:
     """Schedules focus-restoring callbacks without spamming Tk."""
 
     def __init__(
-        self, after_idle: Callable[[Callable[[], None]], object], focus_fn: Callable[[], None]
+        self,
+        after_idle: Callable[[Callable[[], None]], str | None],
+        focus_fn: Callable[[], None],
+        after_cancel: Callable[[str], None] | None = None,
     ):
         """Store Tk's idle scheduler and the focus callback."""
         self._after_idle = after_idle
         self._focus_fn = focus_fn
+        self._after_cancel = after_cancel
         self._pending = False
+        self._pending_id: str | None = None
 
     def schedule(self) -> None:
         """Schedule a focus refresh if one is not already queued."""
         if self._pending:
             return
         self._pending = True
-        self._after_idle(self._run)
+        self._pending_id = self._after_idle(self._run)
+
+    def cancel(self) -> None:
+        """Cancel a queued focus refresh after focus has been acquired."""
+        if not self._pending:
+            return
+        pending_id = self._pending_id
+        self._pending = False
+        self._pending_id = None
+        if pending_id is not None and self._after_cancel is not None:
+            self._after_cancel(pending_id)
 
     def _run(self) -> None:
+        if not self._pending:
+            return
         self._pending = False
+        self._pending_id = None
         self._focus_fn()
 
 
@@ -452,7 +470,7 @@ class ComicViewer(tk.Frame):
         self._image_cache: LRUCache = LRUCache(maxsize=20)
         self._scroll_offset: int = 0
         self._scaled_size: tuple[int, int] | None = None
-        self._focus_restorer = FocusRestorer(self.after_idle, self._ensure_focus)
+        self._focus_restorer = FocusRestorer(self.after_idle, self._ensure_focus, self.after_cancel)
         self._info_overlay: tk.Label | None = None
         self._context_menu = self._build_context_menu()
 
@@ -491,7 +509,8 @@ class ComicViewer(tk.Frame):
         self._bind_mouse()
 
         self.bind("<Map>", lambda _: self._request_focus())
-        self.bind("<FocusIn>", lambda _: self._request_focus())
+        self.bind("<FocusIn>", self._on_focus_in)
+        self.bind("<FocusOut>", self._on_focus_out)
         self.bind("<Double-Button-1>", lambda _: self._dismiss_info())
         self.bind("<Key>", lambda _: self._dismiss_info())
         self.bind("<Destroy>", self._on_destroy)
@@ -560,6 +579,12 @@ class ComicViewer(tk.Frame):
     def _request_focus(self) -> None:
         self._focus_restorer.schedule()
 
+    def _on_focus_in(self, event: tk.Event) -> None:
+        self._focus_restorer.cancel()
+
+    def _on_focus_out(self, event: tk.Event) -> None:
+        self._request_focus()
+
     def event_generate(self, sequence: str, **kwargs):
         """Intercept navigation keys to call viewer handlers."""
         if sequence in {"<Right>", "<Next>"}:
@@ -607,10 +632,9 @@ class ComicViewer(tk.Frame):
 
     def _ensure_focus(self) -> None:
         try:
-            self.focus_force()
+            self.canvas.focus_set()
         except tk.TclError:
-            pass
-        self.canvas.focus_set()
+            return
 
     def _prime_imagetk(self) -> None:
         """Ensure Pillow's Tk bindings register the PyImagingPhoto command."""
