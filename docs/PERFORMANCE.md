@@ -1,4 +1,4 @@
-# Performance Baselines (Dec 2025 - Updated Mar 2026)
+# Performance Baselines (Dec 2025 - Updated Jul 2026)
 
 Profiling was conducted on representative archives to establish performance baselines for the current implementation (Python 3.13 + Tkinter + Pillow + pyvips + unrar2-cffi).
 
@@ -34,6 +34,22 @@ Profiling was conducted on representative archives to establish performance base
 - **Decoding + Resizing + Caching**: ~0.0001s - 0.00035s per page (cached).
 - **Tkinter Transfer**: ~0.0002s - 0.0003s (marshalling pixels to Tcl/Tk).
 - **Worker Drain Loop**: < 0.01ms overhead (runs every 10ms when idle).
+- **Initial Cover**: Displays a full-screen preview immediately and does not perform a
+  second high-quality replacement, avoiding a visible cover transition.
+
+### 4. Packaged Desktop Launch
+
+The installed Linux build uses a Nuitka standalone bundle. Recent measurements on the
+development workstation show:
+
+- **Launcher → logging initialized**: ~0.20–0.23s
+- **Launcher → cover preview visible**: ~0.95–1.0s on the real desktop display
+- **Archive open after logging**: ~0.005s for the measured CBZ samples
+- **Second open while viewer is running**: handed to the existing process over a
+  per-user Unix socket, avoiding a second Python/Tk startup
+
+These are cold desktop-launch measurements and are separate from the in-process render
+benchmarks below. The launcher records the build ID and timing in each session log.
 
 ## Benchmark Results
 
@@ -65,7 +81,7 @@ Profiling was conducted on representative archives to establish performance base
 
 **Notes:**
 - Page turn performance is exceptional at 0.24ms (416x faster than 100ms threshold)
-- First paint includes full render pipeline: archive extraction, JPEG decode, VIPS resize, LRU cache, and Tkinter display
+- First paint is the cover preview path: archive extraction, JPEG decode, fast fit-to-screen display, and Tkinter display
 - Worker thread drain loop runs every 10ms when idle, adding negligible overhead
 - All benchmarks run on cached data after initial load
 

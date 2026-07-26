@@ -4,11 +4,13 @@
 from __future__ import annotations
 
 import argparse
+import errno
 import importlib
 import io
 import logging
 import os
 import queue
+import socket
 import sys
 import threading
 import time
@@ -66,6 +68,78 @@ from archives import load_tar as load_tar
 from archives import natural_key as natural_key
 
 TkPhotoImage = tk.PhotoImage | ImageTk.PhotoImage
+
+
+def ipc_socket_path() -> Path:
+    """Return the per-user Unix socket used for opening comics in a running viewer."""
+    runtime_dir = Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")).expanduser()
+    user_id = os.getuid() if hasattr(os, "getuid") else os.environ.get("USERNAME", "user")
+    return runtime_dir / f"cdisplayagain-{user_id}.sock"
+
+
+class OpenRequestServer:
+    """Receive file-open requests without starting another Tk process."""
+
+    def __init__(self, root: tk.Tk, callback: Callable[[Path], None]) -> None:
+        """Create a server that dispatches received paths through the Tk event loop."""
+        self._root = root
+        self._callback = callback
+        self._path = ipc_socket_path()
+        self._requests: queue.Queue[Path] = queue.Queue()
+        self._stop_event = threading.Event()
+        self._socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            self._socket.bind(str(self._path))
+        except OSError as exc:
+            self._socket.close()
+            if exc.errno == errno.EADDRINUSE:
+                raise RuntimeError(f"Another cdisplayagain instance is using {self._path}") from exc
+            raise
+        self._path.chmod(0o600)
+        self._socket.listen(4)
+        self._socket.settimeout(0.5)
+        self._thread = threading.Thread(target=self._serve, name="OpenRequestServer", daemon=True)
+        self._thread.start()
+        self._poll_id = root.after(50, self._dispatch_requests)
+        logging.info("IPC server listening at %s", self._path)
+
+    def _serve(self) -> None:
+        while not self._stop_event.is_set():
+            try:
+                connection, _ = self._socket.accept()
+            except TimeoutError:
+                continue
+            except OSError:
+                break
+            with connection:
+                data = connection.recv(65536)
+            if data:
+                self._requests.put(Path(data.decode("utf-8").strip()).expanduser())
+
+    def _dispatch_requests(self) -> None:
+        while True:
+            try:
+                path = self._requests.get_nowait()
+            except queue.Empty:
+                break
+            self._callback(path)
+        if not self._stop_event.is_set():
+            self._poll_id = self._root.after(50, self._dispatch_requests)
+
+    def close(self) -> None:
+        """Stop the listener and remove its socket."""
+        self._stop_event.set()
+        try:
+            self._root.after_cancel(self._poll_id)
+        except tk.TclError:
+            pass
+        self._socket.close()
+        self._thread.join(timeout=1)
+        try:
+            self._path.unlink()
+        except FileNotFoundError:
+            pass
+        logging.info("IPC server stopped")
 
 
 def get_resized_pil(raw_bytes: bytes, target_width: int, target_height: int) -> Image.Image:
@@ -1296,7 +1370,7 @@ class ComicViewer(tk.Frame):
             perf_log("render_current_sync", time.perf_counter() - render_start, "cache_hit")
             return
 
-        logging.info("Cache miss for page %d, displaying preview then requesting resize", index)
+        logging.info("Cache miss for page %d, displaying preview", index)
         raw_start = time.perf_counter()
         raw = self.source.get_bytes(self.source.pages[index])
         perf_log("get_bytes", time.perf_counter() - raw_start)
@@ -1661,7 +1735,30 @@ def main():
     app._request_focus()
 
     root.deiconify()
-    root.mainloop()
+    ipc_server: OpenRequestServer | None = None
+    if hasattr(socket, "AF_UNIX") and hasattr(root, "after"):
+        try:
+            ipc_server = OpenRequestServer(root, lambda requested_path: _open_requested_path(app, requested_path))
+        except RuntimeError as exc:
+            logging.warning("IPC server unavailable: %s", exc)
+    try:
+        root.mainloop()
+    finally:
+        if ipc_server is not None:
+            ipc_server.close()
+
+
+def _open_requested_path(app: ComicViewer, path: Path) -> None:
+    """Open a path received from the file-association handoff."""
+    if not path.exists():
+        logging.warning("IPC open request path does not exist: %s", path)
+        return
+    if path.suffix.casefold() == ".cbr":  # pragma: no cover
+        require_pyvips()
+    logging.info("Opening comic from IPC request: %s", path)
+    app._open_comic(path)
+    app._render_current_sync()
+    app._request_focus()
 
 
 def require_pyvips():

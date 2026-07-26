@@ -92,6 +92,7 @@ install-bin:  ## Install binary to system
 		install -d $(BINDIR); \
 		install -m 0755 dist/cdisplayagain $(BINDIR)/cdisplayagain; \
 		install -m 0755 scripts/cdisplayagain-launcher.sh $(BINDIR)/cdisplayagain-launcher; \
+		install -m 0755 scripts/cdisplayagain-ipc.py $(BINDIR)/cdisplayagain-ipc.py; \
 	elif [ -f dist/cdisplayagain/cdisplayagain ]; then \
 		echo "Installing onedir bundle to $(LIBDIR)/cdisplayagain and wrapper to $(BINDIR)/cdisplayagain"; \
 		rm -rf $(LIBDIR)/cdisplayagain; \
@@ -99,9 +100,10 @@ install-bin:  ## Install binary to system
 		cp -a dist/cdisplayagain/* $(LIBDIR)/cdisplayagain/; \
 		install -d $(BINDIR); \
 		rm -rf $(BINDIR)/cdisplayagain; \
-		printf '%s\n' '#!/usr/bin/env sh' 'launch_ns=$$(date +%s%N)' 'export CDISPLAYAGAIN_LAUNCH_NS="$$launch_ns"' 'exec $(LIBDIR)/cdisplayagain/cdisplayagain "$$@"' > $(BINDIR)/cdisplayagain; \
+		printf '%s\n' '#!/usr/bin/env sh' 'launch_ns=$$(date +%s%N)' 'export CDISPLAYAGAIN_LAUNCH_NS="$$launch_ns"' 'runtime_dir=$${XDG_RUNTIME_DIR:-/tmp}' 'socket_path="$$runtime_dir/cdisplayagain-$$(id -u).sock"' 'ipc_client="$(BINDIR)/cdisplayagain-ipc.py"' 'if [ -S "$$socket_path" ] && [ "$$#" -gt 0 ] && [ -f "$$ipc_client" ] && python3 "$$ipc_client" "$$socket_path" "$$1"; then exit 0; fi' 'exec $(LIBDIR)/cdisplayagain/cdisplayagain "$$@"' > $(BINDIR)/cdisplayagain; \
 		chmod 0755 $(BINDIR)/cdisplayagain; \
 		install -m 0755 scripts/cdisplayagain-launcher.sh $(BINDIR)/cdisplayagain-launcher; \
+		install -m 0755 scripts/cdisplayagain-ipc.py $(BINDIR)/cdisplayagain-ipc.py; \
 	else \
 		echo "No dist output found. Run 'make build' or 'make build-onedir' first."; \
 		exit 1; \
