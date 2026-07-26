@@ -7,11 +7,12 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  id-token: write
+  contents: read
 
 jobs:
   build-release:
+    permissions:
+      contents: read
     runs-on: ubuntu-22.04
     steps:
       - name: Check out exact selected commit
@@ -72,11 +73,6 @@ jobs:
           bash scripts/ci-archive-check.sh "$asset_path"
           echo "asset_path=$asset_path" >> "$GITHUB_OUTPUT"
 
-      - name: Generate build provenance
-        uses: actions/attest-build-provenance@v2
-        with:
-          subject-path: ${{ steps.package.outputs.asset_path }}
-
       - name: Upload tested release artifact
         uses: actions/upload-artifact@v4
         with:
@@ -87,6 +83,8 @@ jobs:
           retention-days: 7
 
   compatibility:
+    permissions:
+      contents: read
     runs-on: ubuntu-22.04
     needs: build-release
     strategy:
@@ -132,9 +130,28 @@ jobs:
           name: compatibility-log-${{ matrix.name }}
           path: "compatibility-${{ matrix.name }}.log"
 
+  attest:
+    permissions:
+      contents: read
+      id-token: write
+    needs: build-release
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Download tested release artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: cdisplayagain-linux-x86_64-release
+          path: artifact
+      - name: Generate build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: artifact/*.tar.gz
+
   publish:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: compatibility
+    needs: [compatibility, attest]
+    permissions:
+      contents: write
     runs-on: ubuntu-22.04
     steps:
       - name: Download tested release artifact

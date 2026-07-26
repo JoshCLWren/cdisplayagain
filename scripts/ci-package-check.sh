@@ -30,7 +30,7 @@ with zipfile.ZipFile(sys.argv[1], "w") as archive:
 PY
 
 echo "Starting packaged CBZ smoke test under Xvfb"
-xvfb-run -a "$executable" "$fixture" >"$test_root/smoke.log" 2>&1 &
+CDISPLAYAGAIN_LOG_DIR="$test_root/logs" xvfb-run -a "$executable" "$fixture" >"$test_root/smoke.log" 2>&1 &
 smoke_pid=$!
 sleep 3
 if ! kill -0 "$smoke_pid" 2>/dev/null; then
@@ -39,7 +39,23 @@ if ! kill -0 "$smoke_pid" 2>/dev/null; then
     echo "ERROR: packaged executable exited during startup smoke test." >&2
     exit 1
 fi
-kill -TERM "$smoke_pid"
+if ! grep -R -q "Opening comic: $fixture" "$test_root/logs" || \
+    ! grep -R -q "cached page 0" "$test_root/logs"; then
+    cat "$test_root/smoke.log"
+    find "$test_root/logs" -type f -maxdepth 2 -print -exec cat {} \;
+    echo "ERROR: packaged smoke did not prove page 0 was rendered." >&2
+    kill -TERM "$smoke_pid" 2>/dev/null || true
+    wait "$smoke_pid" || true
+    exit 1
+fi
+kill -INT "$smoke_pid" 2>/dev/null || true
+for _ in {1..10}; do
+    if ! kill -0 "$smoke_pid" 2>/dev/null; then break; fi
+    sleep 0.5
+done
+if kill -0 "$smoke_pid" 2>/dev/null; then
+    kill -TERM "$smoke_pid" 2>/dev/null || true
+fi
 wait "$smoke_pid" || true
 
 installer="$root_dir/scripts/install-linux.sh"

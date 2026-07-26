@@ -17,7 +17,7 @@ if [[ -n "$(git -C "$root_dir" status --porcelain --untracked-files=all)" ]]; th
     exit 1
 fi
 
-readarray -t project_values < <(python - "$root_dir/pyproject.toml" <<'PY'
+readarray -t project_values < <(uv run --no-project python - "$root_dir/pyproject.toml" <<'PY'
 import sys
 import tomllib
 
