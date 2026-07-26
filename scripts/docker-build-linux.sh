@@ -2,7 +2,9 @@
 set -euo pipefail
 
 root_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+build_id=$(git -C "$root_dir" rev-parse --short HEAD)
 docker run --rm \
+    -e "CDISPLAYAGAIN_BUILD_ID=$build_id" \
     -v "$root_dir:/workspace" \
     -w /workspace \
     ubuntu:22.04 \
