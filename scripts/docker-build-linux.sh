@@ -15,6 +15,7 @@ docker run --rm \
             libvips-dev python3-tk python3-venv unar
         curl -LsSf https://astral.sh/uv/install.sh | sh
         export PATH=/root/.local/bin:$PATH
+        export UV_PROJECT_ENVIRONMENT=/tmp/cdisplayagain-venv
         uv python install 3.13
         uv sync --locked
         uv run python scripts/generate_build_info.py
