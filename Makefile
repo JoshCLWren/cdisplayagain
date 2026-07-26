@@ -4,6 +4,8 @@
 PREFIX ?= $(HOME)/.local
 BINDIR ?= $(PREFIX)/bin
 LIBDIR ?= $(PREFIX)/lib
+XDG_DATA_HOME ?= $(HOME)/.local/share
+APPDIR ?= $(XDG_DATA_HOME)/applications
 
 help:  ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -60,7 +62,7 @@ smoke:  ## Run manual smoke test checklist
 clean-build:  ## Clean build artifacts
 	rm -rf build dist *.spec __pycache__ .pytest_cache
 
-deploy: clean-build build install  ## Build + install for this machine (one command)
+deploy: clean-build build-onedir install  ## Build + install for this machine (one command)
 
 build: clean-build  ## Build single-file executable (slower startup)
 	uv run --active python scripts/generate_build_info.py
@@ -89,6 +91,7 @@ install-bin:  ## Install binary to system
 		echo "Installing onefile binary to $(BINDIR)/cdisplayagain"; \
 		install -d $(BINDIR); \
 		install -m 0755 dist/cdisplayagain $(BINDIR)/cdisplayagain; \
+		install -m 0755 scripts/cdisplayagain-launcher.sh $(BINDIR)/cdisplayagain-launcher; \
 	elif [ -f dist/cdisplayagain/cdisplayagain ]; then \
 		echo "Installing onedir bundle to $(LIBDIR)/cdisplayagain and wrapper to $(BINDIR)/cdisplayagain"; \
 		rm -rf $(LIBDIR)/cdisplayagain; \
@@ -98,6 +101,7 @@ install-bin:  ## Install binary to system
 		rm -rf $(BINDIR)/cdisplayagain; \
 		printf '%s\n' '#!/usr/bin/env sh' 'exec $(LIBDIR)/cdisplayagain/cdisplayagain "$$@"' > $(BINDIR)/cdisplayagain; \
 		chmod 0755 $(BINDIR)/cdisplayagain; \
+		install -m 0755 scripts/cdisplayagain-launcher.sh $(BINDIR)/cdisplayagain-launcher; \
 	else \
 		echo "No dist output found. Run 'make build' or 'make build-onedir' first."; \
 		exit 1; \
@@ -108,17 +112,17 @@ install-desktop:  ## Install desktop entry (Linux) or app symlink (macOS)
 		echo "macOS: file associations handled by 'open' command and Launch Services."; \
 		echo "Double-click a .cbz/.cbr once and choose cdisplayagain, then 'Always Open With'."; \
 	else \
-		mkdir -p $(HOME)/.local/share/applications; \
+		mkdir -p $(APPDIR); \
 		printf '%s\n' \
 			'[Desktop Entry]' \
 			'Type=Application' \
 			'Name=cdisplayagain' \
-			"Exec=$(BINDIR)/cdisplayagain %f" \
+			"Exec=$(BINDIR)/cdisplayagain-launcher %f" \
 			'Terminal=false' \
 			'Categories=Graphics;Viewer;' \
 			'MimeType=application/x-cbz;application/x-cbr;application/vnd.comicbook+zip;application/vnd.comicbook-rar;application/x-ext-cbz;application/x-ext-cbr;' \
-			> $(HOME)/.local/share/applications/cdisplayagain.desktop; \
-		update-desktop-database $(HOME)/.local/share/applications || true; \
+			> $(APPDIR)/cdisplayagain.desktop; \
+		update-desktop-database $(APPDIR) || true; \
 		for mime in application/x-cbz application/x-cbr application/vnd.comicbook+zip application/vnd.comicbook-rar application/x-ext-cbz application/x-ext-cbr; do \
 			xdg-mime default cdisplayagain.desktop "$$mime" 2>/dev/null || true; \
 		done; \

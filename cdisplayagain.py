@@ -102,6 +102,14 @@ def _init_logging() -> None:
     )
     logging.info("Logging initialized at %s", LOG_PATH)
     logging.info("cdisplayagain version=%s build=%s executable=%s", APP_VERSION, BUILD_ID, sys.executable)
+    launch_ns = os.environ.get("CDISPLAYAGAIN_LAUNCH_NS")
+    if launch_ns:
+        try:
+            elapsed_ms = (time.time_ns() - int(launch_ns)) / 1_000_000
+        except ValueError:
+            logging.warning("Invalid launcher timestamp: %s", launch_ns)
+        else:
+            logging.info("launcher_to_logging_ms=%.3f", elapsed_ms)
 
 
 class LRUCache:
