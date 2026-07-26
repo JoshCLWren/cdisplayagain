@@ -187,7 +187,6 @@ def test_preload_with_parallel_workers(tk_root, tmp_path):
         assert len(preload_requests) == 2, "Should process preload requests with parallel workers"
 
 
-@pytest.mark.skip(reason="Test has issues with render_generation matching - needs investigation")
 def test_parallel_processing_priority_order(tk_root, tmp_path):
     """Test that priority queue ordering is maintained with parallel workers."""
     cbz_path = tmp_path / "test.cbz"

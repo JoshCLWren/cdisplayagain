@@ -58,6 +58,14 @@ from archives import load_tar as load_tar
 from archives import natural_key as natural_key
 from image_backend import get_resized_pil
 
+try:
+    _build_info = importlib.import_module("build_info")
+    APP_VERSION = str(getattr(_build_info, "BUILD_VERSION", "0.1.0"))
+    BUILD_ID = str(getattr(_build_info, "BUILD_ID", "source"))
+except ImportError:
+    APP_VERSION = "0.1.0"
+    BUILD_ID = "source"
+
 TkPhotoImage = tk.PhotoImage | ImageTk.PhotoImage
 
 
@@ -93,6 +101,15 @@ def _init_logging() -> None:
         format="%(asctime)s %(levelname)s %(message)s",
     )
     logging.info("Logging initialized at %s", LOG_PATH)
+    logging.info("cdisplayagain version=%s build=%s executable=%s", APP_VERSION, BUILD_ID, sys.executable)
+    launch_ns = os.environ.get("CDISPLAYAGAIN_LAUNCH_NS")
+    if launch_ns:
+        try:
+            elapsed_ms = (time.time_ns() - int(launch_ns)) / 1_000_000
+        except ValueError:
+            logging.warning("Invalid launcher timestamp: %s", launch_ns)
+        else:
+            logging.info("launcher_to_logging_ms=%.3f", elapsed_ms)
 
 
 class LRUCache:
@@ -145,22 +162,40 @@ class FocusRestorer:
     """Schedules focus-restoring callbacks without spamming Tk."""
 
     def __init__(
-        self, after_idle: Callable[[Callable[[], None]], object], focus_fn: Callable[[], None]
+        self,
+        after_idle: Callable[[Callable[[], None]], str | None],
+        focus_fn: Callable[[], None],
+        after_cancel: Callable[[str], None] | None = None,
     ):
         """Store Tk's idle scheduler and the focus callback."""
         self._after_idle = after_idle
         self._focus_fn = focus_fn
+        self._after_cancel = after_cancel
         self._pending = False
+        self._pending_id: str | None = None
 
     def schedule(self) -> None:
         """Schedule a focus refresh if one is not already queued."""
         if self._pending:
             return
         self._pending = True
-        self._after_idle(self._run)
+        self._pending_id = self._after_idle(self._run)
+
+    def cancel(self) -> None:
+        """Cancel a queued focus refresh after focus has been acquired."""
+        if not self._pending:
+            return
+        pending_id = self._pending_id
+        self._pending = False
+        self._pending_id = None
+        if pending_id is not None and self._after_cancel is not None:
+            self._after_cancel(pending_id)
 
     def _run(self) -> None:
+        if not self._pending:
+            return
         self._pending = False
+        self._pending_id = None
         self._focus_fn()
 
 
@@ -216,6 +251,8 @@ class ImageWorker:
         self._stopped: bool = False
         self._threads_started: bool = False
         self._start_lock = threading.Lock()
+        self._pending_requests: set[tuple[int, int, int, int]] = set()
+        self._pending_requests_lock = threading.Lock()
         with self._instances_lock:
             self._instances.add(self)
         if autostart:
@@ -252,13 +289,22 @@ class ImageWorker:
         if self._stopped or not self._app:
             return
         self._ensure_threads_started()
+        source_generation = self._app._source_generation
+        request_key = (source_generation, index, width, height)
+        with self._pending_requests_lock:
+            if request_key in self._pending_requests:
+                return
+            self._pending_requests.add(request_key)
         try:
             priority = 1 if preload else 0
-            self._queue.put_nowait((priority, index, width, height, preload, render_generation))
+            self._queue.put_nowait(
+                (priority, index, width, height, preload, render_generation, source_generation)
+            )
             if self._app and hasattr(self._app, "_ensure_worker_drain_running"):
                 self._app._ensure_worker_drain_running()
         except queue.Full:
-            pass
+            with self._pending_requests_lock:
+                self._pending_requests.discard(request_key)
 
     def preload(self, index: int):
         """Preload a page at current canvas dimensions for future display."""
@@ -274,7 +320,7 @@ class ImageWorker:
 
         for _ in self._threads:
             try:
-                self._queue.put_nowait((2, None, None, None, None, None))
+                self._queue.put_nowait((2, None, None, None, None, None, None))
             except queue.Full:
                 pass  # workers will exit via _stopped flag within 0.1s
 
@@ -304,10 +350,20 @@ class ImageWorker:
         """Process resize requests in background."""
         while not self._stopped:
             priority = None
+            index = None
+            width = None
+            height = None
+            source_generation = None
             try:
-                priority, index, width, height, preload, render_generation = self._queue.get(
-                    timeout=0.1
-                )
+                (
+                    priority,
+                    index,
+                    width,
+                    height,
+                    preload,
+                    render_generation,
+                    source_generation,
+                ) = self._queue.get(timeout=0.1)
 
                 if priority == 2:
                     break
@@ -336,7 +392,7 @@ class ImageWorker:
                     break
 
                 if app and hasattr(app, "_worker_results"):
-                    app._worker_results.put((index, resized_pil))
+                    app._worker_results.put((index, resized_pil, source_generation))
 
             except queue.Empty:
                 continue
@@ -344,6 +400,17 @@ class ImageWorker:
                 if self._stopped or sys.is_finalizing():
                     break
                 break
+            finally:
+                if (
+                    source_generation is not None
+                    and index is not None
+                    and width is not None
+                    and height is not None
+                ):
+                    with self._pending_requests_lock:
+                        self._pending_requests.discard(
+                            (source_generation, index, width, height)
+                        )
 
 
 class ComicViewer(tk.Frame):
@@ -397,7 +464,7 @@ class ComicViewer(tk.Frame):
         self._image_cache: LRUCache = LRUCache(maxsize=20)
         self._scroll_offset: int = 0
         self._scaled_size: tuple[int, int] | None = None
-        self._focus_restorer = FocusRestorer(self.after_idle, self._ensure_focus)
+        self._focus_restorer = FocusRestorer(self.after_idle, self._ensure_focus, self.after_cancel)
         self._info_overlay: tk.Label | None = None
         self._context_menu = self._build_context_menu()
 
@@ -423,19 +490,21 @@ class ComicViewer(tk.Frame):
         self._quitting: bool = False
         self._canvas_properly_sized: bool = False
         self._worker = ImageWorker(self, autostart=False)
-        self._worker_results: queue.Queue[tuple[int, Image.Image]] = queue.Queue()
+        self._worker_results: queue.Queue[tuple[int, Image.Image, int]] = queue.Queue()
         self._worker_drain_job: str | None = None
         self._pending_index: int | None = None
         self._nav_debounce = Debouncer(150, self._execute_page_change, self)
         self._first_render_done: bool = False
         self._first_proper_render_completed: bool = False
+        self._source_generation: int = 0
         self._render_generation: int = 0
 
         self._bind_keys()
         self._bind_mouse()
 
         self.bind("<Map>", lambda _: self._request_focus())
-        self.bind("<FocusIn>", lambda _: self._request_focus())
+        self.bind("<FocusIn>", self._on_focus_in)
+        self.bind("<FocusOut>", self._on_focus_out)
         self.bind("<Double-Button-1>", lambda _: self._dismiss_info())
         self.bind("<Key>", lambda _: self._dismiss_info())
         self.bind("<Destroy>", self._on_destroy)
@@ -487,10 +556,13 @@ class ComicViewer(tk.Frame):
         had_items = False
         while True:
             try:
-                index, img = self._worker_results.get_nowait()
+                index, img, source_generation = self._worker_results.get_nowait()
             except queue.Empty:
                 break
             had_items = True
+            if source_generation != self._source_generation:
+                logging.info("Discarding result from previous comic: generation=%d", source_generation)
+                continue
             self._update_from_cache(index, img)
         return had_items
 
@@ -500,6 +572,12 @@ class ComicViewer(tk.Frame):
 
     def _request_focus(self) -> None:
         self._focus_restorer.schedule()
+
+    def _on_focus_in(self, event: tk.Event) -> None:
+        self._focus_restorer.cancel()
+
+    def _on_focus_out(self, event: tk.Event) -> None:
+        self._request_focus()
 
     def event_generate(self, sequence: str, **kwargs):
         """Intercept navigation keys to call viewer handlers."""
@@ -548,10 +626,9 @@ class ComicViewer(tk.Frame):
 
     def _ensure_focus(self) -> None:
         try:
-            self.focus_force()
+            self.canvas.focus_set()
         except tk.TclError:
-            pass
-        self.canvas.focus_set()
+            return
 
     def _prime_imagetk(self) -> None:
         """Ensure Pillow's Tk bindings register the PyImagingPhoto command."""
@@ -759,6 +836,7 @@ class ComicViewer(tk.Frame):
     def _open_comic(self, path: Path):
         open_start = time.perf_counter()
         perf_log("open_comic_start", 0, f"path={path.name}")
+        self._source_generation += 1
 
         if self.source and self.source.cleanup:
             try:
@@ -881,19 +959,16 @@ class ComicViewer(tk.Frame):
         if not self.source:
             logging.warning("Update from cache: no source")
             return
-        if index != self._current_index:
-            logging.info("Update from cache: index mismatch, skipping")
-            return
-
         cw = max(1, self.canvas.winfo_width())
         ch = max(1, self.canvas.winfo_height())
 
-        cache_key: tuple[int, int, int] | None = None
-        # Only cache when canvas has proper dimensions to avoid caching tiny images
         if self._canvas_properly_sized:
-            cache_key = (index, cw, ch)
-        if cache_key is not None:
-            self._image_cache[cache_key] = img
+            self._image_cache[(index, cw, ch)] = img
+
+        if index != self._current_index:
+            logging.info("Update from cache: index mismatch, cached for future display")
+            return
+
         logging.info("Update from cache: cached page %d at %dx%d", index, cw, ch)
 
         self._display_cached_image(img)
@@ -1205,7 +1280,8 @@ class ComicViewer(tk.Frame):
             self._update_title()
 
         next_idx = self._find_next_image_index(index)
-        if next_idx is not None:
+        next_cache_key = (next_idx, cw, ch) if next_idx is not None else None
+        if next_idx is not None and next_cache_key not in self._image_cache:
             logging.info("Preloading next image page %d", next_idx)
             self._get_worker().preload(next_idx)
 
@@ -1544,6 +1620,9 @@ def main():
     """Parse arguments and launch the comic viewer."""
     _init_logging()
     parser = argparse.ArgumentParser(description="Simple CBZ/CBR viewer (cdisplay-ish)")
+    parser.add_argument(
+        "--version", action="version", version=f"%(prog)s {APP_VERSION} (build {BUILD_ID})"
+    )
     parser.add_argument("comic", nargs="?", help="Path to .cbz/.cbr, directory, or image file")
     args = parser.parse_args()
 
