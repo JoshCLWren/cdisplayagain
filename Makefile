@@ -63,11 +63,20 @@ clean-build:  ## Clean build artifacts
 deploy: clean-build build install  ## Build + install for this machine (one command)
 
 build: clean-build  ## Build single-file executable (slower startup)
-	uv run --active pyinstaller --onefile --name cdisplayagain cdisplayagain.py
+	uv run --active python scripts/generate_build_info.py
+	uv run --active pyinstaller \
+		--onefile \
+		--hidden-import PIL._tkinter_finder \
+		--hidden-import build_info \
+		--name cdisplayagain \
+		cdisplayagain.py
 
 build-onedir:  ## Build onedir bundle (faster startup than onefile)
+	uv run --active python scripts/generate_build_info.py
 	uv run --active pyinstaller \
 		--onedir \
+		--hidden-import PIL._tkinter_finder \
+		--hidden-import build_info \
 		--icon=cdisplayagain.png \
 		--name cdisplayagain \
 		cdisplayagain.py

@@ -58,6 +58,14 @@ from archives import load_tar as load_tar
 from archives import natural_key as natural_key
 from image_backend import get_resized_pil
 
+try:
+    _build_info = importlib.import_module("build_info")
+    APP_VERSION = str(getattr(_build_info, "BUILD_VERSION", "0.1.0"))
+    BUILD_ID = str(getattr(_build_info, "BUILD_ID", "source"))
+except ImportError:
+    APP_VERSION = "0.1.0"
+    BUILD_ID = "source"
+
 TkPhotoImage = tk.PhotoImage | ImageTk.PhotoImage
 
 
@@ -93,6 +101,7 @@ def _init_logging() -> None:
         format="%(asctime)s %(levelname)s %(message)s",
     )
     logging.info("Logging initialized at %s", LOG_PATH)
+    logging.info("cdisplayagain version=%s build=%s executable=%s", APP_VERSION, BUILD_ID, sys.executable)
 
 
 class LRUCache:
@@ -216,7 +225,7 @@ class ImageWorker:
         self._stopped: bool = False
         self._threads_started: bool = False
         self._start_lock = threading.Lock()
-        self._pending_requests: set[tuple[int, int, int]] = set()
+        self._pending_requests: set[tuple[int, int, int, int]] = set()
         self._pending_requests_lock = threading.Lock()
         with self._instances_lock:
             self._instances.add(self)
@@ -254,14 +263,17 @@ class ImageWorker:
         if self._stopped or not self._app:
             return
         self._ensure_threads_started()
-        request_key = (index, width, height)
+        source_generation = self._app._source_generation
+        request_key = (source_generation, index, width, height)
         with self._pending_requests_lock:
             if request_key in self._pending_requests:
                 return
             self._pending_requests.add(request_key)
         try:
             priority = 1 if preload else 0
-            self._queue.put_nowait((priority, index, width, height, preload, render_generation))
+            self._queue.put_nowait(
+                (priority, index, width, height, preload, render_generation, source_generation)
+            )
             if self._app and hasattr(self._app, "_ensure_worker_drain_running"):
                 self._app._ensure_worker_drain_running()
         except queue.Full:
@@ -282,7 +294,7 @@ class ImageWorker:
 
         for _ in self._threads:
             try:
-                self._queue.put_nowait((2, None, None, None, None, None))
+                self._queue.put_nowait((2, None, None, None, None, None, None))
             except queue.Full:
                 pass  # workers will exit via _stopped flag within 0.1s
 
@@ -315,10 +327,17 @@ class ImageWorker:
             index = None
             width = None
             height = None
+            source_generation = None
             try:
-                priority, index, width, height, preload, render_generation = self._queue.get(
-                    timeout=0.1
-                )
+                (
+                    priority,
+                    index,
+                    width,
+                    height,
+                    preload,
+                    render_generation,
+                    source_generation,
+                ) = self._queue.get(timeout=0.1)
 
                 if priority == 2:
                     break
@@ -347,7 +366,7 @@ class ImageWorker:
                     break
 
                 if app and hasattr(app, "_worker_results"):
-                    app._worker_results.put((index, resized_pil))
+                    app._worker_results.put((index, resized_pil, source_generation))
 
             except queue.Empty:
                 continue
@@ -356,9 +375,16 @@ class ImageWorker:
                     break
                 break
             finally:
-                if index is not None and width is not None and height is not None:
+                if (
+                    source_generation is not None
+                    and index is not None
+                    and width is not None
+                    and height is not None
+                ):
                     with self._pending_requests_lock:
-                        self._pending_requests.discard((index, width, height))
+                        self._pending_requests.discard(
+                            (source_generation, index, width, height)
+                        )
 
 
 class ComicViewer(tk.Frame):
@@ -438,12 +464,13 @@ class ComicViewer(tk.Frame):
         self._quitting: bool = False
         self._canvas_properly_sized: bool = False
         self._worker = ImageWorker(self, autostart=False)
-        self._worker_results: queue.Queue[tuple[int, Image.Image]] = queue.Queue()
+        self._worker_results: queue.Queue[tuple[int, Image.Image, int]] = queue.Queue()
         self._worker_drain_job: str | None = None
         self._pending_index: int | None = None
         self._nav_debounce = Debouncer(150, self._execute_page_change, self)
         self._first_render_done: bool = False
         self._first_proper_render_completed: bool = False
+        self._source_generation: int = 0
         self._render_generation: int = 0
 
         self._bind_keys()
@@ -502,10 +529,13 @@ class ComicViewer(tk.Frame):
         had_items = False
         while True:
             try:
-                index, img = self._worker_results.get_nowait()
+                index, img, source_generation = self._worker_results.get_nowait()
             except queue.Empty:
                 break
             had_items = True
+            if source_generation != self._source_generation:
+                logging.info("Discarding result from previous comic: generation=%d", source_generation)
+                continue
             self._update_from_cache(index, img)
         return had_items
 
@@ -774,6 +804,7 @@ class ComicViewer(tk.Frame):
     def _open_comic(self, path: Path):
         open_start = time.perf_counter()
         perf_log("open_comic_start", 0, f"path={path.name}")
+        self._source_generation += 1
 
         if self.source and self.source.cleanup:
             try:
@@ -1557,6 +1588,9 @@ def main():
     """Parse arguments and launch the comic viewer."""
     _init_logging()
     parser = argparse.ArgumentParser(description="Simple CBZ/CBR viewer (cdisplay-ish)")
+    parser.add_argument(
+        "--version", action="version", version=f"%(prog)s {APP_VERSION} (build {BUILD_ID})"
+    )
     parser.add_argument("comic", nargs="?", help="Path to .cbz/.cbr, directory, or image file")
     args = parser.parse_args()
 
