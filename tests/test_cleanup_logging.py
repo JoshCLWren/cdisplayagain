@@ -110,3 +110,12 @@ def test_cleanup_success_no_logging(tmp_path, caplog):
     with caplog.at_level("WARNING"):
         source.cleanup()
         assert len(caplog.records) == 0
+
+
+def test_init_logging_records_launcher_elapsed_time(tmp_path, monkeypatch):
+    """Cover valid and invalid launcher timing metadata without affecting the app."""
+    monkeypatch.setattr(cdisplayagain, "LOG_ROOT", tmp_path)
+    monkeypatch.setenv("CDISPLAYAGAIN_LAUNCH_NS", str(cdisplayagain.time.time_ns()))
+    cdisplayagain._init_logging()
+    monkeypatch.setenv("CDISPLAYAGAIN_LAUNCH_NS", "invalid")
+    cdisplayagain._init_logging()

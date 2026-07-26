@@ -99,7 +99,7 @@ install-bin:  ## Install binary to system
 		cp -a dist/cdisplayagain/* $(LIBDIR)/cdisplayagain/; \
 		install -d $(BINDIR); \
 		rm -rf $(BINDIR)/cdisplayagain; \
-		printf '%s\n' '#!/usr/bin/env sh' 'launch_ns=$$(date +%s%N)' 'export CDISPLAYAGAIN_LAUNCH_NS="$$launch_ns"' 'exec $(LIBDIR)/cdisplayagain/cdisplayagain "$$@"' > $(BINDIR)/cdisplayagain; \
+		printf '%s\n' '#!/usr/bin/env sh' 'exec $(LIBDIR)/cdisplayagain/cdisplayagain "$$@"' > $(BINDIR)/cdisplayagain; \
 		chmod 0755 $(BINDIR)/cdisplayagain; \
 		install -m 0755 scripts/cdisplayagain-launcher.sh $(BINDIR)/cdisplayagain-launcher; \
 	else \

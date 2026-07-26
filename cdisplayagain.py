@@ -19,14 +19,6 @@ from pathlib import Path
 from typing import cast
 
 try:
-    _build_info = importlib.import_module("build_info")
-    APP_VERSION = str(getattr(_build_info, "BUILD_VERSION", "0.1.0"))
-    BUILD_ID = str(getattr(_build_info, "BUILD_ID", "source"))
-except ImportError:
-    APP_VERSION = "0.1.0"
-    BUILD_ID = "source"
-
-try:
     import tkinter as tk
     from tkinter import filedialog, messagebox
 except ImportError as e:  # pragma: no cover
@@ -64,15 +56,17 @@ from archives import load_directory as load_directory
 from archives import load_image_file as load_image_file
 from archives import load_tar as load_tar
 from archives import natural_key as natural_key
+from image_backend import get_resized_pil
+
+try:
+    _build_info = importlib.import_module("build_info")
+    APP_VERSION = str(getattr(_build_info, "BUILD_VERSION", "0.1.0"))
+    BUILD_ID = str(getattr(_build_info, "BUILD_ID", "source"))
+except ImportError:
+    APP_VERSION = "0.1.0"
+    BUILD_ID = "source"
 
 TkPhotoImage = tk.PhotoImage | ImageTk.PhotoImage
-
-
-def get_resized_pil(raw_bytes: bytes, target_width: int, target_height: int) -> Image.Image:
-    """Resize an image lazily so pyvips does not delay initial cover display."""
-    from image_backend import get_resized_pil as resize_image
-
-    return resize_image(raw_bytes, target_width, target_height)
 
 
 def _as_wm(obj: tk.Misc) -> tk.Wm:
@@ -1320,7 +1314,16 @@ class ComicViewer(tk.Frame):
             perf_log("render_current_sync", time.perf_counter() - render_start, "cache_hit")
             return
 
-        logging.info("Cache miss for page %d, displaying preview", index)
+        if not self._first_proper_render_completed:
+            logging.info("First proper render, skipping preview, requesting high-quality resize")
+            self._get_worker().request_page(
+                index, cw, ch, preload=False, render_generation=self._render_generation
+            )
+            self._update_title()
+            perf_log("render_current_sync", time.perf_counter() - render_start, "first_render")
+            return
+
+        logging.info("Cache miss for page %d, displaying preview then requesting resize", index)
         raw_start = time.perf_counter()
         raw = self.source.get_bytes(self.source.pages[index])
         perf_log("get_bytes", time.perf_counter() - raw_start)
@@ -1333,11 +1336,6 @@ class ComicViewer(tk.Frame):
         self._display_image_fast(raw_img)
         self._update_title()
         perf_log("display_preview", time.perf_counter() - display_start)
-
-        if not self._first_proper_render_completed:
-            self._first_proper_render_completed = True
-            perf_log("render_current_sync", time.perf_counter() - render_start, "initial_preview")
-            return
 
         logging.info("Requesting high-quality resize for page %d", index)
         self._get_worker().request_page(
@@ -1621,7 +1619,6 @@ class ComicViewer(tk.Frame):
 def main():
     """Parse arguments and launch the comic viewer."""
     _init_logging()
-    main_start = time.perf_counter()
     parser = argparse.ArgumentParser(description="Simple CBZ/CBR viewer (cdisplay-ish)")
     parser.add_argument(
         "--version", action="version", version=f"%(prog)s {APP_VERSION} (build {BUILD_ID})"
@@ -1633,7 +1630,6 @@ def main():
     try:
         root = tk.Tk()
         root.withdraw()
-        logging.info("startup_root_ready_ms=%.3f", (time.perf_counter() - main_start) * 1000)
     except tk.TclError as e:
         print(
             f"Error: tkinter cannot initialize the display.\n\n"
@@ -1663,8 +1659,6 @@ def main():
             return
         path = Path(selection)
 
-    logging.info("startup_path_ready_ms=%.3f", (time.perf_counter() - main_start) * 1000)
-
     if not path.exists():
         print(f"File not found: {path}", file=sys.stderr)
         root.destroy()
@@ -1675,11 +1669,8 @@ def main():
     # Set initial full screen state BEFORE creating viewer
     # to ensure first render uses correct canvas dimensions
     root.attributes("-fullscreen", True)
-    logging.info("startup_fullscreen_ready_ms=%.3f", (time.perf_counter() - main_start) * 1000)
 
-    viewer_start = time.perf_counter()
     app = ComicViewer(root, path)
-    logging.info("startup_viewer_ready_ms=%.3f", (time.perf_counter() - viewer_start) * 1000)
     app._fullscreen = True
     app._set_cursor_hidden(True)
     app._request_focus()

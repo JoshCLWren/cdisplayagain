@@ -131,11 +131,12 @@ def tk_root():
 
 
 def test_perf_page_turn_latency(tmp_path, tk_root):
-    """Measure page-turn scheduling latency after the initial cover preview.
+    """Measure full 'Page Turn' latency.
 
-    The initial cover is intentionally displayed through the fast preview path.
-    Page turns schedule high-quality work in the background, so this benchmark
-    measures the synchronous UI scheduling portion rather than worker completion.
+    1. Read bytes from Zip
+    2. Decode JPEG
+    3. Resize (Lanczos)
+    4. Convert to ImageTk
     """
     cbz_path = tmp_path / "benchmark.cbz"
     create_benchmark_cbz(cbz_path, page_count=3)
@@ -150,12 +151,12 @@ def test_perf_page_turn_latency(tmp_path, tk_root):
     # Tkinter requires update_idletasks for geometries to settle.
     app.update_idletasks()
 
-    # Measure: Schedule the initial cover preview.
+    # Measure: Render Page 0 (First Load)
     start_time = time.perf_counter()
     app._render_current()
     page0_time = time.perf_counter() - start_time
 
-    # Measure: Schedule the next page turn.
+    # Measure: Render Page 1 (Next Page - The 'Turn')
     app._current_index = 1
     start_time = time.perf_counter()
     app._render_current()
