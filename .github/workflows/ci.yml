@@ -120,7 +120,7 @@ jobs:
         uses: ./.github/actions/setup
 
       - name: Build onedir bundle once
-        run: uv run --active python scripts/generate_build_info.py && uv run --active pyinstaller --clean --noconfirm cdisplayagain.spec
+        run: bash scripts/docker-build-linux.sh
 
       - name: Smoke test bundle and installer
         run: bash scripts/ci-package-check.sh
@@ -130,7 +130,7 @@ jobs:
         shell: bash
         run: |
           asset_path=$(bash scripts/package-linux.sh)
-          sha256sum "$asset_path" > SHA256SUMS
+          printf '%s  %s\n' "$(sha256sum "$asset_path" | cut -d' ' -f1)" "$(basename "$asset_path")" > SHA256SUMS
           bash scripts/ci-archive-check.sh "$asset_path"
           echo "asset_path=$asset_path" >> "$GITHUB_OUTPUT"
 
@@ -142,3 +142,43 @@ jobs:
             ${{ steps.package.outputs.asset_path }}
             SHA256SUMS
           retention-days: 7
+
+  compatibility:
+    runs-on: ubuntu-22.04
+    needs: package-linux
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: ubuntu-22.04
+            image: ubuntu:22.04
+            family: apt
+          - name: debian-12
+            image: debian:12-slim
+            family: apt
+          - name: fedora-40
+            image: fedora:40
+            family: dnf
+    steps:
+      - name: Check out test harness and fixtures
+        uses: actions/checkout@v4
+      - name: Download tested release artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: cdisplayagain-linux-x86_64
+          path: artifact
+      - name: Run container compatibility checks
+        shell: bash
+        run: |
+          set -o pipefail
+          docker run --rm -v "$GITHUB_WORKSPACE:/workspace" -w /workspace \
+            "${{ matrix.image }}" bash /workspace/scripts/compatibility-test.sh \
+            "${{ matrix.family }}" 2>&1 | tee "compatibility-${{ matrix.name }}.log"
+        env:
+          BUILD_SHA: ${{ github.sha }}
+      - name: Upload compatibility logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compatibility-log-${{ matrix.name }}
+          path: "compatibility-${{ matrix.name }}.log"

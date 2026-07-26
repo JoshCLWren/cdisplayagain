@@ -52,6 +52,16 @@ locations for testing or custom user-local layouts.
 Only Linux x86-64 release downloads are currently provided. Packaged Windows
 and macOS releases are not yet available.
 
+Release builds are produced in Ubuntu 22.04 (glibc 2.35), the oldest verified
+distribution baseline, and compatibility checks run the same archive on
+Ubuntu 22.04, Ubuntu 24.04, Debian 13, Fedora 42, and openSUSE Leap 15.6.
+These checks cover x86-64 headless startup, archive handling, X11/Xvfb, the
+installer, and bundled/native shared-library resolution. They do not establish
+GNOME, KDE, Wayland, GPU-driver, or file-manager integration. The packaged
+bundle includes its Python, Pillow, pyvips/libvips, unrar, and Tk runtime
+components; it requires a glibc-based Linux x86-64 system with the usual X11
+libraries. Alpine Linux and musl-based systems are unsupported.
+
 #### Source installation for contributors
 
 Source installation is for development and requires Python and the project
