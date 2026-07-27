@@ -24,12 +24,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
         run: |
-          project_version=$(python3 - <<'PY'
-          import tomllib
-          with open("pyproject.toml", "rb") as file:
-              print(tomllib.load(file)["project"]["version"])
-          PY
-          )
+          project_version=$(awk -F '"' '$1 ~ /^version[[:space:]]*=/ {print $2; exit}' pyproject.toml)
           test "${GITHUB_REF_NAME#v}" = "$project_version"
 
       - name: Install system dependencies
