@@ -73,14 +73,32 @@ done
 run_smoke() {
     local input=$1
     local log_dir="$temp_root/logs-$(basename "$input")"
+    local xvfb_pid=""
     mkdir -p "$log_dir"
-    CDISPLAYAGAIN_LOG_DIR="$log_dir" xvfb-run -a "$wrapper" "$input" \
-        >"$workspace/$(basename "$input").log" 2>&1 &
+    if command -v xvfb-run >/dev/null 2>&1; then
+        CDISPLAYAGAIN_LOG_DIR="$log_dir" xvfb-run -a "$wrapper" "$input" \
+            >"$workspace/$(basename "$input").log" 2>&1 &
+    else
+        local display_number=$((90 + $$ % 10))
+        Xvfb ":$display_number" -screen 0 1280x1024x24 -nolisten tcp \
+            >"$workspace/xvfb-$(basename "$input").log" 2>&1 &
+        xvfb_pid=$!
+        sleep 0.2
+        DISPLAY=":$display_number" CDISPLAYAGAIN_LOG_DIR="$log_dir" \
+            "$wrapper" "$input" >"$workspace/$(basename "$input").log" 2>&1 &
+    fi
     local smoke_pid=$!
+    cleanup_xvfb() {
+        if [[ -n "$xvfb_pid" ]]; then
+            kill "$xvfb_pid" 2>/dev/null || true
+            wait "$xvfb_pid" 2>/dev/null || true
+        fi
+    }
     sleep 1
     if ! kill -0 "$smoke_pid" 2>/dev/null; then
         wait "$smoke_pid" || true
         cat "$workspace/$(basename "$input").log"
+        cleanup_xvfb
         return 1
     fi
     for _ in {1..18}; do
@@ -96,6 +114,7 @@ run_smoke() {
         echo "Packaged smoke did not prove page 0 was rendered for $input" >&2
         kill -TERM "$smoke_pid" 2>/dev/null || true
         wait "$smoke_pid" || true
+        cleanup_xvfb
         return 1
     fi
     kill -INT "$smoke_pid" 2>/dev/null || true
@@ -107,6 +126,7 @@ run_smoke() {
         kill -TERM "$smoke_pid" 2>/dev/null || true
     fi
     wait "$smoke_pid" || true
+    cleanup_xvfb
 }
 
 run_smoke "$workspace/tests/fixtures/test_cbz.cbz"
