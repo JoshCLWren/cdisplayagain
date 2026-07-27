@@ -1271,12 +1271,7 @@ class ComicViewer(tk.Frame):
 
     def _update_page_counter(self) -> None:
         """Render (or hide) the page-counter fraction in the bottom-right of the canvas."""
-        if self._page_counter_id is not None:
-            try:
-                self.canvas.delete(self._page_counter_id)
-            except tk.TclError:
-                pass
-            self._page_counter_id = None
+        self._clear_page_counter()
 
         text = self._page_counter_text()
         if text is None:
