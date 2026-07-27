@@ -158,4 +158,4 @@ jobs:
       - name: Publish GitHub Release assets
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" artifact/*.tar.gz artifact/SHA256SUMS --generate-notes
+        run: gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" artifact/*.tar.gz artifact/SHA256SUMS --generate-notes
