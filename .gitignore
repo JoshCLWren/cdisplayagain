@@ -16,7 +16,6 @@ logs/
 .envrc
 cdisplayagain.egg-info
 build_info.py
-cdisplayagain.spec
 *.log
 
 cdisplayagain/

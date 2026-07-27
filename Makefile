@@ -1,4 +1,4 @@
-.PHONY: help lint pytest sync venv run smoke clean-build build build-onedir install install-bin install-desktop mime-query redo ci-test-debian ci-test-local ci-build-image githook install-githook deploy
+.PHONY: help lint pytest sync venv run smoke clean-build build build-onedir package-linux install install-bin install-desktop mime-query redo ci-test-debian ci-test-local ci-build-image githook install-githook deploy
 
 # Configuration
 PREFIX ?= $(HOME)/.local
@@ -60,28 +60,18 @@ smoke:  ## Run manual smoke test checklist
 	uv run --active python cdisplayagain.py "$(FILE)"
 
 clean-build:  ## Clean build artifacts
-	rm -rf build dist *.spec __pycache__ .pytest_cache
+	rm -rf build dist __pycache__ .pytest_cache
 
 deploy: clean-build build-onedir install  ## Build + install for this machine (one command)
 
-build: clean-build  ## Build single-file executable (slower startup)
-	uv run --active python scripts/generate_build_info.py
-	uv run --active pyinstaller \
-		--onefile \
-		--hidden-import PIL._tkinter_finder \
-		--hidden-import build_info \
-		--name cdisplayagain \
-		cdisplayagain.py
+build: build-onedir  ## Build the PyInstaller onedir bundle
 
 build-onedir:  ## Build onedir bundle (faster startup than onefile)
 	uv run --active python scripts/generate_build_info.py
-	uv run --active pyinstaller \
-		--onedir \
-		--hidden-import PIL._tkinter_finder \
-		--hidden-import build_info \
-		--icon=cdisplayagain.png \
-		--name cdisplayagain \
-		cdisplayagain.py
+	uv run --active pyinstaller --clean --noconfirm cdisplayagain.spec
+
+package-linux: build-onedir  ## Package the tested Linux onedir bundle
+	bash scripts/package-linux.sh
 
 
 install: install-bin install-desktop  ## Install everything

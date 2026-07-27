@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=cdisplayagain
+Comment=Fast comic book viewer
+Exec=@EXEC@ %f
+Icon=@ICON@
+Terminal=false
+Categories=Graphics;Viewer;
+MimeType=application/x-cbz;application/x-cbr;application/vnd.comicbook+zip;application/vnd.comicbook-rar;application/x-ext-cbz;application/x-ext-cbr;

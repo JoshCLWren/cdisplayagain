@@ -32,6 +32,41 @@ viewer without wrestling dated IDEs or registry quirks.
 
 ### Installation
 
+#### Linux release (Linux x86-64)
+
+Download the latest Linux release archive from GitHub. No Python installation
+is required for release downloads.
+
+1. Optionally verify the archive with the accompanying `SHA256SUMS` file.
+2. Extract the archive.
+3. Enter the extracted directory and run `./install.sh`.
+4. Open `.cbz` and `.cbr` files from your desktop file manager.
+
+The installer is user-local and requires no sudo. It installs the bundle under
+`~/.local/lib/cdisplayagain`, a wrapper at `~/.local/bin/cdisplayagain`, the
+desktop entry under `~/.local/share/applications`, and the icon under the XDG
+data directory. Uninstall with `./install.sh --uninstall` from the extracted
+release directory. `PREFIX`, `HOME`, and `XDG_DATA_HOME` can override these
+locations for testing or custom user-local layouts.
+
+Only Linux x86-64 release downloads are currently provided. Packaged Windows
+and macOS releases are not yet available.
+
+Release builds are produced in Ubuntu 22.04 (glibc 2.35), the oldest verified
+distribution baseline, and compatibility checks run the same archive on
+Ubuntu 22.04, Ubuntu 24.04, Debian 13, Fedora 42, and openSUSE Leap 15.6.
+These checks cover x86-64 headless startup, archive handling, X11/Xvfb, the
+installer, and bundled/native shared-library resolution. They do not establish
+GNOME, KDE, Wayland, GPU-driver, or file-manager integration. The packaged
+bundle includes its Python, Pillow, pyvips/libvips, unrar, and Tk runtime
+components; it requires a glibc-based Linux x86-64 system with the usual X11
+libraries. Alpine Linux and musl-based systems are unsupported.
+
+#### Source installation for contributors
+
+Source installation is for development and requires Python and the project
+tools:
+
 ```bash
 uv venv
 uv sync
@@ -56,7 +91,7 @@ Or, via the official installer:
 curl -Ls https://astral.sh/uv/install.sh | sh
 ```
 
-  CBR support uses `unrar2-cffi` for in-process extraction.
+ CBR support uses `unrar2-cffi` for in-process extraction.
 
   The project uses `pyvips[binary]` which includes precompiled libvips binaries
   for all platforms (Linux, macOS, Windows). No external libvips installation required.

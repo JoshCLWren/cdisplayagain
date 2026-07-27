@@ -105,3 +105,80 @@ jobs:
           files: ./coverage.xml
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  package-linux:
+    runs-on: ubuntu-22.04
+    needs: [lint, tests]
+    steps:
+      - name: Check out exact commit
+        uses: actions/checkout@v4
+
+      - name: Install packaging dependencies
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq libvips-dev python3-tk xvfb unar
+
+      - name: Set up environment
+        uses: ./.github/actions/setup
+
+      - name: Build onedir bundle once
+        run: bash scripts/docker-build-linux.sh
+
+      - name: Smoke test bundle and installer
+        run: bash scripts/ci-package-check.sh
+
+      - name: Package tested bundle
+        id: package
+        shell: bash
+        run: |
+          asset_path=$(bash scripts/package-linux.sh)
+          printf '%s  %s\n' "$(sha256sum "$asset_path" | cut -d' ' -f1)" "$(basename "$asset_path")" > SHA256SUMS
+          bash scripts/ci-archive-check.sh "$asset_path"
+          echo "asset_path=$asset_path" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Linux release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cdisplayagain-linux-x86_64
+          path: |
+            ${{ steps.package.outputs.asset_path }}
+            SHA256SUMS
+          retention-days: 7
+
+  compatibility:
+    runs-on: ubuntu-22.04
+    needs: package-linux
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: ubuntu-22.04
+            image: ubuntu:22.04
+            family: apt
+          - name: debian-12
+            image: debian:12-slim
+            family: apt
+          - name: fedora-40
+            image: fedora:40
+            family: dnf
+    steps:
+      - name: Check out test harness and fixtures
+        uses: actions/checkout@v4
+      - name: Download tested release artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: cdisplayagain-linux-x86_64
+          path: artifact
+      - name: Run container compatibility checks
+        shell: bash
+        run: |
+          set -o pipefail
+          docker run --rm -e "BUILD_SHA=${BUILD_SHA}" -v "$GITHUB_WORKSPACE:/workspace" -w /workspace \
+            "${{ matrix.image }}" bash /workspace/scripts/compatibility-test.sh \
+            "${{ matrix.family }}" 2>&1 | tee "compatibility-${{ matrix.name }}.log"
+        env:
+          BUILD_SHA: ${{ github.sha }}
+      - name: Upload compatibility logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compatibility-log-${{ matrix.name }}
+          path: "compatibility-${{ matrix.name }}.log"
