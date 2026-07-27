@@ -458,6 +458,7 @@ class ComicViewer(tk.Frame):
         self._current_pil: Image.Image | None = None
         self._current_index: int = 0
         self._canvas_image_id: int | None = None
+        self._page_counter_id: int | None = None
 
         # Lightweight caches - store PIL Image objects directly to avoid encode/decode roundtrip
         self._pil_cache: dict[str, Image.Image] = {}
@@ -909,6 +910,8 @@ class ComicViewer(tk.Frame):
         self._canvas_image_id = self.canvas.create_image(x, y, image=self._tk_img, anchor=anchor)
         perf_log("canvas_update", time.perf_counter() - canvas_start)
 
+        self._update_page_counter()
+
     def _display_image_fast(self, img: Image.Image):
         """Display PIL image with fast NEAREST resampling for instant preview."""
         cw = max(1, self.canvas.winfo_width())
@@ -952,6 +955,8 @@ class ComicViewer(tk.Frame):
             y = -self._scroll_offset
         self._canvas_image_id = self.canvas.create_image(x, y, image=self._tk_img, anchor=anchor)
         perf_log("display_fast_image", time.perf_counter() - imagetk_start)
+
+        self._update_page_counter()
 
     def _update_from_cache(self, index: int, img: Image.Image):
         logging.info("Update from cache: index=%d, current_index=%d", index, self._current_index)
@@ -1239,6 +1244,60 @@ class ComicViewer(tk.Frame):
             f" ({self._current_index + 1}/{total})"
         )
 
+    def _page_counter_text(self) -> str | None:
+        """Return the page counter fraction for the current page, or None to hide it."""
+        if not self.source:
+            return None
+        name = self.source.pages[self._current_index]
+        if is_text_name(name):
+            return None
+        total = len(self.source.pages)
+        if total <= 1:
+            return None
+        return f"{self._current_index + 1}/{total}"
+
+    def _page_counter_color(self) -> str:
+        """Pick black or white text based on the mean luminance of the current page."""
+        if self._current_pil is None:
+            return "#ffffff"
+        try:
+            from PIL import ImageStat
+
+            thumb = self._current_pil.convert("L").resize((32, 32), Image.Resampling.BILINEAR)
+            mean = ImageStat.Stat(thumb).mean[0]
+        except Exception:
+            return "#ffffff"
+        return "#000000" if mean >= 128 else "#ffffff"
+
+    def _update_page_counter(self) -> None:
+        """Render (or hide) the page-counter fraction in the bottom-right of the canvas."""
+        self._clear_page_counter()
+
+        text = self._page_counter_text()
+        if text is None:
+            return
+
+        cw = max(1, self.canvas.winfo_width())
+        ch = max(1, self.canvas.winfo_height())
+        margin = 12
+        self._page_counter_id = self.canvas.create_text(
+            cw - margin,
+            ch - margin,
+            text=text,
+            anchor="se",
+            fill=self._page_counter_color(),
+            font="TkFixedFont 12",
+        )
+
+    def _clear_page_counter(self) -> None:
+        """Remove the page counter (called when canvas content is cleared)."""
+        if self._page_counter_id is not None:
+            try:
+                self.canvas.delete(self._page_counter_id)
+            except tk.TclError:
+                pass
+            self._page_counter_id = None
+
     def _find_next_image_index(self, start_index: int) -> int | None:
         if not self.source:
             return None
@@ -1251,10 +1310,12 @@ class ComicViewer(tk.Frame):
         if not self.source:
             self.canvas.delete("all")
             self._canvas_image_id = None
+            self._page_counter_id = None
             return
 
         name = self.source.pages[self._current_index]
         if is_text_name(name):
+            self._clear_page_counter()
             self._render_info_with_image(name)
             self._update_title()
             return
@@ -1287,11 +1348,13 @@ class ComicViewer(tk.Frame):
 
     def _render_current_sync(self):
         if not self.source:
+            self._clear_page_counter()
             return
 
         render_start = time.perf_counter()
         name = self.source.pages[self._current_index]
         if is_text_name(name):
+            self._clear_page_counter()
             self._render_info_with_image(name)
             self._update_title()
             perf_log("render_current_sync", time.perf_counter() - render_start, "info_page")
@@ -1350,6 +1413,7 @@ class ComicViewer(tk.Frame):
         if image_index is None:
             self.canvas.delete("all")
             self._canvas_image_id = None
+            self._page_counter_id = None
             self._current_pil = None
             self._scaled_size = None
             self._scroll_offset = 0
@@ -1364,12 +1428,14 @@ class ComicViewer(tk.Frame):
         if cached:
             self._display_cached_image(cached)
             self._show_info_overlay(name)
+            self._clear_page_counter()
             return
 
         self._get_worker().request_page(
             image_index, cw, ch, preload=False, render_generation=self._render_generation
         )
         self._show_info_overlay(name)
+        self._clear_page_counter()
 
     def _show_info_overlay(self, name: str) -> None:
         if not self.source:

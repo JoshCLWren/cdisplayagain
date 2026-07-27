@@ -31,6 +31,7 @@ These features match CDisplay's behavior and are fully implemented:
 - ✅ Sequential reading across comics in same directory (next/previous comic)
 - ✅ Mouse wheel scrolls/navigates (Windows/Mac/Linux X11 bindings)
 - ✅ Mouse drag to pan page
+- ✅ Page counter (bottom-right current/total fraction, auto black/white by page luminance)
 
 ### Keyboard Shortcuts
 - ✅ `q` / `Q` / `x` / `X` quits the app
