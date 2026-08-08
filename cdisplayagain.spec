@@ -118,3 +118,9 @@ if is_macos:
             ],
         },
     )
+
+    # PyInstaller does not emit the classic package marker, and Finder falls
+    # back to a generic icon for bundles without it even when Info.plist
+    # already carries CFBundlePackageType.
+    pkg_info = Path(DISTPATH) / "cdisplayagain.app" / "Contents" / "PkgInfo"
+    pkg_info.write_text("APPL????", encoding="ascii")
