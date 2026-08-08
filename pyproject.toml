@@ -17,6 +17,11 @@ pythonpath = ["."]
 [tool.uv]
 python-preference = "managed"
 
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
+default = true
+
 [tool.pyright]
 include = ["."]
 stubPath = "stubs"
