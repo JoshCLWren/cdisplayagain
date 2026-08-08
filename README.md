@@ -67,8 +67,13 @@ libraries. Alpine Linux and musl-based systems are unsupported.
 
 ```bash
 brew tap JoshCLWren/tap
+brew trust joshclwren/tap
 brew install --cask cdisplayagain
 ```
+
+Homebrew 6 refuses to load casks from a third-party tap until you trust it,
+which is why the `brew trust` line is there. Trust the single cask instead of
+the whole tap with `brew trust --cask joshclwren/tap/cdisplayagain`.
 
 The cask installs the same notarization-free bundle the release workflow
 publishes for Apple silicon. Intel Macs get no release asset; build from source

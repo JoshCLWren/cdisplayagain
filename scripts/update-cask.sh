@@ -57,7 +57,7 @@ cask "cdisplayagain" do
 
   # Only Apple silicon builds are published; Intel users build from source.
   depends_on arch: :arm64
-  depends_on macos: ">= :big_sur"
+  depends_on macos: :big_sur
 
   # package-macos.sh zips a versioned parent directory holding the bundle
   # alongside install.sh and the license, so the app is one level down.
