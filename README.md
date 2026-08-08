@@ -63,6 +63,21 @@ bundle includes its Python, Pillow, pyvips/libvips, unrar, and Tk runtime
 components; it requires a glibc-based Linux x86-64 system with the usual X11
 libraries. Alpine Linux and musl-based systems are unsupported.
 
+#### macOS via Homebrew
+
+```bash
+brew tap JoshCLWren/tap
+brew install --cask cdisplayagain
+```
+
+The cask installs the same notarization-free bundle the release workflow
+publishes for arm64 and Intel. Because the app is ad-hoc signed rather than
+notarized, and Homebrew quarantines every cask download, the cask clears the
+quarantine flag on install. See the
+[tap README](https://github.com/JoshCLWren/homebrew-tap) if you would rather
+handle that yourself with `--no-quarantine`. Building from source avoids the
+question entirely, since a locally built app is never quarantined.
+
 #### macOS app bundle (Apple silicon or Intel)
 
 Build a real `cdisplayagain.app` from a clone and install it, so `.cbz`/`.cbr`
