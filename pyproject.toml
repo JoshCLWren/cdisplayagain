@@ -1,6 +1,6 @@
 [project]
 name = "cdisplayagain"
-version = "0.1.1"
+version = "0.1.2"
 description = "Minimalist, cross-platform remake of the classic CDisplay sequential image viewer"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -16,6 +16,11 @@ pythonpath = ["."]
 
 [tool.uv]
 python-preference = "managed"
+
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
+default = true
 
 [tool.pyright]
 include = ["."]
