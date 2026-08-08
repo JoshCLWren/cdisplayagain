@@ -40,6 +40,18 @@ register_with_launch_services() {
     fi
 }
 
+refresh_finder_icons() {
+    # Finder caches an app's icon against the bundle path and its modification
+    # time, so installing over a previous copy keeps showing the stale icon
+    # (a generic one, if the earlier build predated Contents/PkgInfo). Bumping
+    # the timestamp and relaunching Finder is what makes the new icon appear.
+    touch -- "$installed_app" 2>/dev/null || true
+    local finder_user=${SUDO_USER:-$(id -un)}
+    if killall -u "$finder_user" Finder >/dev/null 2>&1; then
+        echo "Relaunched Finder so the new icon is picked up."
+    fi
+}
+
 remove_existing_installs() {
     local removed=0 location
     for location in "${install_locations[@]}"; do
@@ -129,6 +141,10 @@ EOF
 chmod 0755 "$bin_path"
 
 register_with_launch_services
+
+if [[ -z "${MACOS_APPDIR:-}" ]]; then
+    refresh_finder_icons
+fi
 
 if [[ -n "${MACOS_APPDIR:-}" ]]; then
     # Claiming the system-wide default for a copy in a scratch or non-standard
