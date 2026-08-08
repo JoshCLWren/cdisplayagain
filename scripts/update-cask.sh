@@ -58,17 +58,43 @@ cask "cdisplayagain" do
   # Only Apple silicon builds are published; Intel users build from source.
   depends_on arch: :arm64
   depends_on macos: :big_sur
+  # duti sets the default handlers below; without it a cask install would do
+  # strictly less than scripts/install-macos.sh and .cbz would not open on
+  # double-click for anyone whose Launch Services database already has a claim.
+  depends_on formula: "duti"
 
   # package-macos.sh zips a versioned parent directory holding the bundle
   # alongside install.sh and the license, so the app is one level down.
   app "cdisplayagain-#{version}-macos-arm64/cdisplayagain.app"
 
-  # The app is ad-hoc signed rather than notarized, so Gatekeeper blocks the
-  # quarantined copy Homebrew downloads until the flag is cleared.
   postflight do
+    installed = "#{appdir}/cdisplayagain.app"
+
+    # The app is ad-hoc signed rather than notarized, so Gatekeeper blocks the
+    # quarantined copy Homebrew downloads until the flag is cleared.
     system_command "/usr/bin/xattr",
-                   args: ["-dr", "com.apple.quarantine", "#{appdir}/cdisplayagain.app"],
-                   sudo: false
+                   args: ["-dr", "com.apple.quarantine", installed],
+                   sudo: false,
+                   must_succeed: false
+
+    launch_services = "/System/Library/Frameworks/CoreServices.framework/Versions/A" +
+                      "/Frameworks/LaunchServices.framework/Versions/A/Support"
+    system_command "#{launch_services}/lsregister",
+                   args: ["-f", installed],
+                   sudo: false,
+                   must_succeed: false
+
+    ["cbz", "cbr", "cbt", "cba"].each do |extension|
+      system_command "#{HOMEBREW_PREFIX}/bin/duti",
+                     args: ["-s", "io.github.joshclwren.cdisplayagain", extension, "all"],
+                     sudo: false,
+                     must_succeed: false
+    end
+
+    # Finder caches an icon against the bundle path and mtime, so a fresh
+    # install over a previous one otherwise keeps showing the stale icon.
+    system_command "/usr/bin/touch", args: [installed], sudo: false, must_succeed: false
+    system_command "/usr/bin/killall", args: ["Finder"], sudo: false, must_succeed: false
   end
 
   zap trash: [
