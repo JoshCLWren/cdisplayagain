@@ -32,6 +32,23 @@ if [ -n "$PYTHON_FILES" ]; then
     fi
 fi
 
+# A local UV_INDEX_URL or pip.conf mirror makes every uv command rewrite the
+# registry of every entry in uv.lock. Committing that breaks CI and every clone
+# that cannot reach the mirror, and nothing announces the change.
+if git diff --cached --name-only --diff-filter=ACM | grep -qx 'uv.lock'; then
+    FOREIGN_REGISTRIES=$(git show ":uv.lock" \
+        | grep -oE 'registry = "[^"]+"' \
+        | grep -v 'registry = "https://pypi.org/simple"' \
+        | sort -u || true)
+    if [ -n "$FOREIGN_REGISTRIES" ]; then
+        echo ""
+        echo "${RED}ERROR: uv.lock resolves against a non-public index:${NC}"
+        echo "$FOREIGN_REGISTRIES" | sed 's/^/  /'
+        echo "${RED}Restore it with 'git checkout uv.lock' before committing.${NC}"
+        exit 1
+    fi
+fi
+
 # Run the shared lint script
 bash scripts/lint.sh
 
