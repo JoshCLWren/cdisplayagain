@@ -32,6 +32,51 @@ viewer without wrestling dated IDEs or registry quirks.
 
 ### Installation
 
+Every route gives you a self-contained app with `.cbz`/`.cbr` double-click
+support and no Python installation to manage.
+
+| Platform | Install |
+| --- | --- |
+| macOS (Apple silicon) | `brew install --cask cdisplayagain` (see below for the two setup lines) |
+| Linux (x86-64) | Download the release archive, run `./install.sh` |
+| Anything else | Build from source with `make install` |
+
+#### macOS via Homebrew
+
+```bash
+brew tap JoshCLWren/tap
+brew trust joshclwren/tap
+brew install --cask cdisplayagain
+```
+
+Homebrew refuses to load casks from a third-party tap until you trust it, which
+is what the middle line does. It is a one-time decision per machine, and you can
+scope it to this cask alone with
+`brew trust --cask joshclwren/tap/cdisplayagain`.
+
+Then open any comic:
+
+```bash
+open ~/Comics/issue.cbz
+```
+
+Or double-click a `.cbz`/`.cbr` in Finder, which works because the installer
+registers the app as their default handler.
+
+Upgrade and removal are the usual Homebrew verbs:
+
+```bash
+brew upgrade --cask cdisplayagain
+brew uninstall --cask cdisplayagain
+```
+
+The cask ships the Apple silicon build the release workflow publishes. It is
+ad-hoc signed rather than notarized, since notarization requires a paid Apple
+Developer account, so Homebrew's quarantine flag is cleared during install; the
+[tap README](https://github.com/JoshCLWren/homebrew-tap) explains how to handle
+that yourself instead. Intel Macs have no published asset and should build from
+source, which sidesteps quarantine entirely.
+
 #### Linux release (Linux x86-64)
 
 Download the latest Linux release archive from GitHub. No Python installation
@@ -49,9 +94,8 @@ data directory. Uninstall with `./install.sh --uninstall` from the extracted
 release directory. `PREFIX`, `HOME`, and `XDG_DATA_HOME` can override these
 locations for testing or custom user-local layouts.
 
-Only Linux x86-64 release downloads are currently provided. Packaged Windows
-and macOS releases are not yet available; macOS users build the app locally
-with `make build && make install` (see below).
+Linux downloads are x86-64 only. macOS is published as an Apple silicon app
+bundle (see above); Windows has no packaged release yet.
 
 Release builds are produced in Ubuntu 22.04 (glibc 2.35), the oldest verified
 distribution baseline, and compatibility checks run the same archive on
@@ -62,27 +106,6 @@ GNOME, KDE, Wayland, GPU-driver, or file-manager integration. The packaged
 bundle includes its Python, Pillow, pyvips/libvips, unrar, and Tk runtime
 components; it requires a glibc-based Linux x86-64 system with the usual X11
 libraries. Alpine Linux and musl-based systems are unsupported.
-
-#### macOS via Homebrew
-
-```bash
-brew tap JoshCLWren/tap
-brew trust joshclwren/tap
-brew install --cask cdisplayagain
-```
-
-Homebrew 6 refuses to load casks from a third-party tap until you trust it,
-which is why the `brew trust` line is there. Trust the single cask instead of
-the whole tap with `brew trust --cask joshclwren/tap/cdisplayagain`.
-
-The cask installs the same notarization-free bundle the release workflow
-publishes for Apple silicon. Intel Macs get no release asset; build from source
-with `make install` instead. Because the app is ad-hoc signed rather than
-notarized, and Homebrew quarantines every cask download, the cask clears the
-quarantine flag on install. See the
-[tap README](https://github.com/JoshCLWren/homebrew-tap) if you would rather
-handle that yourself with `--no-quarantine`. Building from source avoids the
-question entirely, since a locally built app is never quarantined.
 
 #### macOS app bundle (build from source)
 
