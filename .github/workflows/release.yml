@@ -77,6 +77,82 @@ jobs:
             SHA256SUMS
           retention-days: 7
 
+  build-macos:
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-14
+          - arch: x86_64
+            runner: macos-13
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Check out exact selected commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Verify release tag version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          project_version=$(awk -F '"' '$1 ~ /^version[[:space:]]*=/ {print $2; exit}' pyproject.toml)
+          test "${GITHUB_REF_NAME#v}" = "$project_version"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      # The shared setup action is Linux-only: it apt-gets and rebuilds pyvips
+      # from source, while macOS needs the pyvips-binary wheel that carries
+      # libvips inside the bundle.
+      - name: Install Python 3.13 and sync dependencies
+        shell: bash
+        run: |
+          uv python install 3.13
+          uv venv
+          uv sync --locked
+
+      - name: Build app bundle
+        shell: bash
+        run: |
+          source .venv/bin/activate
+          make build
+
+      - name: Smoke test the bundle from a read-only working directory
+        shell: bash
+        run: |
+          cd /
+          "$GITHUB_WORKSPACE/dist/cdisplayagain.app/Contents/MacOS/cdisplayagain" --version
+
+      - name: Verify the bundle declares its file associations
+        shell: bash
+        run: |
+          plist=dist/cdisplayagain.app/Contents/Info.plist
+          for extension in cbz cbr; do
+            plutil -p "$plist" | grep -q "\"$extension\"" || {
+              echo "Info.plist does not declare .$extension" >&2
+              exit 1
+            }
+          done
+
+      - name: Package app bundle
+        id: package
+        shell: bash
+        run: |
+          source .venv/bin/activate
+          asset_path=$(bash scripts/package-macos.sh)
+          echo "asset_path=$asset_path" >> "$GITHUB_OUTPUT"
+
+      - name: Upload tested macOS release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cdisplayagain-macos-${{ matrix.arch }}-release
+          path: ${{ steps.package.outputs.asset_path }}
+          retention-days: 7
+
   compatibility:
     permissions:
       contents: read
@@ -129,33 +205,46 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    needs: build-release
+    needs: [build-release, build-macos]
     runs-on: ubuntu-22.04
     steps:
-      - name: Download tested release artifact
+      - name: Download every tested release artifact
         uses: actions/download-artifact@v4
         with:
-          name: cdisplayagain-linux-x86_64-release
+          pattern: cdisplayagain-*-release
           path: artifact
+          merge-multiple: true
       - name: Generate build provenance
         uses: actions/attest-build-provenance@v2
         continue-on-error: true
         with:
-          subject-path: artifact/*.tar.gz
+          subject-path: |
+            artifact/*.tar.gz
+            artifact/*.zip
 
   publish:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [compatibility, attest]
+    needs: [compatibility, attest, build-macos]
     permissions:
       contents: write
     runs-on: ubuntu-22.04
     steps:
-      - name: Download tested release artifact
+      - name: Download every tested release artifact
         uses: actions/download-artifact@v4
         with:
-          name: cdisplayagain-linux-x86_64-release
+          pattern: cdisplayagain-*-release
           path: artifact
+          merge-multiple: true
+      - name: Checksum the published set
+        shell: bash
+        run: |
+          cd artifact
+          rm -f SHA256SUMS
+          sha256sum ./*.tar.gz ./*.zip | sed 's| \./| |' > SHA256SUMS
+          cat SHA256SUMS
       - name: Publish GitHub Release assets
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" artifact/*.tar.gz artifact/SHA256SUMS --generate-notes
+        run: >-
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY"
+          artifact/*.tar.gz artifact/*.zip artifact/SHA256SUMS --generate-notes

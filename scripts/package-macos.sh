@@ -61,5 +61,5 @@ EOF
 
 output_path="$root_dir/$asset_name"
 rm -f "$output_path"
-ditto -c -k --sequesterRsrc --keepParent "$package_root" "$output_path"
+ditto -c -k --keepParent "$package_root" "$output_path"
 printf '%s\n' "$output_path"
