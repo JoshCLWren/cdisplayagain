@@ -21,6 +21,9 @@ from urllib.parse import urlparse
 from urllib.request import url2pathname
 
 try:
+    from tk_bootstrap import configure_tk_library
+
+    configure_tk_library()
     import tkinter as tk
     from tkinter import filedialog, messagebox
 except ImportError as e:  # pragma: no cover

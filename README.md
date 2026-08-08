@@ -143,19 +143,14 @@ You must install it separately:
 brew install python-tk
 ```
 
-Running from source under a `uv`-managed interpreter needs one extra step.
-uv installs python-build-standalone, which keeps Tcl/Tk under the interpreter
-prefix while Tk probes for `init.tcl` relative to the virtualenv, so every
-`Tk()` call fails with `Can't find a usable init.tcl`. The Makefile handles this
-for you via `scripts/tk-env.sh`; to run the script directly, export what that
-helper prints:
-
-```bash
-eval "export $(bash scripts/tk-env.sh)"
-python cdisplayagain.py path/to/comic.cbz
-```
-
-This affects source runs only. The packaged `.app` carries its own Tcl/Tk.
+Running from source under a `uv`-managed interpreter needs no extra step, but
+it is worth knowing why. uv installs python-build-standalone, which keeps
+Tcl/Tk under the interpreter prefix while Tk probes for `init.tcl` relative to
+the virtualenv, so every `Tk()` call would fail with
+`Can't find a usable init.tcl`. `tk_bootstrap.py` sets `TCL_LIBRARY` and
+`TK_LIBRARY` at import time to fix this for every entry point: the app, the
+tests, and IDE launches alike. It is a no-op for Homebrew and system pythons,
+which resolve those paths themselves.
 
 If you encounter issues with the UI not responding or appearing, try:
 ```bash

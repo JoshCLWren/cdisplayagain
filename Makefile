@@ -8,8 +8,6 @@ XDG_DATA_HOME ?= $(HOME)/.local/share
 APPDIR ?= $(XDG_DATA_HOME)/applications
 UNAME := $(shell uname)
 MACOS_APPDIR ?= /Applications
-# Recursive (=) so the helper only runs for the targets that need Tk on macOS.
-TK_ENV = $(shell bash scripts/tk-env.sh)
 
 help:  ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -30,7 +28,7 @@ pytest:  ## Run tests (xvfb on Linux; macOS opens real windows, see pytest-conta
 	@if [ "$(UNAME)" = "Darwin" ]; then \
 		echo "NOTE: macOS has no xvfb, so this run opens real Tk windows and takes"; \
 		echo "      over the display for ~30s. 'make pytest-container' is headless."; \
-		$(TK_ENV) TK_SILENCE_DEPRECATION=1 uv run --active pytest; \
+		TK_SILENCE_DEPRECATION=1 uv run --active pytest; \
 	elif ! command -v xvfb-run >/dev/null 2>&1; then \
 		echo "ERROR: xvfb-run is required to run tests."; \
 		echo "Install xvfb: sudo apt-get install xvfb"; \
@@ -57,7 +55,7 @@ venv:  ## Create virtual environment
 
 run:  ## Run the app (Usage: make run FILE=path/to/comic.cbz)
 	@if [ -z "$(FILE)" ]; then echo "Usage: make run FILE=path/to/comic.cbz"; exit 1; fi
-	$(TK_ENV) uv run --active python cdisplayagain.py "$(FILE)"
+	uv run --active python cdisplayagain.py "$(FILE)"
 
 smoke:  ## Run manual smoke test checklist
 	@if [ -z "$(FILE)" ]; then echo "Usage: make smoke FILE=path/to/comic.cbz"; exit 1; fi
@@ -77,7 +75,7 @@ build: build-onedir  ## Build the PyInstaller onedir bundle
 
 build-onedir:  ## Build onedir bundle (adds cdisplayagain.app on macOS)
 	uv run --active python scripts/generate_build_info.py
-	$(TK_ENV) uv run --active pyinstaller --clean --noconfirm cdisplayagain.spec
+	uv run --active pyinstaller --clean --noconfirm cdisplayagain.spec
 
 package-linux: build-onedir  ## Package the tested Linux onedir bundle
 	bash scripts/package-linux.sh
@@ -126,11 +124,19 @@ install-desktop:  ## Install desktop entry (Linux) or app symlink (macOS)
 		echo "Double-click a .cbz/.cbr once and choose cdisplayagain, then 'Always Open With'."; \
 	else \
 		mkdir -p $(APPDIR); \
+		mkdir -p $(XDG_DATA_HOME)/mime/packages; \
+		install -m 0644 packaging/linux/cdisplayagain.xml \
+			$(XDG_DATA_HOME)/mime/packages/cdisplayagain.xml; \
+		update-mime-database $(XDG_DATA_HOME)/mime 2>/dev/null || true; \
+		mkdir -p $(XDG_DATA_HOME)/icons/hicolor/256x256/apps; \
+		install -m 0644 cdisplayagain.png \
+			$(XDG_DATA_HOME)/icons/hicolor/256x256/apps/cdisplayagain.png; \
 		printf '%s\n' \
 			'[Desktop Entry]' \
 			'Type=Application' \
 			'Name=cdisplayagain' \
 			"Exec=$(BINDIR)/cdisplayagain-launcher %f" \
+			'Icon=cdisplayagain' \
 			'Terminal=false' \
 			'Categories=Graphics;Viewer;' \
 			'MimeType=application/x-cbz;application/x-cbr;application/vnd.comicbook+zip;application/vnd.comicbook-rar;application/x-ext-cbz;application/x-ext-cbr;' \
@@ -175,7 +181,7 @@ ci-test-local:  ## Run CI-like tests locally (requires xvfb and libvips)
 pytest-container:  ## Run the suite headless in Docker without touching the host .venv
 	@if ! docker info >/dev/null 2>&1; then \
 		echo "ERROR: Docker is not available or not running."; \
-		echo "Start Docker, or run natively with 'make pytest GUI_TESTS=1'."; \
+		echo "Start Docker, or run natively with 'make pytest'."; \
 		exit 1; \
 	fi
 	@if ! docker image inspect cdisplayagain-ci:13 >/dev/null 2>&1; then \
