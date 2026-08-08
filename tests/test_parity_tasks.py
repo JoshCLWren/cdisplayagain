@@ -96,6 +96,9 @@ def test_launch_fullscreen_enabled_in_main(tmp_path, monkeypatch):
         def mainloop(self):
             calls["mainloop"] = True
 
+        def createcommand(self, name, callback):
+            calls["createcommand"] = name
+
     class FakeViewer:
         def __init__(self, master, comic_path):
             self.master = master
@@ -138,6 +141,9 @@ def test_launch_fullscreen_hides_cursor(tmp_path, monkeypatch):
             pass
 
         def mainloop(self):
+            pass
+
+        def createcommand(self, name, callback):
             pass
 
     class FakeViewer:
