@@ -1,4 +1,4 @@
-.PHONY: help lint pytest sync venv run smoke clean-build build build-onedir package-linux install install-bin install-desktop mime-query redo ci-test-debian ci-test-local ci-build-image githook install-githook deploy
+.PHONY: help lint pytest sync venv run smoke clean-build build build-onedir package-linux install install-bin install-desktop mime-query redo ci-test-debian ci-test-local ci-build-image githook install-githook deploy build-macos install-macos uninstall-macos package-macos pytest-container
 
 # Configuration
 PREFIX ?= $(HOME)/.local
@@ -6,6 +6,10 @@ BINDIR ?= $(PREFIX)/bin
 LIBDIR ?= $(PREFIX)/lib
 XDG_DATA_HOME ?= $(HOME)/.local/share
 APPDIR ?= $(XDG_DATA_HOME)/applications
+UNAME := $(shell uname)
+MACOS_APPDIR ?= /Applications
+# Recursive (=) so the helper only runs for the targets that need Tk on macOS.
+TK_ENV = $(shell bash scripts/tk-env.sh)
 
 help:  ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -22,13 +26,18 @@ install-githook:  ## Install pre-commit hook for new developers
 githook: install-githook  ## Run lint checks manually (installs pre-commit hook if missing)
 	bash scripts/lint.sh
 
-pytest:  ## Run tests (requires xvfb to prevent GUI windows)
-	@if ! command -v xvfb-run >/dev/null 2>&1; then \
+pytest:  ## Run tests (xvfb on Linux; macOS opens real windows, see pytest-container)
+	@if [ "$(UNAME)" = "Darwin" ]; then \
+		echo "NOTE: macOS has no xvfb, so this run opens real Tk windows and takes"; \
+		echo "      over the display for ~30s. 'make pytest-container' is headless."; \
+		$(TK_ENV) TK_SILENCE_DEPRECATION=1 uv run --active pytest; \
+	elif ! command -v xvfb-run >/dev/null 2>&1; then \
 		echo "ERROR: xvfb-run is required to run tests."; \
 		echo "Install xvfb: sudo apt-get install xvfb"; \
 		exit 1; \
+	else \
+		xvfb-run -a -s "-screen 0 1280x1024x24" uv run --active pytest; \
 	fi
-	xvfb-run -a -s "-screen 0 1280x1024x24" uv run --active pytest
 
 profile-cbz:  ## Profile CBZ launch performance (Usage: make profile-cbz FILE=path/to/comic.cbz)
 	@if [ -z "$(FILE)" ]; then echo "Usage: make profile-cbz FILE=path/to/comic.cbz"; exit 1; fi
@@ -48,7 +57,7 @@ venv:  ## Create virtual environment
 
 run:  ## Run the app (Usage: make run FILE=path/to/comic.cbz)
 	@if [ -z "$(FILE)" ]; then echo "Usage: make run FILE=path/to/comic.cbz"; exit 1; fi
-	uv run --active python cdisplayagain.py "$(FILE)"
+	$(TK_ENV) uv run --active python cdisplayagain.py "$(FILE)"
 
 smoke:  ## Run manual smoke test checklist
 	@if [ -z "$(FILE)" ]; then echo "Usage: make smoke FILE=path/to/comic.cbz"; exit 1; fi
@@ -66,15 +75,29 @@ deploy: clean-build build-onedir install  ## Build + install for this machine (o
 
 build: build-onedir  ## Build the PyInstaller onedir bundle
 
-build-onedir:  ## Build onedir bundle (faster startup than onefile)
+build-onedir:  ## Build onedir bundle (adds cdisplayagain.app on macOS)
 	uv run --active python scripts/generate_build_info.py
-	uv run --active pyinstaller --clean --noconfirm cdisplayagain.spec
+	$(TK_ENV) uv run --active pyinstaller --clean --noconfirm cdisplayagain.spec
 
 package-linux: build-onedir  ## Package the tested Linux onedir bundle
 	bash scripts/package-linux.sh
 
 
-install: install-bin install-desktop  ## Install everything
+install: build-onedir  ## Build, then install (.app on macOS, bundle + desktop entry on Linux)
+	@if [ "$(UNAME)" = "Darwin" ]; then \
+		$(MAKE) --no-print-directory install-macos; \
+	else \
+		$(MAKE) --no-print-directory install-bin install-desktop; \
+	fi
+
+install-macos:  ## Install cdisplayagain.app to $(MACOS_APPDIR) and register file types
+	@bash scripts/install-macos.sh
+
+uninstall-macos:  ## Remove the installed macOS app bundle
+	@bash scripts/install-macos.sh --uninstall
+
+package-macos: build-onedir  ## Package the macOS .app into a distributable zip
+	@bash scripts/package-macos.sh
 
 install-bin:  ## Install binary to system
 	@if [ -f dist/cdisplayagain ]; then \
@@ -148,6 +171,23 @@ ci-test-local:  ## Run CI-like tests locally (requires xvfb and libvips)
 		echo "=== CI Test Output Summary ==="; \
 		grep -E "passed|failed|ERROR|coverage" ci-test-output.log | tail -10; \
 	fi
+
+pytest-container:  ## Run the suite headless in Docker without touching the host .venv
+	@if ! docker info >/dev/null 2>&1; then \
+		echo "ERROR: Docker is not available or not running."; \
+		echo "Start Docker, or run natively with 'make pytest GUI_TESTS=1'."; \
+		exit 1; \
+	fi
+	@if ! docker image inspect cdisplayagain-ci:13 >/dev/null 2>&1; then \
+		$(MAKE) --no-print-directory ci-build-image; \
+	fi
+	@docker run --rm \
+		-v "$(CURDIR):/app" \
+		-v cdisplayagain-container-venv:/app/.venv \
+		-w /app \
+		-e PATH="/root/.local/bin:$$PATH" \
+		cdisplayagain-ci:13 \
+		bash -c 'uv sync --locked && xvfb-run -a --server-args="-screen 0 1280x1024x24" uv run pytest tests/ -q --tb=short'
 
 ci-build-image:  ## Build/rebuild cached debian image
 	@echo "Building cached debian image..."

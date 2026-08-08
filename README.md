@@ -50,7 +50,8 @@ release directory. `PREFIX`, `HOME`, and `XDG_DATA_HOME` can override these
 locations for testing or custom user-local layouts.
 
 Only Linux x86-64 release downloads are currently provided. Packaged Windows
-and macOS releases are not yet available.
+and macOS releases are not yet available; macOS users build the app locally
+with `make build && make install` (see below).
 
 Release builds are produced in Ubuntu 22.04 (glibc 2.35), the oldest verified
 distribution baseline, and compatibility checks run the same archive on
@@ -61,6 +62,43 @@ GNOME, KDE, Wayland, GPU-driver, or file-manager integration. The packaged
 bundle includes its Python, Pillow, pyvips/libvips, unrar, and Tk runtime
 components; it requires a glibc-based Linux x86-64 system with the usual X11
 libraries. Alpine Linux and musl-based systems are unsupported.
+
+#### macOS app bundle (Apple silicon or Intel)
+
+Build a real `cdisplayagain.app` from a clone and install it, so `.cbz`/`.cbr`
+files open on double-click:
+
+```bash
+uv sync
+make install
+```
+
+`make install` builds `dist/cdisplayagain.app` (a self-contained bundle carrying
+its own Python, Tk, Pillow, libvips, and unrar), copies it to `/Applications`,
+registers it with Launch Services, and drops a CLI wrapper at
+`~/.local/bin/cdisplayagain`. Use `make build` alone to produce the bundle
+without installing it. Override the destination with `MACOS_APPDIR`
+(for example `MACOS_APPDIR=~/Applications make install`) and the wrapper
+location with `PREFIX`. Remove everything with `make uninstall-macos`.
+
+Making it the *default* comic viewer needs one more piece, because macOS will
+not let an app claim a file type on its own. If [`duti`](https://github.com/moretension/duti)
+is installed (`brew install duti`), `make install` sets the default handler for
+`.cbz`, `.cbr`, `.cbt`, and `.cba` automatically. Otherwise set it once by hand:
+right-click a comic, choose Get Info, set Open With to cdisplayagain, and click
+Change All.
+
+`make package-macos` produces a distributable
+`cdisplayagain-<version>-macos-<arch>.zip` containing the app, an `install.sh`,
+and the license. The bundle is unsigned and un-notarized, so a copy downloaded
+through a browser is quarantined; open it the first time with right-click >
+Open, or clear the flag with
+`xattr -dr com.apple.quarantine /Applications/cdisplayagain.app`.
+
+Finder hands a double-clicked file to a macOS app through an `openDocument`
+Apple Event rather than `argv`, so the viewer registers a
+`::tk::mac::OpenDocument` handler at startup. That also means double-clicking a
+second comic while the app is running loads it into the open window.
 
 #### Source installation for contributors
 
@@ -105,11 +143,36 @@ You must install it separately:
 brew install python-tk
 ```
 
+Running from source under a `uv`-managed interpreter needs one extra step.
+uv installs python-build-standalone, which keeps Tcl/Tk under the interpreter
+prefix while Tk probes for `init.tcl` relative to the virtualenv, so every
+`Tk()` call fails with `Can't find a usable init.tcl`. The Makefile handles this
+for you via `scripts/tk-env.sh`; to run the script directly, export what that
+helper prints:
+
+```bash
+eval "export $(bash scripts/tk-env.sh)"
+python cdisplayagain.py path/to/comic.cbz
+```
+
+This affects source runs only. The packaged `.app` carries its own Tcl/Tk.
+
 If you encounter issues with the UI not responding or appearing, try:
 ```bash
 export TK_SILENCE_DEPRECATION=1
 python cdisplayagain.py path/to/comic.cbz
 ```
+
+**Running the tests on macOS.** There is no xvfb for Aqua, so `make pytest`
+opens real Tk windows and takes over the display for the ~30 seconds the suite
+runs. One test, `test_right_click_shows_context_menu`, fails natively because
+Aqua's `tk_popup` needs a live event loop.
+
+`make pytest-container` runs the suite headless in the Debian container, using a
+dedicated Docker volume so the host `.venv` is never overwritten with Linux
+binaries. It is the CI-parity path and works well on Linux, but be warned that
+it has been observed hanging on macOS, where Docker bind-mounts the repository
+across the VM boundary. Prefer the native run there, or let CI cover it.
 
 ### Usage
 
@@ -139,7 +202,12 @@ and use `Esc` or `q` to close the window.
  - `make venv`: create the uv-managed virtualenv.
  - `make sync`: install dependencies from `uv.lock`.
  - `make lint`: run ruff.
- - `make pytest`: run the test suite.
+ - `make pytest`: run the test suite (xvfb on Linux, container on macOS).
+ - `make pytest-container`: run the suite headless in Docker on any platform.
+ - `make build`: build the PyInstaller bundle, plus `cdisplayagain.app` on macOS.
+ - `make install`: build and install for this machine (Linux bundle or macOS `.app`).
+ - `make uninstall-macos`: remove the installed macOS app and CLI wrapper.
+ - `make package-macos`: zip the macOS app for distribution.
  - `make run FILE=path/to/comic.cbz`: launch the viewer.
  - `make smoke FILE=path/to/comic.cbz`: print the manual checklist and launch.
  - `make profile-cbz FILE=path/to/comic.cbz`: profile CBZ launch performance.

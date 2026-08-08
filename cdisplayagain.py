@@ -14,9 +14,11 @@ import threading
 import time
 import weakref
 from collections import OrderedDict
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import cast
+from urllib.parse import urlparse
+from urllib.request import url2pathname
 
 try:
     import tkinter as tk
@@ -84,24 +86,64 @@ FILE_DIALOG_TYPES = [
     ("All files", "*.*"),
 ]
 
-LOG_ROOT = Path(os.environ.get("CDISPLAYAGAIN_LOG_DIR", "logs")).expanduser()
+
+def _user_log_root() -> Path:
+    """Return the per-user log location for the current platform."""
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Logs" / "cdisplayagain"
+    state_home = os.environ.get("XDG_STATE_HOME") or str(Path.home() / ".local" / "state")
+    return Path(state_home).expanduser() / "cdisplayagain" / "logs"
+
+
+def _default_log_root() -> Path:
+    """Pick a log root that survives being launched from a read-only directory.
+
+    Finder and desktop launchers start a packaged app with the working directory
+    set to "/", so the relative path a source checkout uses is unwritable there.
+    """
+    override = os.environ.get("CDISPLAYAGAIN_LOG_DIR")
+    if override:
+        return Path(override).expanduser()
+    if getattr(sys, "frozen", False):
+        return _user_log_root()
+    return Path("logs")
+
+
+LOG_ROOT = _default_log_root()
 LOG_PATH: Path | None = None
+LOG_FORMAT = "%(asctime)s %(levelname)s %(message)s"
 
 
 def _init_logging() -> None:
     global LOG_PATH
     timestamp = time.strftime("%Y%m%d-%H%M%S")
-    log_dir = LOG_ROOT / timestamp
-    log_dir.mkdir(parents=True, exist_ok=True)
-    LOG_PATH = log_dir / "cdisplayagain.log"
+    LOG_PATH = None
+    for root in dict.fromkeys([LOG_ROOT, _user_log_root()]):
+        log_dir = root / timestamp
+        try:
+            log_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            print(f"Cannot write logs to {log_dir}: {e}", file=sys.stderr)
+            continue
+        LOG_PATH = log_dir / "cdisplayagain.log"
+        break
+
+    # Failing to open a log file must never stop the viewer from starting.
+    if LOG_PATH is None:
+        logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
+        logging.warning("File logging disabled; no writable log directory found.")
+        return
+
     logging.basicConfig(
         filename=str(LOG_PATH),
         filemode="a",
         level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(message)s",
+        format=LOG_FORMAT,
     )
     logging.info("Logging initialized at %s", LOG_PATH)
-    logging.info("cdisplayagain version=%s build=%s executable=%s", APP_VERSION, BUILD_ID, sys.executable)
+    logging.info(
+        "cdisplayagain version=%s build=%s executable=%s", APP_VERSION, BUILD_ID, sys.executable
+    )
     launch_ns = os.environ.get("CDISPLAYAGAIN_LAUNCH_NS")
     if launch_ns:
         try:
@@ -408,9 +450,7 @@ class ImageWorker:
                     and height is not None
                 ):
                     with self._pending_requests_lock:
-                        self._pending_requests.discard(
-                            (source_generation, index, width, height)
-                        )
+                        self._pending_requests.discard((source_generation, index, width, height))
 
 
 class ComicViewer(tk.Frame):
@@ -562,7 +602,9 @@ class ComicViewer(tk.Frame):
                 break
             had_items = True
             if source_generation != self._source_generation:
-                logging.info("Discarding result from previous comic: generation=%d", source_generation)
+                logging.info(
+                    "Discarding result from previous comic: generation=%d", source_generation
+                )
                 continue
             self._update_from_cache(index, img)
         return had_items
@@ -1682,6 +1724,64 @@ class ComicViewer(tk.Frame):
             logging.info("Set mouse binding: %s -> %s", button, action)
 
 
+_PENDING_OPEN_DOCUMENTS: list[str] = []
+OPEN_DOCUMENT_TIMEOUT_MS = 750
+
+
+def comic_path_from_argument(raw: str) -> Path:
+    """Normalize a launcher-supplied argument into a filesystem path."""
+    if raw.startswith("file://"):
+        raw = url2pathname(urlparse(raw).path)
+    return Path(raw).expanduser()
+
+
+def _record_open_document(*paths: str) -> None:
+    """Queue paths delivered by the macOS openDocument Apple Event."""
+    _PENDING_OPEN_DOCUMENTS.extend(paths)
+
+
+def register_open_document_handler(root: tk.Tk, callback: Callable | None = None) -> bool:
+    """Register the Apple Event that Finder uses to hand files to a macOS .app bundle.
+
+    Double-clicking a document on macOS does not put its path in argv; it sends
+    an openDocument event once the Tk event loop is running. Returns False on
+    platforms where the command does not exist, so callers can fall back to argv.
+    """
+    if sys.platform != "darwin":
+        return False
+    _PENDING_OPEN_DOCUMENTS.clear()
+    try:
+        root.createcommand("::tk::mac::OpenDocument", callback or _record_open_document)
+    except tk.TclError:
+        logging.info("openDocument handler unavailable; falling back to argv")
+        return False
+    return True
+
+
+def await_open_document(root: tk.Tk, timeout_ms: int = OPEN_DOCUMENT_TIMEOUT_MS) -> str | None:
+    """Pump the event loop briefly so a launch-time openDocument event can land."""
+    deadline = time.monotonic() + timeout_ms / 1000
+    while not _PENDING_OPEN_DOCUMENTS and time.monotonic() < deadline:
+        try:
+            root.update()
+        except tk.TclError:  # pragma: no cover - root torn down mid-wait
+            break
+        time.sleep(0.02)
+    return _PENDING_OPEN_DOCUMENTS.pop(0) if _PENDING_OPEN_DOCUMENTS else None
+
+
+def _open_documents_in_viewer(app: ComicViewer, paths: Sequence[str]) -> None:
+    """Load a document Finder sent to the already-running viewer."""
+    if not paths:
+        return
+    path = comic_path_from_argument(paths[0])
+    if not path.exists():
+        logging.warning("openDocument path does not exist: %s", path)
+        return
+    app._open_comic(path)
+    app._request_focus()
+
+
 def main():
     """Parse arguments and launch the comic viewer."""
     _init_logging()
@@ -1709,21 +1809,25 @@ def main():
         )
         sys.exit(1)
 
+    open_document_available = register_open_document_handler(root)
+
     path: Path | None = None
     if args.comic:
-        raw = args.comic
-        if raw.startswith("file://"):
-            raw = raw[7]
-        path = Path(raw).expanduser()
+        path = comic_path_from_argument(args.comic)
     else:
-        # Use the existing root for the dialog
-        selection = filedialog.askopenfilename(
-            parent=root, title="Open Comic", filetypes=FILE_DIALOG_TYPES
-        )
-        if not selection:
-            root.destroy()
-            return
-        path = Path(selection)
+        if open_document_available:
+            document = await_open_document(root)
+            if document:
+                path = comic_path_from_argument(document)
+        if path is None:
+            # Use the existing root for the dialog
+            selection = filedialog.askopenfilename(
+                parent=root, title="Open Comic", filetypes=FILE_DIALOG_TYPES
+            )
+            if not selection:
+                root.destroy()
+                return
+            path = Path(selection)
 
     if not path.exists():
         print(f"File not found: {path}", file=sys.stderr)
@@ -1740,6 +1844,9 @@ def main():
     app._fullscreen = True
     app._set_cursor_hidden(True)
     app._request_focus()
+
+    if open_document_available:
+        register_open_document_handler(root, lambda *paths: _open_documents_in_viewer(app, paths))
 
     root.deiconify()
     root.mainloop()
