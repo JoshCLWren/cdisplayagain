@@ -84,10 +84,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Intel is intentionally absent: Apple silicon covers every Mac sold
+          # since 2020, and Intel users can build from source. Re-add with
+          # "- arch: x86_64 / runner: macos-15-intel" if that changes.
           - arch: arm64
-            runner: macos-14
-          - arch: x86_64
-            runner: macos-13
+            runner: macos-15
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Check out exact selected commit

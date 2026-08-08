@@ -71,14 +71,15 @@ brew install --cask cdisplayagain
 ```
 
 The cask installs the same notarization-free bundle the release workflow
-publishes for arm64 and Intel. Because the app is ad-hoc signed rather than
+publishes for Apple silicon. Intel Macs get no release asset; build from source
+with `make install` instead. Because the app is ad-hoc signed rather than
 notarized, and Homebrew quarantines every cask download, the cask clears the
 quarantine flag on install. See the
 [tap README](https://github.com/JoshCLWren/homebrew-tap) if you would rather
 handle that yourself with `--no-quarantine`. Building from source avoids the
 question entirely, since a locally built app is never quarantined.
 
-#### macOS app bundle (Apple silicon or Intel)
+#### macOS app bundle (build from source)
 
 Build a real `cdisplayagain.app` from a clone and install it, so `.cbz`/`.cbr`
 files open on double-click:

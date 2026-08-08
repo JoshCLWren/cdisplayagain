@@ -42,28 +42,26 @@ lookup() {
 }
 
 arm_sha=$(lookup arm64)
-intel_sha=$(lookup x86_64)
 
 mkdir -p -- "$(dirname -- "$output")"
 cat > "$output" <<EOF
 cask "cdisplayagain" do
-  arch arm: "arm64", intel: "x86_64"
-
   version "${version}"
-  sha256 arm:   "${arm_sha}",
-         intel: "${intel_sha}"
+  sha256 "${arm_sha}"
 
-  url "https://github.com/${repo}/releases/download/v#{version}/cdisplayagain-#{version}-macos-#{arch}.zip",
+  url "https://github.com/${repo}/releases/download/v#{version}/cdisplayagain-#{version}-macos-arm64.zip",
       verified: "github.com/${repo}/"
   name "cdisplayagain"
   desc "Minimalist remake of the CDisplay sequential comic viewer"
   homepage "https://github.com/${repo}"
 
+  # Only Apple silicon builds are published; Intel users build from source.
+  depends_on arch: :arm64
   depends_on macos: ">= :big_sur"
 
   # package-macos.sh zips a versioned parent directory holding the bundle
   # alongside install.sh and the license, so the app is one level down.
-  app "cdisplayagain-#{version}-macos-#{arch}/cdisplayagain.app"
+  app "cdisplayagain-#{version}-macos-arm64/cdisplayagain.app"
 
   # The app is ad-hoc signed rather than notarized, so Gatekeeper blocks the
   # quarantined copy Homebrew downloads until the flag is cleared.
