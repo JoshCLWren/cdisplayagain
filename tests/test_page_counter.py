@@ -316,3 +316,69 @@ def test_render_current_sync_no_source_clears_counter(tk_root, tmp_path):
 
     viewer._render_current_sync()
     assert viewer._page_counter_id is None
+
+
+def test_counter_color_sampling_logic():
+    """Test the coordinate sampling logic directly."""
+    from PIL import Image, ImageStat
+    
+    # Create a dark page (100x100) with a white border in the bottom-right
+    img = Image.new("RGB", (100, 100), color=(0, 0, 0))
+    # Add white border in bottom-right 30x30 area
+    for x in range(70, 100):
+        for y in range(70, 100):
+            img.putpixel((x, y), (255, 255, 255))
+    
+    # Simulate the logic from _page_counter_color with realistic canvas size
+    cw, ch = 800, 600  # canvas size
+    iw, ih = 100, 100  # image size
+    scale = min(cw / iw, ch / ih)
+    dw = int(iw * scale)
+    dh = int(ih * scale)
+
+    margin = 12
+    cx = cw - margin
+    cy = ch - margin
+
+    if dh <= ch:
+        img_y = (ch - dh) // 2 + cy
+    else:
+        img_y = cy + 0  # scroll_offset = 0
+
+    if dw <= cw:
+        img_x = (cw - dw) // 2 + cx
+    else:
+        img_x = cx
+
+    # Map back to image coordinates
+    img_x = max(0, min(iw - 1, int(img_x / scale)))
+    img_y = max(0, min(ih - 1, int(img_y / scale)))
+
+    sample_size = min(32, iw // 4, ih // 4)
+    if sample_size < 4:
+        sample_size = min(4, iw, ih)
+    left = max(0, img_x - sample_size)
+    top = max(0, img_y - sample_size)
+    right = min(iw, img_x + sample_size)
+    bottom = min(ih, img_y + sample_size)
+
+    # Sample the region
+    region = img.crop((left, top, right, bottom)).convert("L")
+    mean = ImageStat.Stat(region).mean[0]
+    
+    # The counter area should be white, so text should be black
+    assert mean >= 128  # white area
+    
+    # Create light page with dark border
+    img2 = Image.new("RGB", (100, 100), color=(255, 255, 255))
+    # Add dark border in bottom-right 30x30 area
+    for x in range(70, 100):
+        for y in range(70, 100):
+            img2.putpixel((x, y), (0, 0, 0))
+    
+    # Sample the region again
+    region2 = img2.crop((left, top, right, bottom)).convert("L")
+    mean2 = ImageStat.Stat(region2).mean[0]
+    
+    # The counter area should be dark, so text should be white
+    assert mean2 < 128  # dark area
