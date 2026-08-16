@@ -322,63 +322,71 @@ def test_counter_color_sampling_logic():
     """Test the coordinate sampling logic directly."""
     from PIL import Image, ImageStat
     
+    def test_sampling(img, cw, ch, iw, ih, scroll_offset=0):
+        """Test sampling logic for given image and dimensions."""
+        margin = 12
+        cx = cw - margin
+        cy = ch - margin
+
+        image_left = (cw - iw) // 2
+        image_top = (ch - ih) // 2 if ih <= ch else -scroll_offset
+        img_x = max(0, min(iw - 1, cx - image_left))
+        img_y = max(0, min(ih - 1, cy - image_top))
+
+        sample_size = min(32, iw // 4, ih // 4)
+        if sample_size < 4:
+            sample_size = min(4, iw, ih)
+        left = max(0, img_x - sample_size)
+        top = max(0, img_y - sample_size)
+        right = min(iw, img_x + sample_size)
+        bottom = min(ih, img_y + sample_size)
+
+        region = img.crop((left, top, right, bottom)).convert("L")
+        return ImageStat.Stat(region).mean[0]
+
+    # Test 1: Normal size image (fits in canvas)
     # Create a dark page (100x100) with a white border in the bottom-right
-    img = Image.new("RGB", (100, 100), color=(0, 0, 0))
+    img1 = Image.new("RGB", (100, 100), color=(0, 0, 0))
     # Add white border in bottom-right 30x30 area
     for x in range(70, 100):
         for y in range(70, 100):
-            img.putpixel((x, y), (255, 255, 255))
+            img1.putpixel((x, y), (255, 255, 255))
     
-    # Simulate the logic from _page_counter_color with realistic canvas size
-    cw, ch = 800, 600  # canvas size
-    iw, ih = 100, 100  # image size
-    scale = min(cw / iw, ch / ih)
-    dw = int(iw * scale)
-    dh = int(ih * scale)
-
-    margin = 12
-    cx = cw - margin
-    cy = ch - margin
-
-    if dh <= ch:
-        img_y = (ch - dh) // 2 + cy
-    else:
-        img_y = cy + 0  # scroll_offset = 0
-
-    if dw <= cw:
-        img_x = (cw - dw) // 2 + cx
-    else:
-        img_x = cx
-
-    # Map back to image coordinates
-    img_x = max(0, min(iw - 1, int(img_x / scale)))
-    img_y = max(0, min(ih - 1, int(img_y / scale)))
-
-    sample_size = min(32, iw // 4, ih // 4)
-    if sample_size < 4:
-        sample_size = min(4, iw, ih)
-    left = max(0, img_x - sample_size)
-    top = max(0, img_y - sample_size)
-    right = min(iw, img_x + sample_size)
-    bottom = min(ih, img_y + sample_size)
-
-    # Sample the region
-    region = img.crop((left, top, right, bottom)).convert("L")
-    mean = ImageStat.Stat(region).mean[0]
+    # Test with realistic canvas size
+    cw, ch = 800, 600
+    iw, ih = 100, 100
+    mean1 = test_sampling(img1, cw, ch, iw, ih)
     
     # The counter area should be white, so text should be black
-    assert mean >= 128  # white area
+    assert mean1 >= 128  # white area
     
-    # Create light page with dark border
+    # Test 2: Light page with dark border
     img2 = Image.new("RGB", (100, 100), color=(255, 255, 255))
     # Add dark border in bottom-right 30x30 area
     for x in range(70, 100):
         for y in range(70, 100):
             img2.putpixel((x, y), (0, 0, 0))
     
-    # Sample the region again
-    region2 = img2.crop((left, top, right, bottom)).convert("L")
-    mean2 = ImageStat.Stat(region2).mean[0]
-    
+    mean2 = test_sampling(img2, cw, ch, iw, ih)
     # The counter area should be dark, so text should be white
     assert mean2 < 128  # dark area
+
+    # Test 3: Tall image (doesn't fit in canvas) - regression test for issue #58
+    # Create a tall dark page (100x1200) with white border at the bottom
+    img3 = Image.new("RGB", (100, 1200), color=(0, 0, 0))
+    # Add white border in bottom 30 rows
+    for x in range(0, 100):
+        for y in range(1170, 1200):
+            img3.putpixel((x, y), (255, 255, 255))
+    
+    # Test with scroll offset = 0 (showing top of image)
+    cw, ch = 800, 600
+    iw, ih = 100, 1200
+    mean3 = test_sampling(img3, cw, ch, iw, ih, scroll_offset=0)
+    # Counter is at bottom of canvas, but we're showing top of image, so it should be dark
+    assert mean3 < 128  # dark area
+    
+    # Test with scroll offset = 600 (showing bottom of image)
+    mean4 = test_sampling(img3, cw, ch, iw, ih, scroll_offset=600)
+    # Counter is at bottom of canvas, showing bottom of image, so it should be white
+    assert mean4 >= 128  # white area

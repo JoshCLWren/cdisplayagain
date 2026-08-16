@@ -1321,26 +1321,14 @@ class ComicViewer(tk.Frame):
                 return "#000000" if mean >= 128 else "#ffffff"
 
             iw, ih = self._scaled_size
-            scale = min(cw / iw, ch / ih)
-            dw = int(iw * scale)
-            dh = int(ih * scale)
-
             margin = 12
             cx = cw - margin
             cy = ch - margin
 
-            if dh <= ch:
-                img_y = (ch - dh) // 2 + cy
-            else:
-                img_y = cy + self._scroll_offset
-
-            if dw <= cw:
-                img_x = (cw - dw) // 2 + cx
-            else:
-                img_x = cx
-
-            img_x = max(0, min(iw - 1, int(img_x / scale)))
-            img_y = max(0, min(ih - 1, int(img_y / scale)))
+            image_left = (cw - iw) // 2
+            image_top = (ch - ih) // 2 if ih <= ch else -self._scroll_offset
+            img_x = max(0, min(iw - 1, cx - image_left))
+            img_y = max(0, min(ih - 1, cy - image_top))
 
             sample_size = min(32, iw // 4, ih // 4)
             if sample_size < 4:
