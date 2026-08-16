@@ -1302,14 +1302,48 @@ class ComicViewer(tk.Frame):
         return f"{self._current_index + 1}/{total}"
 
     def _page_counter_color(self) -> str:
-        """Pick black or white text based on the mean luminance of the current page."""
+        """Pick black or white text based on the luminance of the page area where the counter sits.
+
+        The counter is drawn at the bottom-right of the canvas. Sample that region
+        (after accounting for image scaling/positioning) so the text contrasts with
+        whatever is actually behind it.
+        """
         if self._current_pil is None:
             return "#ffffff"
         try:
             from PIL import ImageStat
 
-            thumb = self._current_pil.convert("L").resize((32, 32), Image.Resampling.BILINEAR)
-            mean = ImageStat.Stat(thumb).mean[0]
+            cw = max(1, self.canvas.winfo_width())
+            ch = max(1, self.canvas.winfo_height())
+            if self._scaled_size is None:
+                thumb = self._current_pil.convert("L").resize((32, 32), Image.Resampling.BILINEAR)
+                mean = ImageStat.Stat(thumb).mean[0]
+                return "#000000" if mean >= 128 else "#ffffff"
+
+            iw, ih = self._scaled_size
+            margin = 12
+            cx = cw - margin
+            cy = ch - margin
+
+            image_left = (cw - iw) // 2
+            image_top = (ch - ih) // 2 if ih <= ch else -self._scroll_offset
+            img_x = max(0, min(iw - 1, cx - image_left))
+            img_y = max(0, min(ih - 1, cy - image_top))
+
+            sample_size = min(32, iw // 4, ih // 4)
+            if sample_size < 4:
+                sample_size = min(4, iw, ih)
+            left = max(0, img_x - sample_size)
+            top = max(0, img_y - sample_size)
+            right = min(iw, img_x + sample_size)
+            bottom = min(ih, img_y + sample_size)
+
+            if left >= right or top >= bottom:
+                thumb = self._current_pil.convert("L").resize((32, 32), Image.Resampling.BILINEAR)
+                mean = ImageStat.Stat(thumb).mean[0]
+            else:
+                region = self._current_pil.crop((left, top, right, bottom)).convert("L")
+                mean = ImageStat.Stat(region).mean[0]
         except Exception:
             return "#ffffff"
         return "#000000" if mean >= 128 else "#ffffff"
