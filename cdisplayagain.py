@@ -1302,12 +1302,7 @@ class ComicViewer(tk.Frame):
         return f"{self._current_index + 1}/{total}"
 
     def _page_counter_color(self) -> str:
-        """Pick black or white text based on the luminance of the page area where the counter sits.
-
-        The counter is drawn at the bottom-right of the canvas. Sample that region
-        (after accounting for image scaling/positioning) so the text contrasts with
-        whatever is actually behind it.
-        """
+        """Pick black or white text based on the luminance of the visible portion of the page where the counter sits."""
         if self._current_pil is None:
             return "#ffffff"
         try:
@@ -1315,38 +1310,45 @@ class ComicViewer(tk.Frame):
 
             cw = max(1, self.canvas.winfo_width())
             ch = max(1, self.canvas.winfo_height())
+            
             if self._scaled_size is None:
+                # Fallback to whole-image mean luminance
                 thumb = self._current_pil.convert("L").resize((32, 32), Image.Resampling.BILINEAR)
                 mean = ImageStat.Stat(thumb).mean[0]
                 return "#000000" if mean >= 128 else "#ffffff"
 
             iw, ih = self._scaled_size
             margin = 12
-            cx = cw - margin
-            cy = ch - margin
-
+            
+            # Canvas position of the counter
+            counter_x = cw - margin
+            counter_y = ch - margin
+            
+            # Image position on canvas
             image_left = (cw - iw) // 2
             image_top = (ch - ih) // 2 if ih <= ch else -self._scroll_offset
-            img_x = max(0, min(iw - 1, cx - image_left))
-            img_y = max(0, min(ih - 1, cy - image_top))
-
-            sample_size = min(32, iw // 4, ih // 4)
-            if sample_size < 4:
-                sample_size = min(4, iw, ih)
-            left = max(0, img_x - sample_size)
-            top = max(0, img_y - sample_size)
-            right = min(iw, img_x + sample_size)
-            bottom = min(ih, img_y + sample_size)
-
-            if left >= right or top >= bottom:
-                thumb = self._current_pil.convert("L").resize((32, 32), Image.Resampling.BILINEAR)
-                mean = ImageStat.Stat(thumb).mean[0]
-            else:
+            
+            # Map to image coordinates
+            img_x = counter_x - image_left
+            img_y = counter_y - image_top
+            
+            # Check if within image
+            if 0 <= img_x < iw and 0 <= img_y < ih:
+                # Sample a region around (img_x, img_y)
+                sample_size = 16
+                left = max(0, img_x - sample_size)
+                top = max(0, img_y - sample_size)
+                right = min(iw, img_x + sample_size)
+                bottom = min(ih, img_y + sample_size)
+                
                 region = self._current_pil.crop((left, top, right, bottom)).convert("L")
                 mean = ImageStat.Stat(region).mean[0]
+                return "#000000" if mean >= 128 else "#ffffff"
+            
+            # Default if counter is not over image
+            return "#ffffff"
         except Exception:
             return "#ffffff"
-        return "#000000" if mean >= 128 else "#ffffff"
 
     def _update_page_counter(self) -> None:
         """Render (or hide) the page-counter fraction in the bottom-right of the canvas."""
@@ -1367,6 +1369,7 @@ class ComicViewer(tk.Frame):
             fill=self._page_counter_color(),
             font="TkFixedFont 12",
         )
+
 
     def _clear_page_counter(self) -> None:
         """Remove the page counter (called when canvas content is cleared)."""
