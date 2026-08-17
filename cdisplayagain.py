@@ -1609,6 +1609,7 @@ class ComicViewer(tk.Frame):
             y = -self._scroll_offset
         self.canvas.itemconfigure(self._canvas_image_id, anchor=anchor)
         self.canvas.coords(self._canvas_image_id, cw // 2, y)
+        self._update_page_counter()
 
     def next_page(self):
         """Advance to the next page, or next comic at end of current."""
