@@ -29,6 +29,8 @@ viewer without wrestling dated IDEs or registry quirks.
  - Zero-write runtime: archives stay untouched and temporary extraction
    directories are cleaned automatically.
  - Fast image processing using pyvips with LRU caching for instant page turns.
+ - Remembers your last page per file, so reopening a comic returns to where
+   you left off (unless you finished it, in which case it starts over).
 
 ### Installation
 
