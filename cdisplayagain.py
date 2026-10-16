@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import importlib
 import io
+import json
 import logging
 import os
 import queue
@@ -110,6 +111,88 @@ def _default_log_root() -> Path:
     if getattr(sys, "frozen", False):
         return _user_log_root()
     return Path("logs")
+
+
+def _user_state_root() -> Path:
+    """Return the per-user directory where reader state is stored."""
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / "cdisplayagain"
+    state_home = os.environ.get("XDG_STATE_HOME") or str(Path.home() / ".local" / "state")
+    return Path(state_home).expanduser() / "cdisplayagain"
+
+
+def _resume_store_path() -> Path:
+    """Return the JSON file that remembers reading positions."""
+    override = os.environ.get("CDISPLAYAGAIN_STATE_DIR")
+    root = Path(override).expanduser() if override else _user_state_root()
+    return root / "resume.json"
+
+
+def _resume_key(comic_path: Path) -> str:
+    """Normalize a comic path so the same file always maps to one key."""
+    try:
+        return str(comic_path.resolve())
+    except OSError:
+        return str(comic_path.absolute())
+
+
+def _load_resume_records() -> dict:
+    """Read all saved reading positions, tolerating a missing or corrupt file."""
+    path = _resume_store_path()
+    try:
+        with path.open("r", encoding="utf-8") as fh:
+            data = json.load(fh)
+    except FileNotFoundError:
+        return {}
+    except (OSError, json.JSONDecodeError) as e:
+        logging.warning("Could not read reading positions from %s: %s", path, e)
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return data
+
+
+def _write_resume_records(records: dict) -> None:
+    """Atomically persist reading positions to disk."""
+    path = _resume_store_path()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(f"{path.name}.tmp")
+        with tmp.open("w", encoding="utf-8") as fh:
+            json.dump(records, fh, indent=2, sort_keys=True)
+        os.replace(tmp, path)
+    except OSError as e:
+        logging.warning("Could not save reading positions to %s: %s", path, e)
+
+
+def resume_page_index(comic_path: Path, page_count: int) -> int | None:
+    """Return the page index to resume at, or None to start from the first page.
+
+    A position on the final page means the reader finished the comic, so it does
+    not count as a page to return to.
+    """
+    if page_count <= 1:
+        return None
+    record = _load_resume_records().get(_resume_key(comic_path))
+    if not isinstance(record, dict):
+        return None
+    index = record.get("index")
+    if not isinstance(index, int):
+        return None
+    if index <= 0 or index >= page_count - 1:
+        return None
+    return index
+
+
+def save_resume_index(comic_path: Path, index: int, page_count: int) -> None:
+    """Persist a reading position, clearing it once the final page is reached."""
+    key = _resume_key(comic_path)
+    records = _load_resume_records()
+    if page_count <= 1 or index >= page_count - 1:
+        records.pop(key, None)
+    else:
+        records[key] = {"index": index, "total": page_count}
+    _write_resume_records(records)
 
 
 LOG_ROOT = _default_log_root()
@@ -565,6 +648,7 @@ class ComicViewer(tk.Frame):
     def _on_destroy(self, event: tk.Event) -> None:
         """Stop background workers when this widget is destroyed."""
         if event.widget is self:
+            self._save_resume_position()
             self.cleanup()
 
     def _schedule_worker_drain(self) -> None:
@@ -882,6 +966,7 @@ class ComicViewer(tk.Frame):
     def _open_comic(self, path: Path):
         open_start = time.perf_counter()
         perf_log("open_comic_start", 0, f"path={path.name}")
+        self._save_resume_position()
         self._source_generation += 1
 
         if self.source and self.source.cleanup:
@@ -913,9 +998,21 @@ class ComicViewer(tk.Frame):
             self._request_focus()
             return
 
+        page_count = len(self.source.pages)
+        resume_index = resume_page_index(path, page_count)
+        if resume_index is not None:
+            self._current_index = resume_index
+            logging.info("Resuming %s at page %d of %d", path.name, resume_index + 1, page_count)
+
         self._update_title()
         perf_log("open_comic_total", time.perf_counter() - open_start)
         # Don't render here - let Configure event trigger first render
+
+    def _save_resume_position(self) -> None:
+        """Remember the current page so the comic reopens where it left off."""
+        if not self.source or not self.source.pages:
+            return
+        save_resume_index(self.comic_path, self._current_index, len(self.source.pages))
 
     def _display_cached_image(self, img: Image.Image):
         self._current_pil = img
@@ -1035,6 +1132,7 @@ class ComicViewer(tk.Frame):
             return
         self._quitting = True
         try:
+            self._save_resume_position()
             if self.source and self.source.cleanup:
                 self.source.cleanup()
             self._worker.stop()
@@ -1620,6 +1718,7 @@ class ComicViewer(tk.Frame):
             self._current_index += 1
             self._scroll_offset = 0
             self._render_generation += 1
+            self._save_resume_position()
             self._render_current()
         else:
             self.next_comic()
@@ -1633,6 +1732,7 @@ class ComicViewer(tk.Frame):
             self._current_index -= 1
             self._scroll_offset = 0
             self._render_generation += 1
+            self._save_resume_position()
             self._render_current()
         else:
             self.prev_comic()
@@ -1645,6 +1745,7 @@ class ComicViewer(tk.Frame):
         self._current_index = 0
         self._scroll_offset = 0
         self._render_generation += 1
+        self._save_resume_position()
         self._render_current()
 
     def last_page(self):
@@ -1655,6 +1756,7 @@ class ComicViewer(tk.Frame):
         self._current_index = len(self.source.pages) - 1
         self._scroll_offset = 0
         self._render_generation += 1
+        self._save_resume_position()
         self._render_current()
 
     def next_comic(self) -> None:

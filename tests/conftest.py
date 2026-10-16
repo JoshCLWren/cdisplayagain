@@ -31,6 +31,13 @@ def mock_image_processing():
 
 
 @pytest.fixture(autouse=True)
+def isolate_resume_state(tmp_path, monkeypatch):
+    """Keep saved reading positions out of the developer's real state directory."""
+    monkeypatch.setenv("CDISPLAYAGAIN_STATE_DIR", str(tmp_path / "state"))
+    yield
+
+
+@pytest.fixture(autouse=True)
 def cleanup_workers():
     """Clean up any leaked worker threads after each test."""
     yield
