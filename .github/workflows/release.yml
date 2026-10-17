@@ -173,6 +173,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Kept in sync with the compatibility matrix in ci.yml.
         include:
           - name: ubuntu-22.04
             image: ubuntu:22.04

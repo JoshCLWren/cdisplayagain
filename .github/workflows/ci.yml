@@ -149,16 +149,23 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Kept in sync with the compatibility matrix in release.yml.
         include:
           - name: ubuntu-22.04
             image: ubuntu:22.04
             family: apt
-          - name: debian-12
-            image: debian:12-slim
+          - name: ubuntu-24.04
+            image: ubuntu:24.04
             family: apt
-          - name: fedora-40
-            image: fedora:40
+          - name: debian-13
+            image: debian:13-slim
+            family: apt
+          - name: fedora-42
+            image: fedora:42
             family: dnf
+          - name: opensuse-leap-15.6
+            image: opensuse/leap:15.6
+            family: zypper
     steps:
       - name: Check out test harness and fixtures
         uses: actions/checkout@v7
