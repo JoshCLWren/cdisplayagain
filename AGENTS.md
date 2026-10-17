@@ -68,7 +68,7 @@ Follow standard PEP 8 spacing (4 spaces, 100-character soft wrap) and favor des
 
 Ruff configuration (from `pyproject.toml`):
 - Line length: 100 characters
-- Python version: 3.13
+- Python version: 3.14
 - Enabled rules: E, F, I, N, UP, B, C4, D, ANN401
 - Ignored: D203, D213, E501
 - Code comments are discouraged - prefer clear code and commit messages

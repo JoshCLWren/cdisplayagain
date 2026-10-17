@@ -16,7 +16,7 @@ docker run --rm \
         curl -LsSf https://astral.sh/uv/install.sh | sh
         export PATH=/root/.local/bin:$PATH
         export UV_PROJECT_ENVIRONMENT=/tmp/cdisplayagain-venv
-        uv python install 3.13
+        uv python install 3.14
         uv sync --locked
         uv run python scripts/generate_build_info.py
         uv run pyinstaller --clean --noconfirm cdisplayagain.spec
