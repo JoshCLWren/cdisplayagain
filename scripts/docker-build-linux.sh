@@ -12,7 +12,7 @@ docker run --rm \
         apt-get update -qq
         DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
             ca-certificates curl git libglib2.0-0 libglib2.0-dev libexpat1-dev \
-            libvips-dev python3-tk python3-venv unar
+            libvips-dev python3-tk python3-venv unar build-essential
         curl -LsSf https://astral.sh/uv/install.sh | sh
         export PATH=/root/.local/bin:$PATH
         export UV_PROJECT_ENVIRONMENT=/tmp/cdisplayagain-venv
