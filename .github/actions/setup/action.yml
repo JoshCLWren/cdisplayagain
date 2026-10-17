@@ -18,7 +18,7 @@ runs:
         fi
 
     - name: Set up uv
-      uses: astral-sh/setup-uv@v10
+      uses: astral-sh/setup-uv@v10.3.0
 
     - name: Install Python 3.13 and create venv
       shell: bash

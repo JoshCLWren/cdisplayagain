@@ -104,7 +104,7 @@ jobs:
           test "${GITHUB_REF_NAME#v}" = "$project_version"
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v10
+        uses: astral-sh/setup-uv@v10.3.0
 
       # The shared setup action is Linux-only: it apt-gets and rebuilds pyvips
       # from source, while macOS needs the pyvips-binary wheel that carries
