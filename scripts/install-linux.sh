@@ -25,7 +25,7 @@ mime_types=(
     application/x-cbz application/x-cbr application/vnd.comicbook+zip
     application/vnd.comicbook-rar application/x-ext-cbz application/x-ext-cbr
 )
-source_root=$(CDISPLAYAGAIN_INSTALL_ROOT=1; cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+source_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 
 remove_mime_entry() {
     local mime=$1
