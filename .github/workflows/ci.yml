@@ -97,7 +97,7 @@ jobs:
           PILLOW_NO_SIMD: 1
           VIPS_NO_DEPRECATED: 1
           ORC_CODE: backup
-        run: xvfb-run -a uv run pytest -p no:cov -o addopts=""
+        run: xvfb-run -a uv run pytest --cov-report=term-missing --cov-report=xml
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
