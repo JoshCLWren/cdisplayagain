@@ -9,6 +9,7 @@ import shutil
 import tempfile
 import threading
 import time
+import types
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -35,20 +36,24 @@ class PerfTimer:
         self.extra = extra
         self.start_time: float | None = None
 
-    def __enter__(self):
+    def __enter__(self) -> PerfTimer:
         """Start timing and return self."""
         self.start_time = time.perf_counter()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: types.TracebackType | None,
+    ) -> None:
         """Stop timing and log performance metric."""
         if self.start_time is not None:
             duration = time.perf_counter() - self.start_time
             perf_log(self.operation, duration, self.extra)
-        return False
 
 
-def natural_key(s: str):
+def natural_key(s: str) -> list[int | str]:
     """Return a key for natural sorting with numeric segments."""
     return [int(t) if t.isdigit() else t.casefold() for t in re.split(r"(\d+)", s)]
 
@@ -149,7 +154,7 @@ def load_cbz(path: Path) -> PageSource:
                     f"Failed to read page {name}. Check disk space and file permissions."
                 ) from e
 
-    def cleanup():
+    def cleanup() -> None:
         try:
             zf.close()
         except Exception as e:
@@ -213,7 +218,7 @@ def load_cbr(path: Path) -> PageSource:
                     extracted_cache[rel_name] = data
                     return data
 
-            def cleanup():
+            def cleanup() -> None:
                 try:
                     shutil.rmtree(tmpdir)
                 except Exception as e:
@@ -260,7 +265,7 @@ def load_tar(path: Path) -> PageSource:
         with handle:
             return handle.read()
 
-    def cleanup():
+    def cleanup() -> None:
         try:
             tf.close()
         except Exception as e:

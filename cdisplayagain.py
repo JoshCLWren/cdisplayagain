@@ -13,6 +13,7 @@ import queue
 import sys
 import threading
 import time
+import types
 import weakref
 from collections import OrderedDict
 from collections.abc import Callable, Sequence
@@ -136,7 +137,7 @@ def _resume_key(comic_path: Path) -> str:
         return str(comic_path.absolute())
 
 
-def _load_resume_records() -> dict:
+def _load_resume_records() -> dict[str, object]:
     """Read all saved reading positions, tolerating a missing or corrupt file."""
     path = _resume_store_path()
     try:
@@ -152,7 +153,7 @@ def _load_resume_records() -> dict:
     return data
 
 
-def _write_resume_records(records: dict) -> None:
+def _write_resume_records(records: dict[str, object]) -> None:
     """Atomically persist reading positions to disk."""
     path = _resume_store_path()
     try:
@@ -240,24 +241,24 @@ def _init_logging() -> None:
             logging.info("launcher_to_logging_ms=%.3f", elapsed_ms)
 
 
-class LRUCache:
+class LRUCache[K, V]:
     """Fixed-size LRU cache using OrderedDict for fast eviction."""
 
-    def __init__(self, maxsize: int = 20):
+    def __init__(self, maxsize: int = 20) -> None:
         """Initialize LRU cache with maximum size."""
         if maxsize <= 0:
             raise ValueError("maxsize must be positive")
         self._maxsize = maxsize
-        self._cache: OrderedDict = OrderedDict()
+        self._cache: OrderedDict[K, V] = OrderedDict()
 
-    def get(self, key):
+    def get(self, key: K) -> V | None:
         """Get item and move to end (most recently used)."""
         if key not in self._cache:
             return None
         self._cache.move_to_end(key)
         return self._cache[key]
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key: K, value: V) -> None:
         """Set item and evict oldest if at capacity."""
         if key in self._cache:
             self._cache.move_to_end(key)
@@ -266,22 +267,22 @@ class LRUCache:
                 self._cache.popitem(last=False)
         self._cache[key] = value
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: K) -> V:
         """Get item with KeyError if missing, updates LRU order."""
         if key not in self._cache:
             raise KeyError(key)
         self._cache.move_to_end(key)
         return self._cache[key]
 
-    def __contains__(self, key):
+    def __contains__(self, key: object) -> bool:
         """Check if key exists."""
         return key in self._cache
 
-    def __len__(self):
+    def __len__(self) -> int:
         """Return number of cached items."""
         return len(self._cache)
 
-    def clear(self):
+    def clear(self) -> None:
         """Clear all cached items."""
         self._cache.clear()
 
@@ -330,19 +331,19 @@ class FocusRestorer:
 class Debouncer:
     """Debounce rapid-fire events to prevent spam."""
 
-    def __init__(self, delay_ms: int, callback: Callable, app):
+    def __init__(self, delay_ms: int, callback: Callable[..., None], app: ComicViewer) -> None:
         """Initialize with delay, callback, and Tk app reference."""
         self._delay = delay_ms
         self._callback = callback
         self._app = app
-        self._timer_id: int | None = None
+        self._timer_id: str | None = None
 
-    def trigger(self, *args, **kwargs):
+    def trigger(self, *args: object, **kwargs: object) -> None:
         """Trigger callback after delay (reset if already pending)."""
         if self._timer_id:
             self._app.after_cancel(self._timer_id)
 
-        def wrapper():
+        def wrapper() -> None:
             self._callback(*args, **kwargs)
             self._timer_id = None
 
@@ -356,7 +357,7 @@ class ImageWorker:
     _instances: weakref.WeakSet[ImageWorker] = weakref.WeakSet()
     _instances_lock = threading.Lock()
 
-    def __init__(self, app, num_workers: int = 4, autostart: bool = False):
+    def __init__(self, app: ComicViewer, num_workers: int = 4, autostart: bool = False) -> None:
         """Initialize worker pool with app reference.
 
         Args:
@@ -374,7 +375,9 @@ class ImageWorker:
         """
         self._app = app
         self._num_workers = num_workers
-        self._queue = queue.PriorityQueue(maxsize=4)
+        self._queue: queue.PriorityQueue[
+            tuple[int, int | None, int | None, int | None, bool | None, int | None, int | None]
+        ] = queue.PriorityQueue(maxsize=4)
         self._threads: list[threading.Thread] = []
         self._stopped: bool = False
         self._threads_started: bool = False
@@ -412,7 +415,7 @@ class ImageWorker:
 
     def request_page(
         self, index: int, width: int, height: int, preload: bool = False, render_generation: int = 0
-    ):
+    ) -> None:
         """Request a page be processed in background."""
         if self._stopped or not self._app:
             return
@@ -434,7 +437,7 @@ class ImageWorker:
             with self._pending_requests_lock:
                 self._pending_requests.discard(request_key)
 
-    def preload(self, index: int):
+    def preload(self, index: int) -> None:
         """Preload a page at current canvas dimensions for future display."""
         if not self._app:
             return
@@ -442,7 +445,7 @@ class ImageWorker:
         ch = max(1, self._app.canvas.winfo_height())
         self.request_page(index, cw, ch, preload=True)
 
-    def stop(self):
+    def stop(self) -> None:
         """Signal all worker threads to stop and wait for them to exit."""
         self._stopped = True
 
@@ -461,27 +464,26 @@ class ImageWorker:
         self._threads.clear()
         self._threads_started = False
 
-    def __enter__(self):
+    def __enter__(self) -> ImageWorker:
         """Context manager entry."""
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: types.TracebackType | None,
+    ) -> None:
         """Context manager exit - stop workers."""
         self.stop()
-        return False
 
     def _should_stop(self) -> bool:
         """Check if worker should stop processing."""
         return self._stopped
 
-    def _run(self):
+    def _run(self) -> None:
         """Process resize requests in background."""
         while not self._stopped:
-            priority = None
-            index = None
-            width = None
-            height = None
-            source_generation = None
             try:
                 (
                     priority,
@@ -492,7 +494,10 @@ class ImageWorker:
                     render_generation,
                     source_generation,
                 ) = self._queue.get(timeout=0.1)
+            except queue.Empty:
+                continue
 
+            try:
                 if priority == 2:
                     break
 
@@ -500,9 +505,15 @@ class ImageWorker:
                     break
 
                 app = self._app
-                if not app:
+                if app is None:
                     break
-                assert app is not None
+
+                if index is None or width is None or height is None:
+                    continue
+                if render_generation is None or source_generation is None:
+                    continue
+                if preload is None:
+                    continue
 
                 if not preload and render_generation != app._render_generation:
                     continue
@@ -519,11 +530,9 @@ class ImageWorker:
                 if self._should_stop():
                     break
 
-                if app and hasattr(app, "_worker_results"):
+                if hasattr(app, "_worker_results"):
                     app._worker_results.put((index, resized_pil, source_generation))
 
-            except queue.Empty:
-                continue
             except Exception:
                 if self._stopped or sys.is_finalizing():
                     break
@@ -542,7 +551,9 @@ class ImageWorker:
 class ComicViewer(tk.Frame):
     """Tk viewer for comic archives and image folders."""
 
-    def cleanup(self):
+    _worker_drain_job: str | None = None
+
+    def cleanup(self) -> None:
         """Stop worker threads to prevent threading crashes during shutdown."""
         if hasattr(self, "_worker_drain_job") and self._worker_drain_job:
             try:
@@ -588,7 +599,7 @@ class ComicViewer(tk.Frame):
 
         # Lightweight caches - store PIL Image objects directly to avoid encode/decode roundtrip
         self._pil_cache: dict[str, Image.Image] = {}
-        self._image_cache: LRUCache = LRUCache(maxsize=20)
+        self._image_cache: LRUCache[tuple[int, int, int], Image.Image] = LRUCache(maxsize=20)
         self._scroll_offset: int = 0
         self._scaled_size: tuple[int, int] | None = None
         self._focus_restorer = FocusRestorer(self.after_idle, self._ensure_focus, self.after_cancel)
@@ -618,7 +629,7 @@ class ComicViewer(tk.Frame):
         self._canvas_properly_sized: bool = False
         self._worker = ImageWorker(self, autostart=False)
         self._worker_results: queue.Queue[tuple[int, Image.Image, int]] = queue.Queue()
-        self._worker_drain_job: str | None = None
+        self._worker_drain_job = None
         self._pending_index: int | None = None
         self._nav_debounce = Debouncer(150, self._execute_page_change, self)
         self._first_render_done: bool = False
@@ -709,7 +720,7 @@ class ComicViewer(tk.Frame):
     def _on_focus_out(self, event: tk.Event) -> None:
         self._request_focus()
 
-    def event_generate(self, sequence: str, **kwargs):
+    def event_generate(self, sequence: str, **kwargs: object) -> None:
         """Intercept navigation keys to call viewer handlers."""
         if sequence in {"<Right>", "<Next>"}:
             self.next_page()
@@ -717,7 +728,7 @@ class ComicViewer(tk.Frame):
             self.prev_page()
         elif sequence == "<space>":
             self._space_advance()
-        return super().event_generate(sequence, **kwargs)
+        cast(Callable[..., None], super().event_generate)(sequence, **kwargs)
 
     def _configure_cursor(self) -> None:
         """Use a minimal cursor to mimic CDisplay's pointer."""
@@ -812,7 +823,7 @@ class ComicViewer(tk.Frame):
         data = header + rgb.tobytes()
         return tk.PhotoImage(width=width, height=height, data=data, format="PPM", master=self)
 
-    def _bind_keys(self):
+    def _bind_keys(self) -> None:
         self.bind_all("<KeyPress>", self._log_key_event, add=True)
         self.bind_all("<Right>", lambda e: self._trigger_next())
         self.bind_all("<Left>", lambda e: self._trigger_prev())
@@ -841,19 +852,19 @@ class ComicViewer(tk.Frame):
         self.bind_all("P", lambda e: self.prev_comic())
         self.bind_all("<Button-3>", self._show_context_menu)
 
-    def _trigger_next(self):
+    def _trigger_next(self) -> None:
         self._nav_debounce.trigger(lambda: self.next_page())
 
-    def _trigger_prev(self):
+    def _trigger_prev(self) -> None:
         self._nav_debounce.trigger(lambda: self.prev_page())
 
-    def _trigger_space(self):
+    def _trigger_space(self) -> None:
         self._nav_debounce.trigger(lambda: self._space_advance())
 
-    def _execute_page_change(self, action):
+    def _execute_page_change(self, action: Callable[[], None]) -> None:
         action()
 
-    def _log_key_event(self, event) -> None:
+    def _log_key_event(self, event: tk.Event[tk.Misc]) -> None:
         logging.info(
             "KeyPress keysym=%s char=%s keycode=%s state=%s widget=%s",
             event.keysym,
@@ -872,7 +883,7 @@ class ComicViewer(tk.Frame):
                 pass
             self._active_dialog = None
 
-    def _open_dialog(self):
+    def _open_dialog(self) -> None:
         if self._dialog_active:
             return
         self._dialog_active = True
@@ -904,7 +915,7 @@ class ComicViewer(tk.Frame):
             entry = ttk.Entry(frame, textvariable=entry_var, width=50)
             entry.grid(row=0, column=1, sticky=tk.EW)
 
-            def browse():  # pragma: no cover
+            def browse() -> None:  # pragma: no cover
                 file_path = filedialog.askopenfilename(
                     parent=dialog,
                     title="Open Comic",
@@ -913,7 +924,7 @@ class ComicViewer(tk.Frame):
                 if file_path:
                     entry_var.set(file_path)
 
-            def browse_multi():  # pragma: no cover
+            def browse_multi() -> None:  # pragma: no cover
                 file_paths = filedialog.askopenfilenames(
                     parent=dialog,
                     title="Open Comic",
@@ -929,11 +940,11 @@ class ComicViewer(tk.Frame):
 
             result = {"path": ""}
 
-            def on_ok():  # pragma: no cover
+            def on_ok() -> None:  # pragma: no cover
                 result["path"] = entry_var.get()
                 dialog.destroy()
 
-            def on_cancel():  # pragma: no cover
+            def on_cancel() -> None:  # pragma: no cover
                 dialog.destroy()
 
             ttk.Button(button_frame, text="Open", command=on_ok).pack(side=tk.LEFT, padx=5)
@@ -963,7 +974,7 @@ class ComicViewer(tk.Frame):
             return
         self._request_focus()
 
-    def _open_comic(self, path: Path):
+    def _open_comic(self, path: Path) -> None:
         open_start = time.perf_counter()
         perf_log("open_comic_start", 0, f"path={path.name}")
         self._save_resume_position()
@@ -1014,7 +1025,7 @@ class ComicViewer(tk.Frame):
             return
         save_resume_index(self.comic_path, self._current_index, len(self.source.pages))
 
-    def _display_cached_image(self, img: Image.Image):
+    def _display_cached_image(self, img: Image.Image) -> None:
         self._current_pil = img
 
         imagetk_start = time.perf_counter()
@@ -1054,7 +1065,7 @@ class ComicViewer(tk.Frame):
 
         self._update_page_counter()
 
-    def _display_image_fast(self, img: Image.Image):
+    def _display_image_fast(self, img: Image.Image) -> None:
         """Display PIL image with fast NEAREST resampling for instant preview."""
         cw = max(1, self.canvas.winfo_width())
         ch = max(1, self.canvas.winfo_height())
@@ -1100,7 +1111,7 @@ class ComicViewer(tk.Frame):
 
         self._update_page_counter()
 
-    def _update_from_cache(self, index: int, img: Image.Image):
+    def _update_from_cache(self, index: int, img: Image.Image) -> None:
         logging.info("Update from cache: index=%d, current_index=%d", index, self._current_index)
 
         if not self.source:
@@ -1122,7 +1133,7 @@ class ComicViewer(tk.Frame):
         self._first_proper_render_completed = True
         self._update_title()
 
-    def _quit(self):
+    def _quit(self) -> None:
         if self._quitting:
             return
         if self._dialog_active:
@@ -1265,14 +1276,14 @@ class ComicViewer(tk.Frame):
         color_entry.insert(0, self._background_color)
         color_entry.pack(side=tk.LEFT)
 
-        def apply_color():  # pragma: no cover
+        def apply_color() -> None:  # pragma: no cover
             color = color_entry.get().strip()
             if color:
                 self.set_background_color(color)
 
         tk.Button(color_frame, text="Apply", command=apply_color).pack(side=tk.LEFT, padx=5)
 
-        def on_close():
+        def on_close() -> None:
             self._dialog_active = False
             dialog.destroy()
 
@@ -1304,7 +1315,7 @@ class ComicViewer(tk.Frame):
         menu.add_command(label="Quit", command=self._quit)
         return menu
 
-    def _show_context_menu(self, event) -> None:
+    def _show_context_menu(self, event: tk.Event[tk.Misc]) -> None:
         logging.info("Context menu requested at %s,%s.", event.x_root, event.y_root)
         try:
             self._context_menu.tk_popup(event.x_root, event.y_root)
@@ -1321,7 +1332,7 @@ class ComicViewer(tk.Frame):
         self.canvas.bind("<Button-4>", self._on_mouse_wheel)
         self.canvas.bind("<Button-5>", self._on_mouse_wheel)
 
-    def _log_mouse_event(self, event) -> None:
+    def _log_mouse_event(self, event: tk.Event[tk.Misc]) -> None:
         logging.info(
             "Mouse event type=%s num=%s delta=%s x=%s y=%s state=%s widget=%s",
             event.type,
@@ -1333,11 +1344,11 @@ class ComicViewer(tk.Frame):
             event.widget,
         )
 
-    def _start_pan(self, event) -> None:
+    def _start_pan(self, event: tk.Event[tk.Misc]) -> None:
         logging.info("Pan start y=%s.", event.y)
         self._drag_start_y = event.y
 
-    def _drag_pan(self, event) -> None:
+    def _drag_pan(self, event: tk.Event[tk.Misc]) -> None:
         if not hasattr(self, "_drag_start_y"):
             return
         logging.info("Pan drag y=%s.", event.y)
@@ -1345,7 +1356,7 @@ class ComicViewer(tk.Frame):
         self._drag_start_y = event.y
         self._scroll_by(delta)
 
-    def _on_mouse_wheel(self, event) -> None:
+    def _on_mouse_wheel(self, event: tk.Event[tk.Misc]) -> None:
         logging.info("Mouse wheel delta=%s num=%s.", event.delta, getattr(event, "num", None))
         if hasattr(event, "num") and event.num:
             direction = -1 if event.num == 4 else 1
@@ -1361,7 +1372,7 @@ class ComicViewer(tk.Frame):
             else:
                 self.prev_page()
 
-    def _on_canvas_configure(self, event):
+    def _on_canvas_configure(self, event: tk.Event[tk.Misc]) -> None:
         cw = event.width
         ch = event.height
         if cw >= 100 and ch >= 100:
@@ -1373,7 +1384,7 @@ class ComicViewer(tk.Frame):
             else:
                 logging.info("Canvas resized: %dx%d", cw, ch)
 
-    def _update_title(self):
+    def _update_title(self) -> None:
         wm = _as_wm(self.master)
         sibling_prefix = ""
         if self._sibling_comics and self._sibling_index >= 0:
@@ -1486,7 +1497,7 @@ class ComicViewer(tk.Frame):
                 return index
         return None
 
-    def _render_current(self):
+    def _render_current(self) -> None:
         if not self.source:
             self.canvas.delete("all")
             self._canvas_image_id = None
@@ -1526,7 +1537,7 @@ class ComicViewer(tk.Frame):
             logging.info("Preloading next image page %d", next_idx)
             self._get_worker().preload(next_idx)
 
-    def _render_current_sync(self):
+    def _render_current_sync(self) -> None:
         if not self.source:
             self._clear_page_counter()
             return
@@ -1637,7 +1648,7 @@ class ComicViewer(tk.Frame):
         overlay.place(relx=0.05, rely=0.05, relwidth=0.9, relheight=0.9)
         self._info_overlay = overlay
 
-    def winfo_children(self):
+    def winfo_children(self) -> list[tk.Widget | tk.Toplevel]:
         """Return widget children, omitting internal menus."""
         children = super().winfo_children()
         return [child for child in children if not isinstance(child, tk.Menu)]
@@ -1645,7 +1656,7 @@ class ComicViewer(tk.Frame):
     def _scroll_step(self) -> int:
         return max(50, self.canvas.winfo_height() // 5)
 
-    def _scroll_by(self, delta: int):
+    def _scroll_by(self, delta: int) -> None:
         if not self._scaled_size:
             return
         logging.info("Scroll by delta=%s.", delta)
@@ -1659,7 +1670,7 @@ class ComicViewer(tk.Frame):
         self._scroll_offset = new_offset
         self._reposition_current_image()
 
-    def _space_advance(self):
+    def _space_advance(self) -> None:
         logging.info("Space advance requested.")
         if self._info_overlay:
             self._dismiss_info()
@@ -1683,15 +1694,15 @@ class ComicViewer(tk.Frame):
             return
         self._scroll_by(step)
 
-    def _scroll_down(self):
+    def _scroll_down(self) -> None:
         logging.info("Scroll down requested.")
         self._scroll_by(self._scroll_step())
 
-    def _scroll_up(self):
+    def _scroll_up(self) -> None:
         logging.info("Scroll up requested.")
         self._scroll_by(-self._scroll_step())
 
-    def _reposition_current_image(self):
+    def _reposition_current_image(self) -> None:
         if not self._canvas_image_id or not self._scaled_size:
             return
         cw = max(1, self.canvas.winfo_width())
@@ -1709,7 +1720,7 @@ class ComicViewer(tk.Frame):
         self.canvas.coords(self._canvas_image_id, cw // 2, y)
         self._update_page_counter()
 
-    def next_page(self):
+    def next_page(self) -> None:
         """Advance to the next page, or next comic at end of current."""
         logging.info("Next page requested.")
         if not self.source:
@@ -1723,7 +1734,7 @@ class ComicViewer(tk.Frame):
         else:
             self.next_comic()
 
-    def prev_page(self):
+    def prev_page(self) -> None:
         """Move to the previous page, or previous comic at start of current."""
         logging.info("Prev page requested.")
         if not self.source:
@@ -1737,7 +1748,7 @@ class ComicViewer(tk.Frame):
         else:
             self.prev_comic()
 
-    def first_page(self):
+    def first_page(self) -> None:
         """Jump to the first page in the source."""
         logging.info("First page requested.")
         if not self.source:
@@ -1748,7 +1759,7 @@ class ComicViewer(tk.Frame):
         self._save_resume_position()
         self._render_current()
 
-    def last_page(self):
+    def last_page(self) -> None:
         """Jump to the last page in the source."""
         logging.info("Last page requested.")
         if not self.source:
@@ -1883,7 +1894,9 @@ def _record_open_document(*paths: str) -> None:
     _PENDING_OPEN_DOCUMENTS.extend(paths)
 
 
-def register_open_document_handler(root: tk.Tk, callback: Callable | None = None) -> bool:
+def register_open_document_handler(
+    root: tk.Tk, callback: Callable[..., None] | None = None
+) -> bool:
     """Register the Apple Event that Finder uses to hand files to a macOS .app bundle.
 
     Double-clicking a document on macOS does not put its path in argv; it sends
@@ -1925,7 +1938,7 @@ def _open_documents_in_viewer(app: ComicViewer, paths: Sequence[str]) -> None:
     app._request_focus()
 
 
-def main():
+def main() -> None:
     """Parse arguments and launch the comic viewer."""
     _init_logging()
     parser = argparse.ArgumentParser(description="Simple CBZ/CBR viewer (cdisplay-ish)")
@@ -1995,7 +2008,7 @@ def main():
     root.mainloop()
 
 
-def require_pyvips():
+def require_pyvips() -> None:
     """Raise SystemExit if pyvips or libvips runtime dependencies are missing."""
     try:
         import pyvips

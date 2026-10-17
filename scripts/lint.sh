@@ -35,8 +35,8 @@ fi
 
 # Run type checking
 echo ""
-echo "Running pyright type checking..."
-if ! uv run --active pyright .; then
+echo "Running mypy type checking..."
+if ! uv run --active mypy; then
     echo ""
     echo "${RED}ERROR: Type checking failed.${NC}"
     echo "${RED}Please fix the type errors and check CONTRIBUTING.md for guidelines.${NC}"
