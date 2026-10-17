@@ -22,9 +22,12 @@ name = "pypi"
 url = "https://pypi.org/simple"
 default = true
 
-[tool.pyright]
-include = ["."]
-stubPath = "stubs"
+[tool.mypy]
+python_version = "3.13"
+strict = true
+ignore_missing_imports = true
+mypy_path = "stubs"
+files = ["cdisplayagain.py", "archives.py", "image_backend.py", "tk_bootstrap.py"]
 
 [tool.ruff]
 line-length = 100
@@ -52,8 +55,8 @@ exclude_lines = [
 
 [dependency-groups]
 dev = [
+    "mypy>=1.11.0",
     "pyinstaller>=6.4.0",
-    "pyright>=1.1.400",
     "pytest>=9.0.2",
     "pytest-cov>=6.1.0",
     "ruff>=0.11.2",

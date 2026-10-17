@@ -82,7 +82,7 @@ The lint script runs:
 - Python compilation check
 - Ruff linting
 - Any type usage check (ruff ANN401 rule)
-- Pyright type checking
+- Mypy type checking
 
 The hook will block commits containing `# type: ignore`, `# noqa`, `# ruff: ignore`, or `# pylint: ignore`.
 
