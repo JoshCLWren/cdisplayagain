@@ -102,7 +102,9 @@ location with `PREFIX`. Remove everything with `make uninstall-macos`.
 Making it the *default* comic viewer needs one more piece, because macOS will
 not let an app claim a file type on its own. If [`duti`](https://github.com/moretension/duti)
 is installed (`brew install duti`), `make install` sets the default handler for
-`.cbz`, `.cbr`, `.cbt`, and `.cba` automatically. Otherwise set it once by hand:
+`.cbz`, `.cbr`, `.cbt`, and `.cba` automatically. Note that only `.cbz` and
+`.cbr` are openable today; the loader does not yet support `.cbt`/`.cba`.
+Otherwise set it once by hand:
 right-click a comic, choose Get Info, set Open With to cdisplayagain, and click
 Change All.
 

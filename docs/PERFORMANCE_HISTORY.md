@@ -208,9 +208,9 @@ This document tracks the evolution of cdisplayagain's performance improvements o
 
 Based on the migration plan, potential areas for further optimization:
 
-1. **On-demand CBR extraction**: Extract only current page (not implemented)
-2. **Adaptive resampling**: Use BILINEAR during scrolling, LANCZOS on settle (not implemented)
-3. **Smart preloading**: Preload next page in background (partially implemented)
+1. **On-demand CBR extraction**: Extract only the current page into an in-memory cache (implemented in `load_cbr`)
+2. **Adaptive resampling**: NEAREST preview for instant display, then Lanczos on settle (implemented)
+3. **Smart preloading**: Preload the next page in the background (implemented via `ImageWorker.preload`)
 
 Current performance is already excellent with sub-millisecond page turns on cache hits and instant CBZ/CBR launches.
 
@@ -254,4 +254,4 @@ Current performance is already excellent with sub-millisecond page turns on cach
 - Performance baselines: `docs/PERFORMANCE.md`
 - Test thresholds: `tests/test_performance.py`
 - Migration plan: `docs/archive/MIGRATION_PLAN.md`
-- Crash analysis: `TEST_CRASH_ANALYSIS.md`
+- Crash analysis: `docs/archive/TEST_CRASH_ANALYSIS.md`
