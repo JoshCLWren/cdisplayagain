@@ -217,6 +217,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      attestations: write
     needs: [build-release, build-macos]
     runs-on: ubuntu-22.04
     steps:
@@ -228,7 +229,6 @@ jobs:
           merge-multiple: true
       - name: Generate build provenance
         uses: actions/attest-build-provenance@v2
-        continue-on-error: true
         with:
           subject-path: |
             artifact/*.tar.gz
