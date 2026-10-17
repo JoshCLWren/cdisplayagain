@@ -1,5 +1,7 @@
 # Test Crash Analysis: pytest --tb=no -q vs -v
 
+> **Historical:** This analysis predates the current `ImageWorker` implementation; the crash was resolved (see `tasks.md` / the `fix-test-suite-crash` work). Line references are stale. Kept for context.
+
 ## Executive Summary
 
 Tests in `tests/test_threading.py` and `tests/test_parallel_workers.py` crash with `Fatal Python error: Aborted` when run with `pytest --tb=no -q` but pass with `pytest -v`. This document provides a detailed analysis of the crash mechanism, root cause, and recommended fixes.

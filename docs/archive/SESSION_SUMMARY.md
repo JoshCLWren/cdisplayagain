@@ -1,5 +1,7 @@
 # CI Threading Crash Fix - Session Summary
 
+> **Historical:** This documents the threading crash investigation that was resolved by the `ImageWorker` rewrite (`stop()` no longer clears `_app`, `stop_all()` + `WeakSet` guard leaks). Kept for context; the code it references has changed.
+
 ## Problem
 CI tests were failing with threading crashes during pytest collection/execution. Threads were stuck in `queue.get()` calls causing Python to abort.
 

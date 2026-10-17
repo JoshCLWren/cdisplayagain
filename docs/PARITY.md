@@ -15,14 +15,15 @@ These features match CDisplay's behavior and are fully implemented:
 - ✅ Sequential viewer (reads archives without extraction)
 
 ### Archive & File Loading
-- ✅ Reads JPEG, GIF (static), PNG images
-- ✅ Reads CBZ, CBR, CBA, CBT archives (ZIP, RAR, ACE, TAR)
+- ✅ Reads JPEG, PNG, GIF (static), WEBP, BMP, and TIFF images
+- ✅ Reads CBZ, CBR, and TAR archives (ZIP, RAR/ACE, TAR)
 - ✅ Sorts pages alphabetically
 - ✅ Shows .nfo/.txt files first (comic info screens)
 - ✅ Info screen displayed alongside first image
 - ✅ Info screen dismissible by double-click or any key press
 - ✅ "Load files" opens file browser
 - ✅ Right-click popup menu with "Load files" option
+- ✅ Remembers the last page read per file and resumes there (unless the comic was finished)
 
 ### Navigation
 - ✅ Arrow keys (Left/Right) turn pages forward/back
@@ -53,69 +54,53 @@ These features match CDisplay's behavior and are fully implemented:
 - ✅ Zero-write runtime (archives never mutated, temp dirs cleaned)
 
 ### Configuration Options
-- ✅ `set_one_page_mode()` / `set_two_page_mode()` - Display mode selection
-- ✅ `toggle_color_balance()` - Automatic color correction toggle
-- ✅ `toggle_yellow_reduction()` - Yellow tint reduction toggle
-- ✅ `toggle_hints()` / `_show_hint_popup()` - Popup hints
-- ✅ `toggle_two_pages()` / `toggle_two_page_advance()` - Two-page navigation
-- ✅ `set_page_buffer(size)` - Preload buffer size
-- ✅ `set_background_color(color)` - Custom background colors
-- ✅ `set_small_cursor()` - Minimal cursor toggle
-- ✅ `set_mouse_binding(button, action)` - Customize mouse buttons
-- ✅ `_show_config()` - Full configuration dialog UI
+- ✅ `_show_config()` - Configuration dialog UI
 - ✅ Context menu and F2 access to configuration
-
-### Error Handling
-- ✅ Proper error messages instead of fake placeholders
-- ✅ Cleanup error logging for resource leaks
-- ✅ Friendly CBR error messages with troubleshooting hints
+- ✅ `set_background_color(color)` - Custom background colors
+- ✅ `set_small_cursor()` - Toggles cursor visibility
 
 ## Not Yet Implemented
 
-These features existed in the original CDisplay 1.8 but are not yet present in cdisplayagain.
-
-### Sequential Reading
-- ✅ Read issues sequentially (auto-advance to next comic in directory)
-- ✅ Go to previous comic in directory
+These features are not yet present in cdisplayagain.
 
 ### Navigation
 - ❌ Go To Page (jump to a specific page number by entering it)
 - ❌ Zooming (manual zoom in/out toggle)
 
 ### Archive & File Loading
-- ❌ BMP image support
+- ❌ CBA/CBT archives (ACE- and TAR-based comic archives). The file dialog and desktop associations list them, but `load_comic` rejects them.
 - ❌ SFV file verification (verify archive integrity via .sfv checksums)
 
-### Mouse Configurability
-- ❌ Left/Middle/Right mouse buttons reassignable to actions (next page, prev page, go to page, etc.)
+### Display Modes & Image Adjustments
+- ❌ Two-page display modes (the configuration dialog exposes the toggles, but they do not affect rendering)
+- ❌ Color balance / yellow reduction (toggles exist but are not applied to images)
+- ❌ Page preload buffer size (the setting is stored, but the preload count is fixed)
+- ❌ Reassignable mouse buttons (the API stores bindings but they are not consulted)
+- ❌ Popup hints (the toggle and `_show_hint_popup()` exist but are never invoked)
 
 ## API-Only Placeholders
 
-These features have API stubs with placeholder implementations to maintain interface compatibility. Tests verify the methods exist, but they don't do anything yet.
+These methods exist to keep the configuration API stable and to render the configuration dialog. They store state but nothing reads it during rendering, so toggling them has no visible effect yet.
 
 ### Configuration Options
-- `set_one_page_mode()` - Single page display mode
-- `set_two_page_mode()` - Two-page display mode
+- `set_one_page_mode()` / `set_two_page_mode()` / `toggle_two_pages()` - Display mode selection
 - `toggle_color_balance()` - Automatic color correction
 - `toggle_yellow_reduction()` - Yellow tint reduction
-- `toggle_hints()` - Enable/disable popup hints
-- `toggle_two_pages()` - Toggle two-page display
 - `toggle_two_page_advance()` - Skip two pages at once
 - `set_page_buffer(size)` - Preload buffer size
-- `set_background_color(color)` - Custom background
-- `set_small_cursor()` - Restore cursor visibility (partially functional)
 - `set_mouse_binding(button, action)` - Customize mouse buttons
+- `toggle_hints()` / `_show_hint_popup()` - Popup hints
 
 ## Notes
 
-The placeholder methods in `cdisplayagain.py` (lines 928-1006) serve as API contracts. They:
+The placeholder configuration methods in `cdisplayagain.py` serve as API contracts. They:
 1. Document the intended interface for future features
-2. Ensure parity tests pass (`test_parity_tasks.py`)
+2. Keep the configuration dialog renderable and parity tests passing (`test_parity_tasks.py`)
 3. Allow gradual implementation without breaking changes
 4. Maintain the "fast, lightweight" ethos - adding features shouldn't slow startup
 
 When implementing these features:
-- Remove the placeholder `return None` or `pass`
+- Wire the stored setting into rendering/navigation
 - Keep the method signature intact
 - Update tests to verify real functionality
 - Update this document to move from "API-Only" to "Completed Parity"

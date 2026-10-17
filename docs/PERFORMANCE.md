@@ -41,7 +41,7 @@ Profiling was conducted on representative archives to establish performance base
 
 | Metric | Time | Threshold |
 |--------|-------|-----------|
-| Launch | 0.0062s | 0.02s |
+| Launch | 0.0062s | 0.05s |
 | Cover Render | 0.00021s | 0.01s |
 | Avg Page Turn | 0.00011s | 0.01s |
 
@@ -57,11 +57,11 @@ Profiling was conducted on representative archives to establish performance base
 
 | Metric | Time | Threshold |
 |--------|-------|-----------|
-| First Paint | 0.00177s | 0.01s |
-| Page Turn (cached) | 0.00024s | 0.100s |
-| 4K→1080p Resize | 0.194s | 0.500s |
-| Load CBZ (1000 pages) | 0.044s | 0.100s |
-| Natural Sort (5000 files) | 0.038s | 0.100s |
+| First Paint | 0.00177s | 0.1s |
+| Page Turn (cached) | 0.00024s | 0.1s |
+| 4K→1080p Resize | 0.194s | 0.4s |
+| Load CBZ (1000 pages) | 0.044s | 0.4s |
+| Natural Sort (5000 files) | 0.038s | 0.5s |
 
 **Notes:**
 - Page turn performance is exceptional at 0.24ms (416x faster than 100ms threshold)
