@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-root_dir=$(CDISPLAYAGAIN_PACKAGE_ROOT=1; cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+root_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 bundle_dir="$root_dir/dist/cdisplayagain"
 executable="$bundle_dir/cdisplayagain"
 

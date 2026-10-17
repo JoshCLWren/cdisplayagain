@@ -3,7 +3,7 @@ import sys
 import sysconfig
 import tomllib
 
-project_root = Path.cwd()
+project_root = Path(SPECPATH)
 is_macos = sys.platform == "darwin"
 
 with (project_root / "pyproject.toml").open("rb") as pyproject:
@@ -22,7 +22,8 @@ python_lib_dirs = {
 tk_binaries = [
     (str(library), ".")
     for lib_dir in python_lib_dirs
-    for library in lib_dir.glob("libt[ck]*.so*")
+    for pattern in ("libt[ck]*.so*", "libt[ck]*.dylib")
+    for library in lib_dir.glob(pattern)
 ]
 
 a = Analysis(

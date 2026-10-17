@@ -1,4 +1,4 @@
-.PHONY: help lint pytest sync venv run smoke clean-build build build-onedir package-linux install install-bin install-desktop mime-query redo ci-test-debian ci-test-local ci-build-image githook install-githook deploy build-macos install-macos uninstall-macos package-macos pytest-container
+.PHONY: help lint pytest sync venv run smoke clean-build build build-onedir package-linux install install-bin install-desktop mime-query redo ci-test-debian ci-test-local ci-build-image ci-check githook install-githook deploy build-macos install-macos uninstall-macos package-macos pytest-container profile-cbz profile-cbr
 
 # Configuration
 PREFIX ?= $(HOME)/.local

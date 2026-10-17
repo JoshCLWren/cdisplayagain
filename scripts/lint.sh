@@ -26,7 +26,13 @@ fi
 # Check for Any type usage
 echo ""
 echo "Checking for Any type usage..."
-if [ -n "$(rg ': Any\b' . --type py 2>/dev/null | grep -v 'type: ignore' | head -1)" ]; then
+if command -v rg >/dev/null 2>&1; then
+    any_hits=$(rg ': Any\b' . --type py 2>/dev/null | grep -v 'type: ignore' | head -1 || true)
+else
+    any_hits=$(grep -rn --include='*.py' -E ': Any\b' . 2>/dev/null \
+        | grep -v 'type: ignore' | grep -v '\.venv/' | head -1 || true)
+fi
+if [ -n "$any_hits" ]; then
     echo ""
     echo "${RED}ERROR: Any type found in codebase.${NC}"
     echo "${RED}Please replace Any with specific types and check CONTRIBUTING.md for guidelines.${NC}"
