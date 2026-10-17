@@ -22,7 +22,8 @@ prefix=${PREFIX:-"$HOME/.local"}
 bin_path="$prefix/bin/cdisplayagain"
 extensions=(cbz cbr cbt cba)
 lsregister=/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister
-source_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+source_root=$(cd -- "$script_dir/.." && pwd)
 
 # With no explicit destination, sweep both standard locations so an earlier
 # install cannot leave a second copy behind for Finder to prefer. An explicit
@@ -100,8 +101,9 @@ if [[ $# -eq 1 ]]; then
     exit 0
 fi
 
-# Support both a repo checkout (dist/) and an extracted release archive.
-for candidate in "$source_root/dist/$app_name" "$source_root/$app_name"; do
+# Support both an extracted release archive (app beside the script) and a repo
+# checkout (app under dist/).
+for candidate in "$script_dir/$app_name" "$source_root/dist/$app_name"; do
     if [[ -d "$candidate" ]]; then
         built_app=$candidate
         break
