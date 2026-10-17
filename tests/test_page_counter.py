@@ -27,6 +27,46 @@ def test_counter_font_asset_is_bundled() -> None:
     assert cdisplayagain._counter_font_path().is_file()
 
 
+def _two_page_viewer(tk_root, tmp_path) -> cdisplayagain.ComicViewer:
+    folder = tmp_path / "book"
+    folder.mkdir()
+    _write_image(folder / "page1.png")
+    _write_image(folder / "page2.png")
+    return cdisplayagain.ComicViewer(tk_root, folder / "page1.png")
+
+
+def test_counter_image_falls_back_without_imagetk(tk_root, tmp_path) -> None:
+    """The counter still renders when the ImageTk fast path is unavailable."""
+    viewer = _two_page_viewer(tk_root, tmp_path)
+    viewer._imagetk_ready = False
+    image = viewer._render_page_counter_image("1/2")
+    assert image.width() > 0
+
+
+def test_counter_image_falls_back_when_photoimage_fails(tk_root, tmp_path, monkeypatch) -> None:
+    """A failing ImageTk conversion disables it and uses the plain PhotoImage path."""
+    viewer = _two_page_viewer(tk_root, tmp_path)
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("no imagetk")
+
+    monkeypatch.setattr(cdisplayagain.ImageTk, "PhotoImage", boom)
+    viewer._imagetk_ready = True
+    image = viewer._render_page_counter_image("1/2")
+    assert image.width() > 0
+    assert viewer._imagetk_ready is False
+
+
+def test_counter_image_falls_back_when_font_missing(tk_root, tmp_path, monkeypatch) -> None:
+    """A missing bundled font falls back to Pillow's default font."""
+    viewer = _two_page_viewer(tk_root, tmp_path)
+    monkeypatch.setattr(
+        cdisplayagain, "_counter_font_path", lambda: Path("/nonexistent/missing.ttf")
+    )
+    image = viewer._render_page_counter_image("1/2")
+    assert image.width() > 0
+
+
 def test_counter_shows_on_image_page(tk_root, tmp_path):
     """Loading a multi-image source renders a counter on the first image page."""
     folder = tmp_path / "book"
