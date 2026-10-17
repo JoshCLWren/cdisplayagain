@@ -10,10 +10,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Cache apt packages
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: /var/cache/apt/archives
           key: ${{ runner.os }}-apt-xvfb-unar-libvips-v1
@@ -22,7 +22,7 @@ jobs:
         run: sudo apt-get update -qq && sudo apt-get install -y -qq xvfb unar
 
       - name: Cache uv cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/uv
           key: ${{ runner.os }}-uv-${{ hashFiles('uv.lock') }}
@@ -30,7 +30,7 @@ jobs:
             ${{ runner.os }}-uv-
 
       - name: Cache Python venv
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .venv
           key: ${{ runner.os }}-venv-${{ hashFiles('uv.lock') }}-v2
@@ -49,10 +49,10 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Cache apt packages
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: /var/cache/apt/archives
           key: ${{ runner.os }}-apt-xvfb-unar-libvips-v1
@@ -61,7 +61,7 @@ jobs:
         run: sudo apt-get update -qq && sudo apt-get install -y -qq xvfb unar
 
       - name: Cache pip builds
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: /tmp/pip-cache
           key: ${{ runner.os }}-pip-pyvips-${{ hashFiles('uv.lock') }}
@@ -69,7 +69,7 @@ jobs:
             ${{ runner.os }}-pip-pyvips-
 
       - name: Cache uv cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/uv
           key: ${{ runner.os }}-uv-${{ hashFiles('uv.lock') }}
@@ -77,7 +77,7 @@ jobs:
             ${{ runner.os }}-uv-
 
       - name: Cache Python venv
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .venv
           key: ${{ runner.os }}-venv-${{ hashFiles('uv.lock') }}-v4
@@ -100,7 +100,7 @@ jobs:
         run: xvfb-run -a uv run pytest --cov-report=term-missing --cov-report=xml
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           files: ./coverage.xml
           fail_ci_if_error: false
@@ -111,7 +111,7 @@ jobs:
     needs: [lint, tests]
     steps:
       - name: Check out exact commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install packaging dependencies
         run: sudo apt-get update -qq && sudo apt-get install -y -qq libvips-dev python3-tk xvfb unar
@@ -135,7 +135,7 @@ jobs:
           echo "asset_path=$asset_path" >> "$GITHUB_OUTPUT"
 
       - name: Upload Linux release artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cdisplayagain-linux-x86_64
           path: |
@@ -161,9 +161,9 @@ jobs:
             family: dnf
     steps:
       - name: Check out test harness and fixtures
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Download tested release artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: cdisplayagain-linux-x86_64
           path: artifact
@@ -178,7 +178,7 @@ jobs:
           BUILD_SHA: ${{ github.sha }}
       - name: Upload compatibility logs on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: compatibility-log-${{ matrix.name }}
           path: "compatibility-${{ matrix.name }}.log"

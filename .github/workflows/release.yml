@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Check out exact selected commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
 
@@ -69,7 +69,7 @@ jobs:
           echo "asset_path=$asset_path" >> "$GITHUB_OUTPUT"
 
       - name: Upload tested release artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cdisplayagain-linux-x86_64-release
           path: |
@@ -92,7 +92,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Check out exact selected commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
 
@@ -104,7 +104,7 @@ jobs:
           test "${GITHUB_REF_NAME#v}" = "$project_version"
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v10
 
       # The shared setup action is Linux-only: it apt-gets and rebuilds pyvips
       # from source, while macOS needs the pyvips-binary wheel that carries
@@ -159,7 +159,7 @@ jobs:
           "$scratch/prefix/bin/cdisplayagain" --version
 
       - name: Upload tested macOS release artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cdisplayagain-macos-${{ matrix.arch }}-release
           path: ${{ steps.package.outputs.asset_path }}
@@ -191,9 +191,9 @@ jobs:
             family: zypper
     steps:
       - name: Check out test harness and fixtures
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Download tested release artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: cdisplayagain-linux-x86_64-release
           path: artifact
@@ -208,7 +208,7 @@ jobs:
           BUILD_SHA: ${{ github.sha }}
       - name: Upload compatibility logs on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: compatibility-log-${{ matrix.name }}
           path: "compatibility-${{ matrix.name }}.log"
@@ -222,13 +222,13 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Download every tested release artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: cdisplayagain-*-release
           path: artifact
           merge-multiple: true
       - name: Generate build provenance
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: |
             artifact/*.tar.gz
@@ -242,7 +242,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Download every tested release artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: cdisplayagain-*-release
           path: artifact
