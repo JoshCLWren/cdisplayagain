@@ -102,7 +102,7 @@ dev = [
 requires-dist = [
     { name = "pillow", specifier = ">=12.0.0" },
     { name = "pyvips", extras = ["binary"], specifier = ">=3.1.1" },
-    { name = "unrar2-cffi", specifier = ">=0.4.0" },
+    { name = "unrar2-cffi", specifier = ">=0.5.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -580,9 +580,21 @@ wheels = [
 
 [[package]]
 name = "unrar2-cffi"
-version = "0.4.1"
+version = "0.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cffi" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/36/f1/dcd1d9a2a1a8b0952bab8c49af6d827dd65d486f9f5006073666cce928b8/unrar2_cffi-0.4.1.tar.gz", hash = "sha256:3fe3174a6a0c888924e3630462826af4e91dd494d5c043cb0a31865eb9e9c833", size = 275516, upload-time = "2025-05-25T20:13:59.267Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/12/e2/da7af34f34dd4c9baa92253266a153c3b2b479a07fde56cd620c732617fe/unrar2_cffi-0.5.0.tar.gz", hash = "sha256:5d2fc0e8629792a1df0cdfa518411039493caae1a235b506940170d069e5d725", size = 287361, upload-time = "2026-06-06T23:51:49.286Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0f/44/835b384dd00ff20af76f3b7240bd243e27d66cc89455ccaeb36622133175/unrar2_cffi-0.5.0-cp314-cp314-macosx_10_15_x86_64.whl", hash = "sha256:053bf6fce04cc6cb617e6e6f7dc472186a87c6400ba6182a221b8be1e56f0ae2", size = 200704, upload-time = "2026-06-06T23:51:33.706Z" },
+    { url = "https://files.pythonhosted.org/packages/0e/2e/801eaab54c8dd749c40280a0b68782b988d34a0e053efc9f2fb8a6e787ac/unrar2_cffi-0.5.0-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:e8d7cf40090bb30efafe470b8bdb1634fc69190e2b21539e56061f44f7774006", size = 192665, upload-time = "2026-06-06T23:51:35.201Z" },
+    { url = "https://files.pythonhosted.org/packages/1f/6b/2cdeaf50092d721ebba9cc568d0b468767675d5c9c6bf56ad92b1393e4c7/unrar2_cffi-0.5.0-cp314-cp314-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:dd070ac108466623f600d0e8b9a0e6e0eb919b43af33dbda98dba911bd20f55c", size = 246052, upload-time = "2026-06-06T23:51:36.905Z" },
+    { url = "https://files.pythonhosted.org/packages/98/9a/917997be513bc1b7c651390246a9c1fee800ba79e742740e08c9ad776d7d/unrar2_cffi-0.5.0-cp314-cp314-musllinux_1_2_x86_64.whl", hash = "sha256:4bf8f4c36aab6ca188a407f7fee0da734f1fd16748fe7ebcd16ad4f71455efaf", size = 1282779, upload-time = "2026-06-06T23:51:38.38Z" },
+    { url = "https://files.pythonhosted.org/packages/12/de/eedc0d0425c59552229d64913286efa8089023bc065cd180f8ebc9684778/unrar2_cffi-0.5.0-cp314-cp314-win_amd64.whl", hash = "sha256:0751116790f53203cc8b184df9430d7502caf8d37a3f6643d437657315c3d6e6", size = 437731, upload-time = "2026-06-06T23:51:40.162Z" },
+    { url = "https://files.pythonhosted.org/packages/2b/da/2adf2fdf768e1f3dad1699953bae93debb1131dbefcc32b8fb9948a44be8/unrar2_cffi-0.5.0-cp314-cp314t-macosx_10_15_x86_64.whl", hash = "sha256:29012cd7d7bf9add5dce5daa56506e1a78acadcbe6a00ef2dce01581801479df", size = 200969, upload-time = "2026-06-06T23:51:41.726Z" },
+    { url = "https://files.pythonhosted.org/packages/10/e2/edb3be5b1bb9861771096640920306c4f41ff052976c44be4b62984629bf/unrar2_cffi-0.5.0-cp314-cp314t-macosx_11_0_arm64.whl", hash = "sha256:60dddb5f418e6dd4e12314f2e9941003670ddaecc4d7d22da6865a91901e394d", size = 192967, upload-time = "2026-06-06T23:51:43.133Z" },
+    { url = "https://files.pythonhosted.org/packages/89/8a/684d5abf19f518bc20359c13541cb2cc2a7fa97ab7755e4a55e7c59880bf/unrar2_cffi-0.5.0-cp314-cp314t-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:aa81bf8150a8c50292b9e456528241ed8f3e9c025da7dba42782f5b26665763e", size = 252075, upload-time = "2026-06-06T23:51:44.676Z" },
+    { url = "https://files.pythonhosted.org/packages/43/ca/a34439c1f3202487b8829a5b941c6e611c97b6e6530f31b1a81bd9426226/unrar2_cffi-0.5.0-cp314-cp314t-musllinux_1_2_x86_64.whl", hash = "sha256:075ad64661a3232fc21f92bb3f90cbe67825a44e5f957c546060706fd5a53897", size = 1289028, upload-time = "2026-06-06T23:51:46.252Z" },
+    { url = "https://files.pythonhosted.org/packages/72/49/9b94fc2594cf119830465187be60d858b30cdc622b0a769c3eeaaed52c5c/unrar2_cffi-0.5.0-cp314-cp314t-win_amd64.whl", hash = "sha256:b3dfb7f1dfdddbe26101b043f75a891f455a69542779160d3d74822d7da2fe4b", size = 438060, upload-time = "2026-06-06T23:51:47.783Z" },
+]
