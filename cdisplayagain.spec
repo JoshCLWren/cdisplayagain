@@ -30,7 +30,10 @@ a = Analysis(
     [str(project_root / "cdisplayagain.py")],
     pathex=[str(project_root)],
     binaries=tk_binaries,
-    datas=[(str(project_root / "cdisplayagain.png"), ".")],
+    datas=[
+        (str(project_root / "cdisplayagain.png"), "."),
+        (str(project_root / "fonts" / "DejaVuSansMono.ttf"), "fonts"),
+    ],
     hiddenimports=["PIL._tkinter_finder", "build_info", "tk_bootstrap"],
     hookspath=[],
     hooksconfig={},

@@ -81,6 +81,21 @@ def _as_wm(obj: tk.Misc) -> tk.Wm:
     return cast(tk.Wm, obj)
 
 
+COUNTER_FONT_SIZE = 12
+COUNTER_FONT_FILE = "fonts/DejaVuSansMono.ttf"
+
+
+def _counter_font_path() -> Path:
+    """Locate the bundled monospace font the page counter renders with.
+
+    Rendering the counter ourselves keeps its font identical everywhere; the
+    named Tk font it used before is resolved by Tk and, in the bundled builds,
+    Tk is compiled without Xft so it cannot see the system's DejaVu Sans Mono.
+    """
+    base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+    return base / COUNTER_FONT_FILE
+
+
 FILE_DIALOG_TYPES = [
     ("Comic Archives", "*.cbz *.cbr *.cbt *.cba *.tar *.zip *.rar *.ace"),
     ("Image Files", IMAGE_FILETYPE_PATTERN),
@@ -596,6 +611,7 @@ class ComicViewer(tk.Frame):
         self._current_index: int = 0
         self._canvas_image_id: int | None = None
         self._page_counter_id: int | None = None
+        self._page_counter_image: TkPhotoImage | None = None
 
         # Lightweight caches - store PIL Image objects directly to avoid encode/decode roundtrip
         self._pil_cache: dict[str, Image.Image] = {}
@@ -1470,15 +1486,45 @@ class ComicViewer(tk.Frame):
         cw = max(1, self.canvas.winfo_width())
         ch = max(1, self.canvas.winfo_height())
         margin = 12
-        self._page_counter_id = self.canvas.create_text(
+        self._page_counter_image = self._render_page_counter_image(text)
+        self._page_counter_id = self.canvas.create_image(
             cw - margin,
             ch - margin,
-            text=text,
             anchor="se",
-            fill=self._page_counter_color(),
-            font="TkFixedFont 12",
+            image=self._page_counter_image,
         )
 
+    def _render_page_counter_image(self, text: str) -> TkPhotoImage:
+        """Draw the counter text with the bundled font and an outline for legibility."""
+        from PIL import ImageDraw, ImageFont
+
+        foreground = self._page_counter_color()
+        outline = "#000000" if foreground == "#ffffff" else "#ffffff"
+        font: ImageFont.FreeTypeFont | ImageFont.ImageFont
+        try:
+            font = ImageFont.truetype(str(_counter_font_path()), COUNTER_FONT_SIZE)
+        except OSError:
+            font = ImageFont.load_default()
+        left, top, right, bottom = font.getbbox(text)
+        pad = 3
+        width = int(right - left) + pad * 2
+        height = int(bottom - top) + pad * 2
+        image = Image.new("RGBA", (width, height))
+        draw = ImageDraw.Draw(image)
+        draw.text(
+            (pad - int(left), pad - int(top)),
+            text,
+            font=font,
+            fill=foreground,
+            stroke_width=2,
+            stroke_fill=outline,
+        )
+        if self._imagetk_ready:
+            try:
+                return ImageTk.PhotoImage(image, master=self)
+            except Exception:
+                self._imagetk_ready = False
+        return self._photoimage_from_pil(image)
 
     def _clear_page_counter(self) -> None:
         """Remove the page counter (called when canvas content is cleared)."""
@@ -1488,6 +1534,7 @@ class ComicViewer(tk.Frame):
             except tk.TclError:
                 pass
             self._page_counter_id = None
+        self._page_counter_image = None
 
     def _find_next_image_index(self, start_index: int) -> int | None:
         if not self.source:

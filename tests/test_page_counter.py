@@ -15,10 +15,16 @@ def _write_image(path: Path, size=(10, 10), color=(128, 128, 128)) -> None:
 
 
 def _counter_text(viewer: cdisplayagain.ComicViewer) -> str | None:
-    """Return the canvas text of the page counter, or None if absent."""
+    """Return the text the page counter displays, or None if it is absent."""
     if viewer._page_counter_id is None:
         return None
-    return viewer.canvas.itemcget(viewer._page_counter_id, "text")
+    assert viewer.canvas.itemcget(viewer._page_counter_id, "image")
+    return viewer._page_counter_text()
+
+
+def test_counter_font_asset_is_bundled() -> None:
+    """The bundled monospace font used by the counter ships with the app."""
+    assert cdisplayagain._counter_font_path().is_file()
 
 
 def test_counter_shows_on_image_page(tk_root, tmp_path):
