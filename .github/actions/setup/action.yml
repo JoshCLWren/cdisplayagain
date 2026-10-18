@@ -20,10 +20,12 @@ runs:
     - name: Set up uv
       uses: astral-sh/setup-uv@v10.3.0
 
-    - name: Install Python 3.14 and create venv
+    - name: Install Python and create venv
       shell: bash
       run: |
-        uv python install 3.14
+        # The exact version is pinned in .python-version so the dev environment,
+        # CI, and the release build all use the same Python and Tk.
+        uv python install
         # Only create venv if it doesn't exist (may be cached)
         if [ ! -d .venv ]; then
           uv venv
