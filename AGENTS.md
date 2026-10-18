@@ -19,6 +19,12 @@ The viewer lives entirely in the repository root. `cdisplayagain.py` exposes the
 - `make lint`: run ruff.
 - `make smoke FILE=path/to/comic.cbz`: print the manual checklist and launch.
 
+## Development Environment Parity
+Develop against the same interpreter the packaged app ships with. `.python-version` pins the exact uv-managed Python (currently `3.14.7`), and that patch decides the bundled Tk: `3.14.7` ships **Tk 9.0** while `3.14.2` ships `8.6`. Tk versions deliver different event data (for example Tk 9 sends `<MouseWheel>` with `num="??"`, Tk 8.6 sends `<Button-4/5>`), so developing under a different Python or a system interpreter hides bugs that only appear in the released app.
+- Create the venv with uv so the managed interpreter is used: `uv venv` then `uv sync`; never point it at a system `python3`.
+- Before debugging input issues, confirm the runtime: `python -c "import tkinter; print(tkinter.TkVersion)"` should report `9.0`, matching the app.
+- CI and the release build install the interpreter from `.python-version` (bare `uv python install`), so bump the version in one place.
+
 ## Git Worktrees (Parallel Work)
 Use git worktrees to work on multiple cards in parallel without branch conflicts:
 - Create a branch per card: `git switch -c card/short-slug`
