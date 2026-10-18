@@ -317,3 +317,37 @@ def test_mouse_wheel_unrecognized_event_is_ignored(setup_viewer):
     root.update()
 
     assert app._scroll_offset == 200
+
+
+def test_mouse_wheel_real_tk_event_scrolls_up(setup_viewer):
+    """A genuine Tk wheel event scrolls up; Tk 9 reports num as the string "??"."""
+    app, root = setup_viewer
+
+    root.deiconify()
+    root.update()
+
+    app._scaled_size = (100, 500)
+    app.canvas.winfo_height = Mock(return_value=100)
+    app._scroll_offset = 200
+
+    app.canvas.event_generate("<MouseWheel>", delta=120)
+    root.update()
+
+    assert app._scroll_offset < 200
+
+
+def test_mouse_wheel_real_tk_event_scrolls_down(setup_viewer):
+    """A genuine Tk wheel event scrolls down."""
+    app, root = setup_viewer
+
+    root.deiconify()
+    root.update()
+
+    app._scaled_size = (100, 500)
+    app.canvas.winfo_height = Mock(return_value=100)
+    app._scroll_offset = 200
+
+    app.canvas.event_generate("<MouseWheel>", delta=-120)
+    root.update()
+
+    assert app._scroll_offset > 200
