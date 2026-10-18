@@ -248,3 +248,106 @@ def test_mouse_wheel_back_on_fit_page_navigates_prev(setup_viewer):
     root.update()
 
     assert app._current_index == 0
+
+
+def test_mouse_wheel_unknown_num_scrolls_up(setup_viewer):
+    """Tk 9 reports num as the string "??" for <MouseWheel>; scroll-up must still work."""
+    app, root = setup_viewer
+
+    app._scaled_size = (100, 500)
+    app._scroll_offset = 200
+
+    event = Mock()
+    event.delta = 120
+    event.num = "??"
+
+    app._on_mouse_wheel(event)
+    root.update()
+
+    assert app._scroll_offset < 200
+
+
+def test_mouse_wheel_unknown_num_scrolls_down(setup_viewer):
+    """Tk 9 reports num as the string "??" for <MouseWheel>; scroll-down must still work."""
+    app, root = setup_viewer
+
+    app._scaled_size = (100, 500)
+    app._scroll_offset = 200
+
+    event = Mock()
+    event.delta = -120
+    event.num = "??"
+
+    app._on_mouse_wheel(event)
+    root.update()
+
+    assert app._scroll_offset > 200
+
+
+def test_mouse_wheel_unknown_num_on_fit_page_navigates_prev(setup_viewer):
+    """A Tk 9 wheel-up (num "??") on a fitting page goes to the previous page."""
+    app, root = setup_viewer
+
+    app._scaled_size = (50, 50)
+    app.canvas.winfo_height = Mock(return_value=100)
+    app._current_index = 1
+
+    event = Mock()
+    event.delta = 120
+    event.num = "??"
+
+    app._on_mouse_wheel(event)
+    root.update()
+
+    assert app._current_index == 0
+
+
+def test_mouse_wheel_unrecognized_event_is_ignored(setup_viewer):
+    """A wheel event with no delta and no button number is ignored."""
+    app, root = setup_viewer
+
+    app._scaled_size = (100, 500)
+    app._scroll_offset = 200
+
+    event = Mock()
+    event.delta = 0
+    event.num = "??"
+
+    app._on_mouse_wheel(event)
+    root.update()
+
+    assert app._scroll_offset == 200
+
+
+def test_mouse_wheel_real_tk_event_scrolls_up(setup_viewer):
+    """A genuine Tk wheel event scrolls up; Tk 9 reports num as the string "??"."""
+    app, root = setup_viewer
+
+    root.deiconify()
+    root.update()
+
+    app._scaled_size = (100, 500)
+    app.canvas.winfo_height = Mock(return_value=100)
+    app._scroll_offset = 200
+
+    app.canvas.event_generate("<MouseWheel>", delta=120)
+    root.update()
+
+    assert app._scroll_offset < 200
+
+
+def test_mouse_wheel_real_tk_event_scrolls_down(setup_viewer):
+    """A genuine Tk wheel event scrolls down."""
+    app, root = setup_viewer
+
+    root.deiconify()
+    root.update()
+
+    app._scaled_size = (100, 500)
+    app.canvas.winfo_height = Mock(return_value=100)
+    app._scroll_offset = 200
+
+    app.canvas.event_generate("<MouseWheel>", delta=-120)
+    root.update()
+
+    assert app._scroll_offset > 200

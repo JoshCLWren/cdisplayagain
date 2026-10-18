@@ -1374,19 +1374,39 @@ class ComicViewer(tk.Frame):
 
     def _on_mouse_wheel(self, event: tk.Event[tk.Misc]) -> None:
         logging.info("Mouse wheel delta=%s num=%s.", event.delta, getattr(event, "num", None))
-        if hasattr(event, "num") and event.num:
-            direction = -1 if event.num == 4 else 1
-        elif event.delta == 0:
+        direction = self._wheel_direction(event)
+        if direction is None:
             return
-        else:
-            direction = -1 if event.delta > 0 else 1
         if self._scaled_size and self._scaled_size[1] > self.canvas.winfo_height():
-            self._scroll_by(direction * self._scroll_step())
+            self._scroll_by(direction * self._wheel_step())
         else:
             if direction > 0:
                 self.next_page()
             else:
                 self.prev_page()
+
+    @staticmethod
+    def _wheel_direction(event: tk.Event[tk.Misc]) -> int | None:
+        """Decode a wheel event into -1 (up), 1 (down), or None to ignore it.
+
+        Tk 9 delivers <MouseWheel> on X11 with a +/-120 ``delta`` and reports the
+        unused button substitution as the string "??"; Tk 8.6 delivers
+        <Button-4>/<Button-5> with a zero ``delta`` and a real button number. Read
+        the delta first and only treat ``num`` as a button when it is truly 4 or 5,
+        because the truthy "??" used to make every notch decode as scroll-down.
+        """
+        if event.delta:
+            return -1 if event.delta > 0 else 1
+        num = getattr(event, "num", None)
+        if num == 4:
+            return -1
+        if num == 5:
+            return 1
+        return None
+
+    def _wheel_step(self) -> int:
+        """Return a finer scroll step for the wheel than for the arrow keys."""
+        return max(40, self.canvas.winfo_height() // 10)
 
     def _on_canvas_configure(self, event: tk.Event[tk.Misc]) -> None:
         cw = event.width
